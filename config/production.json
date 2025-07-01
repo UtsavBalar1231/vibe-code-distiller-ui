@@ -1,0 +1,25 @@
+{
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0"
+  },
+  "logging": {
+    "level": "warn",
+    "file": "./logs/app.log"
+  },
+  "security": {
+    "enableAuth": true,
+    "rateLimiting": {
+      "enabled": true,
+      "windowMs": 600000,
+      "max": 50
+    }
+  },
+  "monitoring": {
+    "interval": 10000
+  },
+  "websocket": {
+    "pingTimeout": 120000,
+    "pingInterval": 30000
+  }
+}
