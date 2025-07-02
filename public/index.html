@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 Claude Code Web Manager</title>
+    
+    <!-- CSS Files -->
+    <link rel="stylesheet" href="/assets/css/main.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/terminal.css">
+    
+    <!-- External Dependencies (Local) -->
+    <script src="/assets/libs/xterm.js"></script>
+    <script src="/assets/libs/xterm-addon-fit.js"></script>
+    <script src="/assets/libs/xterm-addon-web-links.js"></script>
+    <link rel="stylesheet" href="/assets/css/xterm.css">
+    
+    <script src="/assets/libs/socket.io.min.js"></script>
+    
+    <!-- Icons and Metadata -->
+    <link rel="icon" href="/assets/icons/favicon.ico">
+    <meta name="description" content="Professional web interface for managing Claude Code CLI projects on Raspberry Pi">
+    <meta name="theme-color" content="#1e1e1e">
+</head>
+<body class="theme-dark">
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h2>🔧 Claude Code Web Manager</h2>
+            <p>Initializing your development environment...</p>
+        </div>
+    </div>
+
+    <!-- Authentication Modal -->
+    <div id="auth-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔐 Authentication Required</h3>
+            </div>
+            <div class="modal-body">
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="username">Username:</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Login</button>
+                    </div>
+                </form>
+                <div id="auth-error" class="error-message" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application Container -->
+    <div id="app" class="app-container" style="display: none;">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1 class="app-title">
+                    <span class="icon">🔧</span>
+                    <span class="title-text">Claude Code Manager</span>
+                </h1>
+                <div class="breadcrumb" id="breadcrumb">
+                    <span class="breadcrumb-item active">Dashboard</span>
+                </div>
+            </div>
+            
+            
+            <div class="header-right">
+                <div class="status-indicators">
+                    <div class="status-item" id="connection-status">
+                        <span class="indicator offline"></span>
+                        <span class="text">Connecting...</span>
+                    </div>
+                    <div class="status-item" id="system-load">
+                        <span class="icon">📊</span>
+                        <span class="text">CPU: --</span>
+                    </div>
+                    <div class="status-item" id="system-temp">
+                        <span class="icon">🌡️</span>
+                        <span class="text">Temp: --</span>
+                    </div>
+                    <div class="status-item" id="system-memory">
+                        <span class="icon">💾</span>
+                        <span class="text">RAM: --</span>
+                    </div>
+                </div>
+                
+                <div class="header-actions">
+                    <button class="btn btn-icon" id="theme-toggle" title="Toggle Theme">
+                        <span class="icon">🌙</span>
+                    </button>
+                    <button class="btn btn-icon" id="settings-btn" title="Settings">
+                        <span class="icon">⚙️</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="app-body">
+            <!-- Sidebar -->
+            <aside class="sidebar" id="sidebar">
+                <!-- Projects Panel -->
+                <section class="sidebar-panel">
+                    <div class="panel-header">
+                        <h3>📁 Projects</h3>
+                        <button class="btn btn-small btn-primary" id="new-project-btn">+ New</button>
+                    </div>
+                    <div class="panel-content">
+                        <div class="project-search">
+                            <input type="text" id="project-search" placeholder="Filter projects...">
+                        </div>
+                        <div class="project-list" id="project-list">
+                            <!-- Projects will be loaded here -->
+                            <div class="loading-placeholder">
+                                <div class="loading-spinner small"></div>
+                                <span>Loading projects...</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Images Panel -->
+                <section class="sidebar-panel">
+                    <div class="panel-header">
+                        <h3>📷 Images</h3>
+                        <button class="btn btn-small btn-primary" id="upload-image-btn" title="Upload Image">+ Upload</button>
+                    </div>
+                    <div class="panel-content">
+                        <div class="images-container" id="images-container">
+                            <div class="no-images" id="no-images">
+                                <span class="no-images-text">No images uploaded</span>
+                            </div>
+                            <div class="images-grid" id="images-grid" style="display: none;">
+                                <!-- Images will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </aside>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <!-- Terminal Container -->
+                <div class="terminal-container" id="terminal-container">
+                    <div class="terminal-header">
+                        <div class="terminal-tabs" id="terminal-tabs">
+                            <!-- Terminal tabs will be created here -->
+                        </div>
+                        <div class="terminal-controls">
+                            <!-- Terminal control buttons removed as per UI simplification -->
+                        </div>
+                    </div>
+                    
+                    <div class="terminal-content" id="terminal-content">
+                        <!-- Welcome Screen -->
+                        <div class="welcome-screen" id="welcome-screen">
+                            <div class="welcome-content">
+                                <h2>Welcome to Claude Code Web Manager</h2>
+                                <p>Select a project from the sidebar or create a new one to get started.</p>
+                                <div class="welcome-actions">
+                                    <button class="btn btn-primary" id="welcome-new-project">Create New Project</button>
+                                    <button class="btn btn-secondary" id="welcome-import-project">Import Project</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Terminal instances will be created here -->
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notification-container" class="notification-container"></div>
+
+    <!-- Context Menu -->
+    <div id="context-menu" class="context-menu" style="display: none;">
+        <div class="context-menu-items" id="context-menu-items">
+            <!-- Context menu items will be populated dynamically -->
+        </div>
+    </div>
+
+    <!-- Modals Container -->
+    <div id="modals-container">
+        <!-- Project Creation Modal -->
+        <div id="project-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="project-modal-title">Create New Project</h3>
+                    <button class="btn btn-icon modal-close">
+                        <span class="icon">✕</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="project-form">
+                        <div class="form-group">
+                            <label for="project-name">Project Name:</label>
+                            <input type="text" id="project-name" name="name" required 
+                                   placeholder="my-awesome-project">
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Create Project</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal" style="display: none;">
+            <div class="modal-content large">
+                <div class="modal-header">
+                    <h3>⚙️ Settings</h3>
+                    <button class="btn btn-icon modal-close">
+                        <span class="icon">✕</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-tabs">
+                        <button class="settings-tab active" data-tab="general">General</button>
+                        <button class="settings-tab" data-tab="terminal">Terminal</button>
+                        <button class="settings-tab" data-tab="claude">Claude</button>
+                        <button class="settings-tab" data-tab="system">System</button>
+                    </div>
+                    <div class="settings-content">
+                        <!-- Settings panels will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Help Modal -->
+        <div id="help-modal" class="modal" style="display: none;">
+            <div class="modal-content large">
+                <div class="modal-header">
+                    <h3>❓ Help & Documentation</h3>
+                    <button class="btn btn-icon modal-close">
+                        <span class="icon">✕</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="help-content">
+                        <h4>Getting Started</h4>
+                        <p>Welcome to Claude Code Web Manager! This interface allows you to manage Claude Code projects through your web browser.</p>
+                        
+                        <h4>Keyboard Shortcuts</h4>
+                        <div class="shortcuts-list">
+                            <div class="shortcut">
+                                <kbd>Ctrl</kbd> + <kbd>N</kbd>
+                                <span>New Project</span>
+                            </div>
+                            <div class="shortcut">
+                                <kbd>Ctrl</kbd> + <kbd>`</kbd>
+                                <span>Toggle Terminal</span>
+                            </div>
+                            <div class="shortcut">
+                                <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd>
+                                <span>Clear Terminal</span>
+                            </div>
+                            <div class="shortcut">
+                                <kbd>F1</kbd>
+                                <span>Help</span>
+                            </div>
+                        </div>
+                        
+                        <h4>Common Commands</h4>
+                        <ul>
+                            <li><code>/help</code> - Show Claude Code help</li>
+                            <li><code>/exit</code> - Exit Claude session</li>
+                            <li><code>/clear</code> - Clear terminal</li>
+                            <li><code>/status</code> - Show session status</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file input for image upload -->
+    <input type="file" id="image-file-input" accept="image/*" style="display: none;">
+
+    <!-- JavaScript Files -->
+    <script src="/assets/js/utils.js"></script>
+    <script src="/assets/js/socket-client.js"></script>
+    <script src="/assets/js/terminal.js"></script>
+    <script src="/assets/js/project-manager.js"></script>
+    <script src="/assets/js/image-manager.js"></script>
+    <script src="/assets/js/app.js"></script>
+</body>
+</html>

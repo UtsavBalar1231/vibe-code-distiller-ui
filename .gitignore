@@ -79,7 +79,7 @@ dist
 
 # Gatsby files
 .cache/
-public
+# public - removed to allow public assets for this project
 
 # Storybook build outputs
 .out
@@ -92,6 +92,7 @@ temp/
 # Logs
 logs/
 *.log
+server.log
 
 # PM2 process manager
 .pm2
@@ -119,6 +120,10 @@ Thumbs.db
 # Claude Code specific
 claude-code-*
 .claude/
+
+# End-to-end test results
+e2e/test-results/
+e2e/playwright-report/
 
 # Terminal session files
 .sessions/
