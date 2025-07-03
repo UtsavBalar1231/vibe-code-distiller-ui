@@ -141,19 +141,24 @@
                     <div class="sidebar-divider-handle"></div>
                 </div>
 
-                <!-- Images Panel -->
+                <!-- File Browser Panel -->
                 <section class="sidebar-panel">
                     <div class="panel-header">
-                        <h3>📷 Images</h3>
-                        <button class="btn btn-small btn-primary" id="upload-image-btn" title="Upload Image">+ Upload</button>
+                        <h3>📁 Files</h3>
+                        <div class="file-actions">
+                            <button class="btn btn-small btn-primary" id="upload-files-btn" title="Upload Files">📤 Upload</button>
+                            <button class="btn btn-small btn-secondary" id="create-folder-btn" title="New Folder">📁 New</button>
+                        </div>
                     </div>
                     <div class="panel-content">
-                        <div class="images-container" id="images-container">
-                            <div class="no-images" id="no-images">
-                                <span class="no-images-text">No images uploaded</span>
+                        <div class="file-browser" id="file-browser">
+                            <div class="file-breadcrumb" id="file-breadcrumb">
+                                <button class="breadcrumb-item active" data-path="">Project Root</button>
                             </div>
-                            <div class="images-grid" id="images-grid" style="display: none;">
-                                <!-- Images will be loaded here -->
+                            <div class="file-list" id="file-list">
+                                <div class="no-files" id="no-files">
+                                    <span class="no-files-text">Loading files...</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -302,15 +307,41 @@
         </div>
     </div>
 
-    <!-- Hidden file input for image upload -->
-    <input type="file" id="image-file-input" accept="image/*" style="display: none;">
+    <!-- Hidden file input for file upload -->
+    <input type="file" id="file-input" multiple style="display: none;">
+    
+    <!-- New Folder Modal -->
+    <div class="modal" id="new-folder-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Folder</h3>
+                <button class="modal-close" onclick="closeNewFolderModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="new-folder-form">
+                    <div class="form-group">
+                        <label for="folder-name">Folder Name:</label>
+                        <input type="text" id="folder-name" name="folderName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="folder-path">Location:</label>
+                        <input type="text" id="folder-path" name="folderPath" readonly>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeNewFolderModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="new-folder-form">Create</button>
+            </div>
+        </div>
+    </div>
 
     <!-- JavaScript Files -->
     <script src="/assets/js/utils.js"></script>
     <script src="/assets/js/socket-client.js"></script>
     <script src="/assets/js/terminal.js"></script>
     <script src="/assets/js/project-manager.js"></script>
-    <script src="/assets/js/image-manager.js"></script>
+    <script src="/assets/js/file-manager.js"></script>
     <script src="/assets/js/sidebar-divider.js"></script>
     <script src="/assets/js/app.js"></script>
 </body>

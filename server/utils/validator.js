@@ -204,14 +204,19 @@ const validateRequest = (schema, data, options = {}) => {
 };
 
 // Express middleware for validation
-const validateMiddleware = (schema, source = 'body') => {
+const validateMiddleware = (schema, source = 'body', paramName = null) => {
   return (req, res, next) => {
     let data;
     
     // For params validation, we need to handle the specific param field
     if (source === 'params') {
-      // If validating against project.id schema, get the 'id' param
-      data = req.params.id;
+      // If paramName is provided, use it; otherwise try common param names
+      if (paramName) {
+        data = req.params[paramName];
+      } else {
+        // Try to find the actual parameter value (projectId, id, etc.)
+        data = req.params.projectId || req.params.id;
+      }
     } else {
       data = req[source];
     }

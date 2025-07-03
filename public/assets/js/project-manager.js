@@ -265,9 +265,11 @@ class ProjectManager extends EventEmitter {
             
             this.emit('project_selected', project);
             
-            // Notify image manager about project change
-            if (window.ImageManager) {
-                window.ImageManager.setCurrentProject(projectId);
+            // Notify file manager about project change
+            if (window.fileManager) {
+                document.dispatchEvent(new CustomEvent('projectChanged', {
+                    detail: { projectId: projectId, project: project }
+                }));
             }
             
             // Close mobile menu after selecting project
