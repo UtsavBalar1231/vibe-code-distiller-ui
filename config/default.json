@@ -8,11 +8,11 @@
     }
   },
   "projects": {
-    "rootDir": "/home/distiller/projects"
+    "rootDir": "~/projects"
   },
   "claude": {
     "executable": "claude",
-    "defaultWorkingDir": "/home/distiller/projects",
+    "defaultWorkingDir": "~/projects",
     "maxSessions": 5,
     "sessionTimeout": 3600000,
     "defaultShell": "/bin/bash"

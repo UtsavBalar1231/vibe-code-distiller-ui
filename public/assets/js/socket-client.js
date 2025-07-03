@@ -10,6 +10,10 @@ class SocketClient extends EventEmitter {
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 1000;
         
+        // Project connection state tracking
+        this.projectStates = new Map(); // projectId -> {status, readyCallbacks, lastActivity}
+        this.pendingInputs = new Map(); // projectId -> input queue
+        
         this.setupSocket();
     }
     
@@ -159,6 +163,35 @@ class SocketClient extends EventEmitter {
             this.emit('terminal_output', data);
         });
         
+        // Project connection events
+        this.socket.on('project-ready', (data) => {
+            const { projectId } = data;
+            console.log(`Project ready event received for: ${projectId}`);
+            this.markProjectReady(projectId);
+            this.emit('project_ready', data);
+        });
+        
+        this.socket.on('project-disconnected', (data) => {
+            const { projectId } = data;
+            console.log(`Project disconnected event received for: ${projectId}`);
+            this.markProjectDisconnected(projectId);
+            this.emit('project_disconnected', data);
+        });
+        
+        this.socket.on('terminal-session-created', (data) => {
+            const { projectId } = data;
+            console.log(`Terminal session created for: ${projectId}`);
+            // Mark project as ready when terminal session is created
+            setTimeout(() => this.markProjectReady(projectId), 100);
+            this.emit('terminal_session_created', data);
+        });
+        
+        this.socket.on('terminal-input-error', (data) => {
+            const { projectId, message, details } = data;
+            console.error(`Terminal input error for ${projectId}: ${message}`, details);
+            this.emit('terminal_input_error', data);
+        });
+        
         // Claude Code events
         this.socket.on('claude-response', (data) => {
             this.emit('claude_response', data);
@@ -301,13 +334,11 @@ class SocketClient extends EventEmitter {
         }
         
         // Ensure we're connected to the project before sending input
-        if (this.currentProject !== projectId) {
-            console.warn('Project mismatch detected, rejoining project:', projectId);
-            this.joinProject(projectId);
-            // Delay the input to allow project join to complete
-            setTimeout(() => {
+        if (this.currentProject !== projectId || !this.isProjectReady(projectId)) {
+            console.warn('Project connection not ready, ensuring connection:', projectId);
+            this.ensureProjectConnection(projectId, () => {
                 this.socket.emit('terminal-input', { projectId, input });
-            }, 500);
+            });
             return true;
         }
         
@@ -433,6 +464,101 @@ class SocketClient extends EventEmitter {
             socketId: this.socket?.id,
             transport: this.socket?.io?.engine?.transport?.name
         };
+    }
+    
+    // Project connection state management
+    isProjectReady(projectId) {
+        const state = this.projectStates.get(projectId);
+        return state && state.status === 'ready';
+    }
+    
+    ensureProjectConnection(projectId, callback, timeout = 5000) {
+        const state = this.projectStates.get(projectId) || { 
+            status: 'disconnected', 
+            readyCallbacks: [], 
+            lastActivity: Date.now() 
+        };
+        
+        this.projectStates.set(projectId, state);
+        
+        if (state.status === 'ready') {
+            callback();
+            return;
+        }
+        
+        // Add callback to queue
+        if (callback) {
+            state.readyCallbacks.push({
+                callback,
+                timestamp: Date.now(),
+                timeout: setTimeout(() => {
+                    console.error(`Project connection timeout for ${projectId}`);
+                    this.emit('error', new Error(`Project connection timeout: ${projectId}`));
+                }, timeout)
+            });
+        }
+        
+        // If already connecting, just wait
+        if (state.status === 'connecting') {
+            return;
+        }
+        
+        // Start connection process
+        state.status = 'connecting';
+        console.log(`Ensuring project connection for: ${projectId}`);
+        
+        this.joinProject(projectId);
+        
+        // Set a backup timeout to mark as ready if no confirmation received
+        setTimeout(() => {
+            if (state.status === 'connecting') {
+                console.warn(`No ready confirmation for ${projectId}, assuming ready`);
+                this.markProjectReady(projectId);
+            }
+        }, 2000);
+    }
+    
+    markProjectReady(projectId) {
+        const state = this.projectStates.get(projectId);
+        if (!state) return;
+        
+        state.status = 'ready';
+        state.lastActivity = Date.now();
+        
+        console.log(`Project ${projectId} marked as ready`);
+        
+        // Execute queued callbacks
+        while (state.readyCallbacks.length > 0) {
+            const { callback, timeout } = state.readyCallbacks.shift();
+            clearTimeout(timeout);
+            try {
+                callback();
+            } catch (error) {
+                console.error('Error executing ready callback:', error);
+            }
+        }
+        
+        // Process any pending inputs
+        const pendingInputs = this.pendingInputs.get(projectId);
+        if (pendingInputs && pendingInputs.length > 0) {
+            console.log(`Processing ${pendingInputs.length} pending inputs for ${projectId}`);
+            while (pendingInputs.length > 0) {
+                const input = pendingInputs.shift();
+                this.socket.emit('terminal-input', { projectId, input });
+            }
+        }
+    }
+    
+    markProjectDisconnected(projectId) {
+        const state = this.projectStates.get(projectId);
+        if (state) {
+            state.status = 'disconnected';
+            // Clear any pending callbacks
+            while (state.readyCallbacks.length > 0) {
+                const { timeout } = state.readyCallbacks.shift();
+                clearTimeout(timeout);
+            }
+        }
     }
 }
 

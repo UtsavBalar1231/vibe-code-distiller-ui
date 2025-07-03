@@ -1,23 +1,17 @@
 {
   "sessions": {
-    "test-123": {
-      "tmuxSession": "claude-web-test-123-1751509521268",
-      "projectId": "test-123",
-      "created": 1751509521269,
-      "lastSeen": 1751509521269
+    "my-images": {
+      "tmuxSession": "claude-web-my-images-1751509527829",
+      "projectId": "my-images",
+      "created": 1751509527829,
+      "lastSeen": 1751509527829
     },
-    "test-test-test": {
-      "tmuxSession": "claude-web-test-test-test-1751509533674",
-      "projectId": "test-test-test",
-      "created": 1751509533674,
-      "lastSeen": 1751509533674
-    },
-    "test": {
-      "tmuxSession": "claude-web-test-1751509536987",
-      "projectId": "test",
-      "created": 1751509536987,
-      "lastSeen": 1751509536987
+    "my-test-2": {
+      "tmuxSession": "claude-web-my-test-2-1751509689238",
+      "projectId": "my-test-2",
+      "created": 1751509689238,
+      "lastSeen": 1751509689238
     }
   },
-  "lastUpdated": "2025-07-03T02:29:19.192Z"
+  "lastUpdated": "2025-07-03T02:31:17.923Z"
 }

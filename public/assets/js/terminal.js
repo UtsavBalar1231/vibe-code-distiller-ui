@@ -17,6 +17,7 @@ class TerminalManager extends EventEmitter {
         socket.onTerminalOutput(this.handleTerminalOutput.bind(this));
         socket.onClaudeResponse(this.handleClaudeResponse.bind(this));
         socket.onProjectStatus(this.handleProjectStatus.bind(this));
+        socket.on('terminal_input_error', this.handleTerminalInputError.bind(this));
         
         // Tmux session events
         socket.on('terminal:sessions-list', this.handleSessionsList.bind(this));
@@ -118,17 +119,18 @@ class TerminalManager extends EventEmitter {
             className: 'terminal-wrapper'
         });
         
-        const statusBar = this.createStatusBar(terminalId, projectId);
+        // Removed terminal status bar to prevent overlap with tmux status bar
+        // const statusBar = this.createStatusBar(terminalId, projectId);
         
         terminalElement.appendChild(terminalWrapper);
-        terminalElement.appendChild(statusBar);
+        // terminalElement.appendChild(statusBar);
         this.container.appendChild(terminalElement);
         
         // Open terminal in wrapper
         terminal.open(terminalWrapper);
         
-        // Fit terminal to container
-        fitAddon.fit();
+        // Fit terminal to container with proper timing
+        this.fitTerminalSafely(fitAddon, terminalWrapper, terminalId);
         
         // Send initial size to server for tmux sessions (with delay for reconnections)
         if (projectId && socket.isConnected()) {
@@ -160,7 +162,7 @@ class TerminalManager extends EventEmitter {
             webLinksAddon,
             projectId,
             isClaudeTerminal,
-            statusBar,
+            // statusBar removed to prevent overlap with tmux status bar
             history: [],
             historyIndex: -1,
             currentInput: '',
@@ -169,13 +171,11 @@ class TerminalManager extends EventEmitter {
         
         this.terminals.set(terminalId, terminalData);
         
-        // Make this terminal active
-        this.setActiveTerminal(terminalId);
+        // Make this terminal active with enhanced visibility check
+        this.setActiveTerminalSafely(terminalId);
         
-        // Hide welcome screen
-        if (this.welcomeScreen) {
-            DOM.hide(this.welcomeScreen);
-        }
+        // Hide welcome screen with multiple fallbacks
+        this.hideWelcomeScreenSafely();
         
         // Focus terminal
         terminal.focus();
@@ -211,7 +211,7 @@ class TerminalManager extends EventEmitter {
             // For interactive applications like Claude Code, send all input directly to server
             // without local processing to ensure interactive prompts work correctly
             if (projectId && socket.isConnected()) {
-                socket.sendTerminalInput(projectId, data);
+                this.sendTerminalInputSafely(projectId, data, terminalId);
                 return;
             }
             
@@ -849,6 +849,190 @@ class TerminalManager extends EventEmitter {
         }
     }
     
+    fitTerminalSafely(fitAddon, terminalWrapper, terminalId, retryCount = 0) {
+        const maxRetries = 3;
+        const retryDelay = 100;
+        
+        // Check if container has valid dimensions
+        const hasValidDimensions = () => {
+            return terminalWrapper.offsetWidth > 0 && terminalWrapper.offsetHeight > 0;
+        };
+        
+        // Perform the fit operation
+        const performFit = () => {
+            try {
+                if (hasValidDimensions()) {
+                    fitAddon.fit();
+                    console.log(`Terminal ${terminalId} fitted successfully`);
+                } else {
+                    throw new Error('Container dimensions not ready');
+                }
+            } catch (error) {
+                console.warn(`Failed to fit terminal ${terminalId}:`, error.message);
+                
+                if (retryCount < maxRetries) {
+                    setTimeout(() => {
+                        this.fitTerminalSafely(fitAddon, terminalWrapper, terminalId, retryCount + 1);
+                    }, retryDelay);
+                } else {
+                    console.error(`Failed to fit terminal ${terminalId} after ${maxRetries} retries`);
+                }
+            }
+        };
+        
+        // Use requestAnimationFrame to ensure DOM is rendered
+        if (retryCount === 0) {
+            requestAnimationFrame(() => {
+                // Add a small delay to ensure layout is complete
+                setTimeout(performFit, 10);
+            });
+        } else {
+            performFit();
+        }
+    }
+    
+    setActiveTerminalSafely(terminalId, retryCount = 0) {
+        const maxRetries = 3;
+        const retryDelay = 50;
+        
+        const terminalData = this.terminals.get(terminalId);
+        if (!terminalData) {
+            console.error(`Cannot set active terminal: ${terminalId} not found`);
+            return;
+        }
+        
+        // Perform the activation
+        const performActivation = () => {
+            try {
+                // Set active terminal
+                if (this.activeTerminal && this.activeTerminal !== terminalId) {
+                    const currentTerminalData = this.terminals.get(this.activeTerminal);
+                    if (currentTerminalData) {
+                        currentTerminalData.isActive = false;
+                        DOM.removeClass(currentTerminalData.element, 'active');
+                        DOM.removeClass(currentTerminalData.tab, 'active');
+                    }
+                }
+                
+                this.activeTerminal = terminalId;
+                terminalData.isActive = true;
+                DOM.addClass(terminalData.element, 'active');
+                DOM.addClass(terminalData.tab, 'active');
+                
+                // Verify visibility
+                const isVisible = terminalData.element.offsetWidth > 0 && terminalData.element.offsetHeight > 0;
+                if (!isVisible && retryCount < maxRetries) {
+                    console.warn(`Terminal ${terminalId} not visible, retrying... (${retryCount + 1}/${maxRetries})`);
+                    setTimeout(() => {
+                        this.setActiveTerminalSafely(terminalId, retryCount + 1);
+                    }, retryDelay);
+                    return;
+                }
+                
+                // Fit and focus terminal
+                if (terminalData.fitAddon) {
+                    terminalData.fitAddon.fit();
+                }
+                terminalData.terminal.focus();
+                
+                // Sync project selection when terminal is activated
+                if (terminalData.projectId && projectManager) {
+                    projectManager.updateActiveProject(terminalData.projectId);
+                }
+                
+                console.log(`Terminal ${terminalId} activated successfully`);
+                
+            } catch (error) {
+                console.error(`Failed to activate terminal ${terminalId}:`, error);
+                if (retryCount < maxRetries) {
+                    setTimeout(() => {
+                        this.setActiveTerminalSafely(terminalId, retryCount + 1);
+                    }, retryDelay);
+                }
+            }
+        };
+        
+        // Use requestAnimationFrame for better timing
+        if (retryCount === 0) {
+            requestAnimationFrame(performActivation);
+        } else {
+            performActivation();
+        }
+    }
+    
+    hideWelcomeScreenSafely() {
+        const hideWelcome = () => {
+            // Try multiple selectors
+            const selectors = ['welcome-screen', '.welcome-screen', '#welcome-screen'];
+            let welcomeElement = null;
+            
+            for (const selector of selectors) {
+                welcomeElement = selector.startsWith('.') || selector.startsWith('#') 
+                    ? DOM.query(selector) 
+                    : DOM.get(selector);
+                if (welcomeElement) break;
+            }
+            
+            if (welcomeElement) {
+                DOM.hide(welcomeElement);
+                console.log('Welcome screen hidden successfully');
+            } else {
+                console.warn('Welcome screen element not found');
+            }
+        };
+        
+        // Try immediately and with small delay as fallback
+        hideWelcome();
+        setTimeout(hideWelcome, 10);
+    }
+    
+    sendTerminalInputSafely(projectId, data, terminalId, retryCount = 0) {
+        const maxRetries = 3;
+        const retryDelay = 200;
+        
+        try {
+            const success = socket.sendTerminalInput(projectId, data);
+            if (!success && retryCount < maxRetries) {
+                console.warn(`Failed to send terminal input for ${projectId}, retrying... (${retryCount + 1}/${maxRetries})`);
+                setTimeout(() => {
+                    this.sendTerminalInputSafely(projectId, data, terminalId, retryCount + 1);
+                }, retryDelay);
+                return;
+            }
+            
+            if (!success && retryCount >= maxRetries) {
+                console.error(`Failed to send terminal input for ${projectId} after ${maxRetries} retries`);
+                this.showTerminalError(terminalId, 'Failed to process terminal input. Please check your connection.');
+            }
+            
+        } catch (error) {
+            console.error(`Error sending terminal input for ${projectId}:`, error);
+            
+            if (retryCount < maxRetries) {
+                setTimeout(() => {
+                    this.sendTerminalInputSafely(projectId, data, terminalId, retryCount + 1);
+                }, retryDelay);
+            } else {
+                this.showTerminalError(terminalId, 'Failed to process terminal input');
+            }
+        }
+    }
+    
+    showTerminalError(terminalId, message) {
+        // Show user-friendly error notification
+        if (window.notifications) {
+            notifications.error(message, { duration: 3000 });
+        }
+        
+        // Optionally write error to terminal
+        const terminalData = this.terminals.get(terminalId);
+        if (terminalData && terminalData.terminal) {
+            terminalData.terminal.writeln(`\r\n\x1b[31m${message}\x1b[0m`);
+        }
+        
+        console.error(`Terminal ${terminalId}: ${message}`);
+    }
+    
     updateTerminalSize(terminalId) {
         const terminalData = this.terminals.get(terminalId);
         if (terminalData && terminalData.projectId && socket.isConnected()) {
@@ -929,6 +1113,19 @@ class TerminalManager extends EventEmitter {
         }
     }
     
+    handleTerminalInputError(data) {
+        const { projectId, message, details } = data;
+        console.error(`Terminal input error for project ${projectId}: ${message}`, details);
+        
+        // Find terminal for this project
+        for (const [terminalId, terminalData] of this.terminals.entries()) {
+            if (terminalData.projectId === projectId) {
+                this.showTerminalError(terminalId, message);
+                break;
+            }
+        }
+    }
+    
     // Helper function to escape special regex characters
     escapeRegExp(string) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -964,28 +1161,16 @@ class TerminalManager extends EventEmitter {
     }
     
     updateTerminalProjectStatus(terminalData, status) {
-        const statusElement = terminalData.statusBar.querySelector(`#project-${terminalData.id}`);
-        if (statusElement) {
-            DOM.removeClass(statusElement, 'success', 'warning', 'error');
-            
-            switch (status) {
-                case 'claude_started':
-                    DOM.addClass(statusElement, 'success');
-                    terminalData.terminal.writeln('\r\n\x1b[32mClaude session started\x1b[0m');
-                    // this.writePrompt(terminalData.terminal);
-                    break;
-                case 'claude_stopped':
-                    DOM.removeClass(statusElement, 'success', 'warning', 'error');
-                    terminalData.terminal.writeln('\r\n\x1b[33mClaude session stopped\x1b[0m');
-                    // this.writePrompt(terminalData.terminal);
-                    break;
-                case 'terminal_created':
-                    DOM.addClass(statusElement, 'success');
-                    break;
-                case 'terminal_destroyed':
-                    DOM.addClass(statusElement, 'error');
-                    break;
-            }
+        // Status bar has been removed to prevent overlap with tmux status bar
+        // Only handle terminal output now
+        switch (status) {
+            case 'claude_started':
+                terminalData.terminal.writeln('\r\n\x1b[32mClaude session started\x1b[0m');
+                break;
+            case 'claude_stopped':
+                terminalData.terminal.writeln('\r\n\x1b[33mClaude session stopped\x1b[0m');
+                break;
+            // terminal_created and terminal_destroyed don't need terminal output
         }
     }
     

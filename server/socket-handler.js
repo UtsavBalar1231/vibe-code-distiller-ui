@@ -233,11 +233,35 @@ class SocketManager {
       if (!terminalStatus.exists) {
         try {
           await terminalService.createSession(projectId, {
-            cwd: project.path
+            cwd: project.path,
+            cols: 80, // Default terminal size
+            rows: 24
           });
           terminalStatus = terminalService.getSessionStatus(projectId);
           
           logger.info('Terminal session created automatically for project:', { projectId });
+          
+          // Notify client that terminal session is ready
+          socket.emit(WEBSOCKET.EVENTS.PROJECT_STATUS, {
+            projectId,
+            status: 'terminal_ready',
+            timestamp: new Date().toISOString()
+          });
+          
+          // Emit terminal session created event
+          socket.emit('terminal-session-created', {
+            projectId,
+            sessionId: projectId,
+            timestamp: new Date().toISOString()
+          });
+          
+          // Mark project as ready after a small delay
+          setTimeout(() => {
+            socket.emit('project-ready', {
+              projectId,
+              timestamp: new Date().toISOString()
+            });
+          }, 200);
         } catch (error) {
           logger.error('Failed to create terminal session automatically:', {
             projectId,
@@ -422,9 +446,19 @@ class SocketManager {
     } catch (error) {
       logger.error('Failed to process terminal input:', { 
         socketId: socket.id, 
+        projectId: data.projectId,
         error: error.message 
       });
       
+      // Send specific terminal input error
+      socket.emit('terminal-input-error', {
+        projectId: data.projectId,
+        message: 'Failed to process terminal input',
+        details: error.message,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Also send general error for backward compatibility
       socket.emit(WEBSOCKET.EVENTS.ERROR, {
         message: 'Failed to process terminal input',
         details: error.message

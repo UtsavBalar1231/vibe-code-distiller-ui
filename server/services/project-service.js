@@ -1,6 +1,8 @@
 const fs = require('fs-extra');
 const path = require('path');
+const os = require('os');
 const chokidar = require('chokidar');
+const config = require('config');
 const logger = require('../utils/logger');
 const { PROJECT, ERROR_CODES, SUCCESS_MESSAGES, FILE_TYPES } = require('../utils/constants');
 const { AppError } = require('../middleware/error-handler');
@@ -8,7 +10,19 @@ const { sanitize } = require('../utils/validator');
 
 class ProjectService {
   constructor() {
-    this.projectsRoot = PROJECT.ROOT_DIR;
+    // Get projects root from config, fallback to PROJECT.ROOT_DIR
+    let rootDir;
+    try {
+      rootDir = config.get('projects.rootDir');
+      // Handle ~ path expansion
+      if (rootDir.startsWith('~')) {
+        rootDir = rootDir.replace('~', os.homedir());
+      }
+    } catch (error) {
+      rootDir = PROJECT.ROOT_DIR;
+    }
+    
+    this.projectsRoot = rootDir;
     this.watchers = new Map();
     this.projectCache = new Map();
     

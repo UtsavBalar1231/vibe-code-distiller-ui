@@ -10,7 +10,12 @@ const config = require('config');
 // Get project root directory
 const getProjectRoot = () => {
   try {
-    return config.get('projects.rootDir');
+    let rootDir = config.get('projects.rootDir');
+    // Handle ~ path expansion
+    if (rootDir.startsWith('~')) {
+      rootDir = rootDir.replace('~', require('os').homedir());
+    }
+    return rootDir;
   } catch (error) {
     // Fallback to default if not configured
     return path.join(process.cwd(), '../projects');
