@@ -130,12 +130,15 @@ class TerminalManager extends EventEmitter {
         // Fit terminal to container
         fitAddon.fit();
         
-        // Send initial size to server for tmux sessions
+        // Send initial size to server for tmux sessions (with delay for reconnections)
         if (projectId && socket.isConnected()) {
-            const { cols, rows } = terminal;
-            if (cols && rows) {
-                socket.resizeTerminal(projectId, cols, rows);
-            }
+            // Small delay to allow server to set up terminal session
+            setTimeout(() => {
+                const { cols, rows } = terminal;
+                if (cols && rows) {
+                    socket.resizeTerminal(projectId, cols, rows);
+                }
+            }, 300);
         }
         
         // Setup terminal event handlers

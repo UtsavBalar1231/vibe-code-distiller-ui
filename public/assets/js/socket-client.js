@@ -126,7 +126,10 @@ class SocketClient extends EventEmitter {
                 setTimeout(() => {
                     this.joinProject(this.currentProject);
                 }, 1000);
-            } else if (error.message === 'Failed to resize terminal' && error.details === 'Terminal session not found') {
+            } else if (error.message === 'Failed to resize terminal' && 
+                      (error.details === 'Terminal session not found' || 
+                       error.details === 'Terminal not active' ||
+                       (error.details && error.details.includes('Terminal not active')))) {
                 // Terminal session not ready yet, ignore this error
                 // This can happen when switching terminals or reconnecting
             } else if (error.message && error.message.includes('Socket is not connected')) {

@@ -272,6 +272,31 @@ class SocketManager {
             });
           }
         });
+        
+        // Apply pending resize if any
+        if (socket.pendingResize && socket.pendingResize.projectId === projectId) {
+          const { cols, rows } = socket.pendingResize;
+          try {
+            // Wait a bit for terminal to be fully ready
+            setTimeout(async () => {
+              try {
+                await terminalService.resizeSession(projectId, cols, rows);
+                logger.info('Applied pending resize after terminal setup:', { projectId, cols, rows });
+                delete socket.pendingResize;
+              } catch (resizeError) {
+                logger.error('Failed to apply pending resize:', {
+                  projectId,
+                  error: resizeError.message
+                });
+              }
+            }, 500);
+          } catch (error) {
+            logger.error('Failed to schedule pending resize:', {
+              projectId,
+              error: error.message
+            });
+          }
+        }
       }
 
       // Set up file watching
@@ -466,8 +491,30 @@ class SocketManager {
         }
       }
 
+      // Check if terminal is active before resizing
+      if (!terminalStatus.active) {
+        logger.debug('Terminal not yet active, skipping resize:', { projectId, cols, rows });
+        // Store the resize request to apply later when terminal becomes active
+        socket.pendingResize = { projectId, cols, rows };
+        return;
+      }
+
       // Resize existing terminal
-      await terminalService.resizeSession(projectId, cols, rows);
+      try {
+        await terminalService.resizeSession(projectId, cols, rows);
+        // Clear any pending resize
+        if (socket.pendingResize && socket.pendingResize.projectId === projectId) {
+          delete socket.pendingResize;
+        }
+      } catch (resizeError) {
+        // If resize fails because terminal is not active, store for later
+        if (resizeError.message && resizeError.message.includes('Terminal not active')) {
+          logger.debug('Terminal not active for resize, will retry later:', { projectId, cols, rows });
+          socket.pendingResize = { projectId, cols, rows };
+          return;
+        }
+        throw resizeError;
+      }
       
       logger.socket('Terminal resized', socket.id, { projectId, cols, rows });
 
