@@ -233,11 +233,35 @@ class SocketManager {
       if (!terminalStatus.exists) {
         try {
           await terminalService.createSession(projectId, {
-            cwd: project.path
+            cwd: project.path,
+            cols: 80, // Default terminal size
+            rows: 24
           });
           terminalStatus = terminalService.getSessionStatus(projectId);
           
           logger.info('Terminal session created automatically for project:', { projectId });
+          
+          // Notify client that terminal session is ready
+          socket.emit(WEBSOCKET.EVENTS.PROJECT_STATUS, {
+            projectId,
+            status: 'terminal_ready',
+            timestamp: new Date().toISOString()
+          });
+          
+          // Emit terminal session created event
+          socket.emit('terminal-session-created', {
+            projectId,
+            sessionId: projectId,
+            timestamp: new Date().toISOString()
+          });
+          
+          // Mark project as ready after a small delay
+          setTimeout(() => {
+            socket.emit('project-ready', {
+              projectId,
+              timestamp: new Date().toISOString()
+            });
+          }, 200);
         } catch (error) {
           logger.error('Failed to create terminal session automatically:', {
             projectId,
@@ -397,9 +421,19 @@ class SocketManager {
     } catch (error) {
       logger.error('Failed to process terminal input:', { 
         socketId: socket.id, 
+        projectId: data.projectId,
         error: error.message 
       });
       
+      // Send specific terminal input error
+      socket.emit('terminal-input-error', {
+        projectId: data.projectId,
+        message: 'Failed to process terminal input',
+        details: error.message,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Also send general error for backward compatibility
       socket.emit(WEBSOCKET.EVENTS.ERROR, {
         message: 'Failed to process terminal input',
         details: error.message
@@ -466,8 +500,36 @@ class SocketManager {
         }
       }
 
-      // Resize existing terminal
-      await terminalService.resizeSession(projectId, cols, rows);
+      // Add delay to ensure terminal is fully initialized before resize
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Resize existing terminal with retry mechanism
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          await terminalService.resizeSession(projectId, cols, rows);
+          break; // Success, exit retry loop
+        } catch (resizeError) {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            // Final attempt failed, but don't show error to user for resize failures
+            // as they're often timing-related and non-critical
+            logger.warn('Terminal resize failed after retries (non-critical):', {
+              projectId,
+              cols,
+              rows,
+              error: resizeError.message,
+              retries: retryCount
+            });
+            return; // Silent fail for resize operations
+          }
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 50 * retryCount));
+        }
+      }
       
       logger.socket('Terminal resized', socket.id, { projectId, cols, rows });
 
