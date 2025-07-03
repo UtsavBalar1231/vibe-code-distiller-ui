@@ -366,11 +366,18 @@ body {
     border-bottom: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
+    min-height: 100px;
+    overflow: hidden;
+}
+
+.sidebar-panel:first-child {
+    flex: 0 0 250px; /* Default height for projects panel */
 }
 
 .sidebar-panel:last-child {
     border-bottom: none;
     flex: 1;
+    min-height: 150px;
 }
 
 .panel-header {
@@ -531,6 +538,54 @@ body {
     background-color: var(--bg-tertiary);
     border-radius: var(--border-radius-sm);
     font-size: 10px;
+}
+
+/* ===== SIDEBAR DIVIDER ===== */
+.sidebar-divider {
+    height: 6px;
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+    cursor: ns-resize;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.sidebar-divider:hover {
+    background-color: var(--bg-hover);
+}
+
+.sidebar-divider:active {
+    background-color: var(--accent-primary);
+}
+
+.sidebar-divider-handle {
+    width: 40px;
+    height: 3px;
+    background-color: var(--border-color);
+    border-radius: 2px;
+    transition: background-color var(--transition-fast);
+}
+
+.sidebar-divider:hover .sidebar-divider-handle {
+    background-color: var(--text-secondary);
+}
+
+.sidebar-divider:active .sidebar-divider-handle {
+    background-color: var(--text-inverse);
+}
+
+.sidebar-divider.dragging {
+    background-color: var(--accent-primary);
+}
+
+.sidebar-divider.dragging .sidebar-divider-handle {
+    background-color: var(--text-inverse);
 }
 
 
