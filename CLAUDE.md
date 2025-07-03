@@ -145,3 +145,9 @@ The application includes specific optimizations for Raspberry Pi deployment:
 ## Feature Updates
 
 - 新增功能：将项目的新功能加入到claude.md中，以便跟踪项目演进和特性更新
+- **Tmux Integration (2025-07-02)**: Added persistent terminal sessions using tmux
+  - Sessions persist across browser/device changes
+  - Automatic session discovery and reconnection
+  - Cross-device session continuation
+  - Session management UI with Ctrl+Shift+S shortcut
+  - Optional feature controlled by config/terminal.tmux.enabled

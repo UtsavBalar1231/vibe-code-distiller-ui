@@ -8,11 +8,11 @@
     }
   },
   "projects": {
-    "rootDir": "/home/lanpangzi/Desktop/claude_test/projects"
+    "rootDir": "/home/distiller/projects"
   },
   "claude": {
     "executable": "claude",
-    "defaultWorkingDir": "/home/pi/projects",
+    "defaultWorkingDir": "/home/distiller/projects",
     "maxSessions": 5,
     "sessionTimeout": 3600000,
     "defaultShell": "/bin/bash"
@@ -27,6 +27,12 @@
       "foreground": "#d4d4d4",
       "cursor": "#ffffff",
       "selection": "#264f78"
+    },
+    "tmux": {
+      "enabled": true,
+      "sessionPrefix": "claude-web",
+      "inactiveTimeout": 1800000,
+      "cleanupOrphaned": true
     }
   },
   "websocket": {

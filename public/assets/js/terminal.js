@@ -17,6 +17,11 @@ class TerminalManager extends EventEmitter {
         socket.onTerminalOutput(this.handleTerminalOutput.bind(this));
         socket.onClaudeResponse(this.handleClaudeResponse.bind(this));
         socket.onProjectStatus(this.handleProjectStatus.bind(this));
+        
+        // Tmux session events
+        socket.on('terminal:sessions-list', this.handleSessionsList.bind(this));
+        socket.on('terminal:session-attached', this.handleSessionAttached.bind(this));
+        socket.on('terminal:session-detached', this.handleSessionDetached.bind(this));
     }
     
     setupTerminalControls() {
@@ -56,6 +61,11 @@ class TerminalManager extends EventEmitter {
                 this.switchToTerminal(i - 1);
             });
         }
+        
+        // Tmux session management
+        keyboard.register('ctrl+shift+s', () => {
+            this.listSessions();
+        });
     }
     
     createTerminal(projectId = null, options = {}) {
@@ -120,8 +130,19 @@ class TerminalManager extends EventEmitter {
         // Fit terminal to container
         fitAddon.fit();
         
+        // Send initial size to server for tmux sessions
+        if (projectId && socket.isConnected()) {
+            const { cols, rows } = terminal;
+            if (cols && rows) {
+                socket.resizeTerminal(projectId, cols, rows);
+            }
+        }
+        
         // Setup terminal event handlers
         this.setupTerminalEvents(terminal, terminalId, projectId);
+        
+        // Setup mobile touch gestures
+        this.setupMobileTouchGestures(terminalWrapper, terminal);
         
         // Create tab
         const tab = this.createTerminalTab(terminalId, projectId, isClaudeTerminal);
@@ -555,6 +576,66 @@ class TerminalManager extends EventEmitter {
         this.writePrompt(terminal);
     }
     
+    setupMobileTouchGestures(terminalWrapper, terminal) {
+        // Only add touch gestures on mobile devices
+        if (window.innerWidth > 768) return;
+        
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchStartTime = 0;
+        
+        // Double tap to focus/unfocus terminal
+        terminalWrapper.addEventListener('touchstart', (e) => {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - touchStartTime;
+            
+            if (tapLength < 500 && tapLength > 0) {
+                // Double tap detected
+                e.preventDefault();
+                if (document.activeElement === terminal.textarea) {
+                    terminal.blur();
+                } else {
+                    terminal.focus();
+                }
+            }
+            
+            touchStartTime = currentTime;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        });
+        
+        // Long press to show context menu (copy/paste)
+        let longPressTimer;
+        terminalWrapper.addEventListener('touchstart', (e) => {
+            longPressTimer = setTimeout(() => {
+                // Trigger browser's native selection/copy menu
+                const selection = terminal.getSelection();
+                if (selection) {
+                    Utils.copyToClipboard(selection);
+                    notifications.success('Copied to clipboard');
+                }
+            }, 500);
+        });
+        
+        terminalWrapper.addEventListener('touchend', () => {
+            clearTimeout(longPressTimer);
+        });
+        
+        terminalWrapper.addEventListener('touchmove', () => {
+            clearTimeout(longPressTimer);
+        });
+        
+        // Prevent default touch behaviors that interfere with terminal
+        terminalWrapper.addEventListener('touchmove', (e) => {
+            // Allow scrolling but prevent other gestures
+            if (Math.abs(e.touches[0].clientY - touchStartY) > 10) {
+                // Vertical scroll is allowed
+            } else {
+                e.preventDefault();
+            }
+        });
+    }
+    
     createTerminalTab(terminalId, projectId, isClaudeTerminal) {
         const tab = DOM.create('button', {
             className: 'terminal-tab',
@@ -936,10 +1017,150 @@ class TerminalManager extends EventEmitter {
             this.closeTerminal(terminalData.id);
         });
     }
+    
+    // Tmux session management
+    async listSessions() {
+        socket.emit('terminal:list-sessions', {});
+    }
+    
+    async attachSession(projectId) {
+        socket.emit('terminal:attach-session', { projectId });
+    }
+    
+    async detachSession(projectId) {
+        socket.emit('terminal:detach-session', { projectId });
+    }
+    
+    handleSessionsList(data) {
+        const { sessions } = data;
+        this.showSessionsDialog(sessions);
+    }
+    
+    handleSessionAttached(data) {
+        const { projectId, isReconnect } = data;
+        
+        if (isReconnect) {
+            // Find terminal for this project
+            const terminals = this.getTerminalsByProject(projectId);
+            if (terminals.length === 0) {
+                // Create new terminal tab for reconnected session
+                this.createTerminalForProject(projectId);
+            }
+            
+            toaster.show({
+                message: `Reconnected to existing session for project ${projectId}`,
+                type: 'success',
+                duration: 3000
+            });
+        }
+    }
+    
+    handleSessionDetached(data) {
+        const { projectId } = data;
+        
+        toaster.show({
+            message: `Detached from session. Session remains active in background.`,
+            type: 'info',
+            duration: 3000
+        });
+    }
+    
+    showSessionsDialog(sessions) {
+        const dialogContent = document.createElement('div');
+        dialogContent.className = 'sessions-list';
+        
+        if (sessions.length === 0) {
+            dialogContent.innerHTML = '<p>No active tmux sessions found.</p>';
+        } else {
+            const sessionsList = document.createElement('ul');
+            sessionsList.className = 'sessions-list-items';
+            
+            sessions.forEach(session => {
+                const item = document.createElement('li');
+                item.className = 'session-item';
+                
+                const info = document.createElement('div');
+                info.className = 'session-info';
+                info.innerHTML = `
+                    <strong>Project: ${session.projectId}</strong><br>
+                    <small>Created: ${new Date(session.created).toLocaleString()}</small><br>
+                    <small>Status: ${session.attached ? 'Attached' : 'Detached'}</small>
+                `;
+                
+                const actions = document.createElement('div');
+                actions.className = 'session-actions';
+                
+                if (!session.active) {
+                    const attachBtn = document.createElement('button');
+                    attachBtn.textContent = 'Attach';
+                    attachBtn.className = 'btn btn-sm btn-primary';
+                    attachBtn.onclick = () => {
+                        this.attachSession(session.projectId);
+                        modals.close('sessions-dialog');
+                    };
+                    actions.appendChild(attachBtn);
+                } else {
+                    const detachBtn = document.createElement('button');
+                    detachBtn.textContent = 'Detach';
+                    detachBtn.className = 'btn btn-sm btn-secondary';
+                    detachBtn.onclick = () => {
+                        this.detachSession(session.projectId);
+                        modals.close('sessions-dialog');
+                    };
+                    actions.appendChild(detachBtn);
+                }
+                
+                item.appendChild(info);
+                item.appendChild(actions);
+                sessionsList.appendChild(item);
+            });
+            
+            dialogContent.appendChild(sessionsList);
+        }
+        
+        // Add refresh button
+        const refreshBtn = document.createElement('button');
+        refreshBtn.textContent = 'Refresh';
+        refreshBtn.className = 'btn btn-primary';
+        refreshBtn.onclick = () => this.listSessions();
+        
+        const footer = document.createElement('div');
+        footer.className = 'dialog-footer';
+        footer.appendChild(refreshBtn);
+        dialogContent.appendChild(footer);
+        
+        modals.custom({
+            id: 'sessions-dialog',
+            title: 'Tmux Sessions',
+            content: dialogContent,
+            width: '500px'
+        });
+    }
+    
+    // Add menu item for session management
+    addSessionManagementUI() {
+        // Add button to terminal header or toolbar
+        const sessionBtn = document.createElement('button');
+        sessionBtn.className = 'btn btn-sm btn-secondary';
+        sessionBtn.innerHTML = '<i class="fas fa-list"></i> Sessions';
+        sessionBtn.title = 'Manage tmux sessions';
+        sessionBtn.onclick = () => this.listSessions();
+        
+        // Find appropriate place to add button
+        const terminalHeader = DOM.get('terminal-header');
+        if (terminalHeader) {
+            terminalHeader.appendChild(sessionBtn);
+        }
+    }
 }
 
 // Initialize terminal manager
 const terminalManager = new TerminalManager();
+
+// Add session management UI after DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    terminalManager.addSessionManagementUI();
+});
 
 // Make terminal manager globally available
 window.terminalManager = terminalManager;

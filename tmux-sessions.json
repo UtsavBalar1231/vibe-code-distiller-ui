@@ -1,0 +1,29 @@
+{
+  "sessions": {
+    "test": {
+      "tmuxSession": "claude-web-test-1751495216230",
+      "projectId": "test",
+      "created": 1751495216230,
+      "lastSeen": 1751495216230
+    },
+    "window-2": {
+      "tmuxSession": "claude-web-window-2-1751498722955",
+      "projectId": "window-2",
+      "created": 1751498722955,
+      "lastSeen": 1751498722955
+    },
+    "test-test": {
+      "tmuxSession": "claude-web-test-test-1751505015759",
+      "projectId": "test-test",
+      "created": 1751505015759,
+      "lastSeen": 1751505015759
+    },
+    "test-test-test": {
+      "tmuxSession": "claude-web-test-test-test-1751505874695",
+      "projectId": "test-test-test",
+      "created": 1751505874695,
+      "lastSeen": 1751505874695
+    }
+  },
+  "lastUpdated": "2025-07-03T01:25:48.577Z"
+}

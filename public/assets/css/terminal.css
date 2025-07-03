@@ -32,6 +32,13 @@
     --terminal-line-height: 1.2;
 }
 
+/* Mobile Terminal Font Size */
+@media (max-width: 768px) {
+    :root {
+        --terminal-font-size: 12px;
+    }
+}
+
 /* Light Theme Terminal Colors */
 .theme-light {
     --terminal-bg: #ffffff;
@@ -623,4 +630,69 @@
 
 .terminal-wrapper {
     contain: layout style paint;
+}
+
+/* ===== MOBILE TERMINAL OPTIMIZATIONS ===== */
+@media (max-width: 768px) {
+    /* Improve terminal readability on mobile */
+    .xterm {
+        font-size: var(--terminal-font-size) !important;
+        line-height: 1.4;
+    }
+    
+    /* Terminal instance spacing */
+    .terminal-instance {
+        padding: 0;
+    }
+    
+    /* Terminal status bar mobile adjustments */
+    .terminal-status {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: var(--font-size-xs);
+    }
+    
+    .terminal-status-actions {
+        gap: var(--spacing-xs);
+    }
+    
+    .terminal-status-actions .btn {
+        padding: var(--spacing-xs);
+        min-width: 32px;
+        min-height: 32px;
+    }
+    
+    /* Hide less important status items on mobile */
+    .terminal-status-item:not(:first-child) {
+        display: none;
+    }
+    
+    /* Command palette mobile */
+    .terminal-command-palette {
+        max-height: 50vh;
+    }
+    
+    .terminal-command-item {
+        padding: var(--spacing-md);
+        min-height: 44px;
+    }
+}
+
+/* Touch-friendly terminal interactions */
+@media (pointer: coarse) {
+    /* Larger touch targets for terminal controls */
+    .terminal-controls button {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    /* Prevent accidental text selection */
+    .terminal-wrapper {
+        -webkit-user-select: none;
+        user-select: none;
+    }
+    
+    .xterm .xterm-screen {
+        -webkit-user-select: text;
+        user-select: text;
+    }
 }

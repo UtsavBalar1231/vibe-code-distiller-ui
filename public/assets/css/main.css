@@ -19,6 +19,9 @@ body {
     user-select: none;
     -webkit-user-select: none;
     -moz-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
 }
 
 /* ===== CSS VARIABLES ===== */
@@ -308,6 +311,39 @@ body {
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
+}
+
+/* Mobile Menu Toggle */
+.mobile-menu-toggle {
+    display: none;
+    background-color: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    padding: var(--spacing-sm);
+    margin-right: var(--spacing-sm);
+}
+
+.mobile-menu-toggle:hover {
+    background-color: var(--bg-hover);
+}
+
+/* Mobile Backdrop */
+.mobile-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: calc(var(--z-fixed) - 1);
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+}
+
+.mobile-backdrop.active {
+    opacity: 1;
 }
 
 /* ===== SIDEBAR ===== */
@@ -602,20 +638,43 @@ body {
     :root {
         --sidebar-width: 0;
         --header-height: 50px;
+        --spacing-touch: 44px; /* Minimum touch target size */
     }
     
+    /* Show mobile menu toggle */
+    .mobile-menu-toggle {
+        display: flex;
+    }
+    
+    /* Mobile backdrop */
+    .mobile-backdrop {
+        display: block;
+        pointer-events: none;
+    }
+    
+    .mobile-backdrop.active {
+        pointer-events: auto;
+    }
+    
+    /* Sidebar as overlay */
     .sidebar {
-        position: absolute;
-        left: -300px;
+        position: fixed;
+        left: -280px;
         top: 0;
         height: 100%;
-        width: 300px;
+        width: 280px;
         z-index: var(--z-fixed);
         transition: left var(--transition-normal);
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
     }
     
     .sidebar.open {
         left: 0;
+    }
+    
+    /* Adjust app body */
+    .app-body {
+        margin-left: 0 !important;
     }
     
     .app-title .title-text {
@@ -628,7 +687,48 @@ body {
     
     .welcome-actions {
         flex-direction: column;
-        align-items: center;
+        align-items: stretch;
+        width: 100%;
+    }
+    
+    .welcome-actions .btn {
+        width: 100%;
+    }
+    
+    /* Terminal adjustments */
+    .terminal-header {
+        padding: 0 var(--spacing-sm);
+    }
+    
+    .terminal-tab {
+        padding: var(--spacing-xs) var(--spacing-xs);
+        font-size: var(--font-size-xs);
+    }
+    
+    /* Larger touch targets */
+    .btn {
+        min-height: var(--spacing-touch);
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+    
+    .btn-icon {
+        min-width: var(--spacing-touch);
+        min-height: var(--spacing-touch);
+    }
+    
+    /* Project items larger for touch */
+    .project-item {
+        padding: var(--spacing-md);
+        min-height: var(--spacing-touch);
+    }
+    
+    /* Header adjustments */
+    .header-right {
+        gap: var(--spacing-xs);
+    }
+    
+    .breadcrumb {
+        display: none;
     }
 }
 
@@ -636,17 +736,74 @@ body {
     :root {
         --spacing-md: 0.75rem;
         --spacing-lg: 1rem;
+        --font-size-base: 16px; /* Prevent zoom on iOS */
     }
     
     .app-header {
-        padding: 0 var(--spacing-sm);
+        padding: 0 var(--spacing-xs);
     }
     
     .header-actions {
-        gap: var(--spacing-xs);
+        gap: 0;
+    }
+    
+    .header-actions .btn-icon {
+        padding: var(--spacing-xs);
     }
     
     .welcome-content {
         padding: var(--spacing-md);
+    }
+    
+    .welcome-content h2 {
+        font-size: var(--font-size-xl);
+    }
+    
+    /* Even larger touch targets on small screens */
+    input, textarea, select {
+        font-size: 16px; /* Prevents zoom on iOS */
+        min-height: var(--spacing-touch);
+    }
+    
+    /* Sidebar full width on small screens */
+    .sidebar {
+        width: 100%;
+        left: -100%;
+    }
+    
+    /* Terminal optimizations */
+    .terminal-content {
+        font-size: 14px;
+    }
+    
+    /* Hide theme toggle on very small screens */
+    #theme-toggle {
+        display: none;
+    }
+}
+
+/* ===== MOBILE-SPECIFIC OPTIMIZATIONS ===== */
+/* Prevent text selection on interactive elements */
+@media (pointer: coarse) {
+    button, .btn, .project-item, .terminal-tab {
+        -webkit-user-select: none;
+        user-select: none;
+    }
+}
+
+/* Smooth scrolling on mobile */
+@media (max-width: 768px) {
+    .panel-content, .terminal-content, .modal-body {
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }

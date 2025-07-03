@@ -221,6 +221,11 @@ class ProjectManager extends EventEmitter {
                 window.ImageManager.setCurrentProject(projectId);
             }
             
+            // Close mobile menu after selecting project
+            if (window.app && window.app.isMobileMenuOpen()) {
+                window.app.closeMobileMenu();
+            }
+            
         } catch (error) {
             console.error('Failed to select project:', error);
             notifications.error('Failed to select project: ' + error.message);

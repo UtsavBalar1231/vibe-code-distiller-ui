@@ -3,7 +3,7 @@ const router = express.Router();
 const { asyncHandler } = require('../middleware/error-handler');
 const { schemas, middleware } = require('../utils/validator');
 const claudeManager = require('../services/claude-manager');
-const terminalService = require('../services/terminal-service');
+const terminalService = require('../services/terminal-service-wrapper');
 const projectService = require('../services/project-service');
 const logger = require('../utils/logger');
 

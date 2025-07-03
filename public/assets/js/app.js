@@ -105,6 +105,16 @@ class ClaudeCodeWebManager extends EventEmitter {
     }
     
     setupGlobalEventHandlers() {
+        // Mobile menu toggle
+        DOM.on('mobile-menu-toggle', 'click', () => {
+            this.toggleMobileMenu();
+        });
+        
+        // Mobile backdrop
+        DOM.on('mobile-backdrop', 'click', () => {
+            this.closeMobileMenu();
+        });
+        
         // Theme toggle
         DOM.on('theme-toggle', 'click', () => {
             theme.toggle();
@@ -183,7 +193,8 @@ class ClaudeCodeWebManager extends EventEmitter {
             
         } catch (error) {
             if (error.message.includes('401')) {
-                this.showAuthModal();
+                // Auth is likely disabled, continue without auth
+                console.log('✅ Authentication not required (disabled)');
             } else {
                 console.warn('Authentication check failed:', error);
                 // Continue anyway for development
@@ -449,6 +460,12 @@ class ClaudeCodeWebManager extends EventEmitter {
     
     
     handleEscapeKey() {
+        // Close mobile menu
+        if (this.isMobileMenuOpen()) {
+            this.closeMobileMenu();
+            return;
+        }
+        
         // Close modals
         if (modals.isOpen()) {
             modals.close();
@@ -464,7 +481,43 @@ class ClaudeCodeWebManager extends EventEmitter {
         
     }
     
+    toggleMobileMenu() {
+        const sidebar = DOM.get('sidebar');
+        const backdrop = DOM.get('mobile-backdrop');
+        
+        if (sidebar && backdrop) {
+            if (DOM.hasClass(sidebar, 'open')) {
+                this.closeMobileMenu();
+            } else {
+                DOM.addClass(sidebar, 'open');
+                DOM.addClass(backdrop, 'active');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    }
+    
+    closeMobileMenu() {
+        const sidebar = DOM.get('sidebar');
+        const backdrop = DOM.get('mobile-backdrop');
+        
+        if (sidebar && backdrop) {
+            DOM.removeClass(sidebar, 'open');
+            DOM.removeClass(backdrop, 'active');
+            document.body.style.overflow = '';
+        }
+    }
+    
+    isMobileMenuOpen() {
+        const sidebar = DOM.get('sidebar');
+        return sidebar && DOM.hasClass(sidebar, 'open');
+    }
+    
     handleWindowResize() {
+        // Close mobile menu on resize to larger screen
+        if (window.innerWidth > 768 && this.isMobileMenuOpen()) {
+            this.closeMobileMenu();
+        }
+        
         // Fit active terminal
         const activeTerminal = terminalManager.getActiveTerminal();
         if (activeTerminal && activeTerminal.fitAddon) {

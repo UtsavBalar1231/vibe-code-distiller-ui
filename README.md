@@ -6,6 +6,7 @@ A Node.js web application that provides a browser-based interface for managing C
 
 - 🌐 **Web-based Interface**: Browser-based interface for Claude Code CLI management
 - 🖥️ **Terminal Integration**: Real-time terminal interface using xterm.js
+- 💾 **Persistent Sessions**: Tmux integration for session persistence across devices
 - 📁 **Project Management**: Easy project selection and management
 - 🔄 **Real-time Communication**: WebSocket-based real-time updates
 - 🍓 **Raspberry Pi Optimized**: Lightweight and optimized for ARM devices
@@ -19,6 +20,7 @@ A Node.js web application that provides a browser-based interface for managing C
 - Node.js 18.0.0+
 - NPM 8.0.0+
 - Claude Code CLI installed and configured
+- tmux (optional, for persistent sessions)
 
 ### Installation
 
@@ -33,7 +35,12 @@ cd claudeCodeUi
 npm install
 ```
 
-3. Start the application:
+3. Install tmux for persistent sessions (optional):
+```bash
+./install-tmux.sh
+```
+
+4. Start the application:
 ```bash
 # Development mode
 npm run dev
@@ -45,7 +52,7 @@ npm start
 npm run pm2:start
 ```
 
-4. Open your browser and navigate to:
+5. Open your browser and navigate to:
 ```
 http://localhost:3000
 ```
@@ -56,6 +63,15 @@ http://localhost:3000
 2. **Terminal Interface**: Interact with Claude Code CLI through the integrated terminal
 3. **Real-time Updates**: All terminal output and project changes are updated in real-time
 4. **Session Management**: Multiple terminal sessions are supported with auto-reconnection
+
+### Tmux Session Management
+
+When tmux is enabled, your terminal sessions persist even when you close the browser:
+
+- **View Sessions**: Press `Ctrl+Shift+S` to view active tmux sessions
+- **Detach Session**: Sessions automatically detach when you close the browser
+- **Reattach Session**: When you return, the system automatically reconnects to existing sessions
+- **Cross-Device Access**: Start work on one device and continue on another
 
 ## Configuration
 

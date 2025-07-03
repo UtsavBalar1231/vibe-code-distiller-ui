@@ -769,15 +769,38 @@ kbd {
 
 /* ===== RESPONSIVE UTILITIES ===== */
 @media (max-width: 768px) {
+    .modal {
+        padding: 0;
+        align-items: flex-end;
+    }
+    
     .modal-content {
-        margin: var(--spacing-sm);
-        max-height: calc(100vh - var(--spacing-lg));
+        margin: 0;
+        max-height: 90vh;
+        width: 100%;
+        max-width: 100%;
+        border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+        transform: translateY(100%);
+    }
+    
+    .modal.active .modal-content {
+        transform: translateY(0);
     }
     
     .notification-container {
         left: var(--spacing-sm);
         right: var(--spacing-sm);
         max-width: none;
+        bottom: var(--spacing-md);
+        top: auto;
+    }
+    
+    .notification {
+        transform: translateY(100%);
+    }
+    
+    .notification.show {
+        transform: translateY(0);
     }
     
     .form-row {
@@ -787,11 +810,23 @@ kbd {
     
     .form-actions {
         flex-direction: column-reverse;
+        gap: var(--spacing-sm);
+    }
+    
+    .form-actions .btn {
+        width: 100%;
     }
     
     .settings-tabs {
         overflow-x: auto;
         white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    
+    .settings-tabs::-webkit-scrollbar {
+        display: none;
     }
     
     .settings-item {
@@ -803,6 +838,34 @@ kbd {
     .settings-item-control {
         margin-left: 0;
         align-self: stretch;
+    }
+    
+    /* Touch-friendly form inputs */
+    input, textarea, select {
+        min-height: 44px;
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+    
+    /* Larger buttons on mobile */
+    .btn {
+        min-height: 44px;
+        font-size: var(--font-size-md);
+    }
+    
+    .btn-icon {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    /* Context menu mobile adjustments */
+    .context-menu {
+        min-width: 200px;
+        max-width: calc(100vw - var(--spacing-lg));
+    }
+    
+    .context-menu-item {
+        padding: var(--spacing-md);
+        min-height: 44px;
     }
 }
 
@@ -923,4 +986,54 @@ kbd {
 
 .images-loading .loading-spinner {
     margin-right: var(--spacing-sm);
+}
+
+/* Tmux Sessions Dialog */
+.sessions-list {
+    padding: 1rem;
+}
+
+.sessions-list-items {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.session-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.session-item:hover {
+    background: var(--bg-hover);
+}
+
+.session-info {
+    flex: 1;
+}
+
+.session-info strong {
+    color: var(--text-primary);
+}
+
+.session-info small {
+    color: var(--text-secondary);
+}
+
+.session-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.dialog-footer {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    text-align: right;
 }

@@ -12,11 +12,21 @@ class ProjectService {
     this.watchers = new Map();
     this.projectCache = new Map();
     
-    // Ensure projects root directory exists
-    this.ensureProjectsRoot();
-    
-    // Initialize project discovery
-    this.discoverProjects();
+    // Initialize asynchronously to handle errors properly
+    this.initialize();
+  }
+
+  async initialize() {
+    try {
+      // Ensure projects root directory exists
+      await this.ensureProjectsRoot();
+      
+      // Initialize project discovery
+      await this.discoverProjects();
+    } catch (error) {
+      logger.error('Failed to initialize ProjectService:', error);
+      // Don't throw here to prevent app crash, just log the error
+    }
   }
 
   async ensureProjectsRoot() {

@@ -1,3 +1,5 @@
+const path = require('path');
+
 // Server constants
 const SERVER = {
   DEFAULT_PORT: 3000,
@@ -22,7 +24,7 @@ const CLAUDE = {
 
 // Project constants
 const PROJECT = {
-  ROOT_DIR: process.env.PROJECTS_ROOT_PATH || '/home/pi/projects',
+  ROOT_DIR: process.env.PROJECTS_ROOT_PATH || path.join(process.env.HOME || '/home', 'projects'),
   CONFIG_DIR: '.claude',
   CONFIG_FILE: 'config.json',
   ALLOWED_EXTENSIONS: ['.js', '.py', '.ts', '.jsx', '.tsx', '.vue', '.php', '.rb', '.go', '.rs', '.java', '.cpp', '.c', '.h'],

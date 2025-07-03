@@ -120,15 +120,20 @@ class SocketClient extends EventEmitter {
         });
         
         this.socket.on('error', (error) => {
-            console.error('❌ Server error:', error);
-            
-            // Handle project connection errors specifically
+            // Handle specific errors without logging
             if (error.message === 'Not connected to project' && this.currentProject) {
                 console.log('🔄 Project connection lost, attempting to rejoin:', this.currentProject);
                 setTimeout(() => {
                     this.joinProject(this.currentProject);
                 }, 1000);
+            } else if (error.message === 'Failed to resize terminal' && error.details === 'Terminal session not found') {
+                // Terminal session not ready yet, ignore this error
+                // This can happen when switching terminals or reconnecting
+            } else if (error.message && error.message.includes('Socket is not connected')) {
+                // Socket connection error, already handled by connection status
             } else {
+                // Log other errors
+                console.error('❌ Server error:', error);
                 notifications.error(error.message || 'Server error occurred');
             }
             

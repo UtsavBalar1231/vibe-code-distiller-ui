@@ -1,7 +1,7 @@
 const logger = require('./utils/logger');
 const { WEBSOCKET, ERROR_CODES } = require('./utils/constants');
 const claudeManager = require('./services/claude-manager');
-const terminalService = require('./services/terminal-service');
+const terminalService = require('./services/terminal-service-wrapper');
 const projectService = require('./services/project-service');
 const fileService = require('./services/file-service');
 
@@ -79,6 +79,19 @@ class SocketManager {
 
     socket.on(WEBSOCKET.EVENTS.TERMINAL_RESIZE, (data) => {
       this.handleTerminalResize(socket, data);
+    });
+
+    // Tmux session events
+    socket.on('terminal:list-sessions', (data) => {
+      this.handleListSessions(socket, data);
+    });
+
+    socket.on('terminal:detach-session', (data) => {
+      this.handleDetachSession(socket, data);
+    });
+
+    socket.on('terminal:attach-session', (data) => {
+      this.handleAttachSession(socket, data);
     });
 
     // Claude Code events
@@ -681,6 +694,83 @@ class SocketManager {
 
   broadcastToProject(projectId, event, data) {
     this.io.to(`project-${projectId}`).emit(event, data);
+  }
+
+  async handleListSessions(socket, data) {
+    try {
+      const sessions = await terminalService.listAvailableSessions();
+      socket.emit('terminal:sessions-list', {
+        sessions,
+        timestamp: new Date().toISOString()
+      });
+      
+      logger.socket('Listed tmux sessions', socket.id, { count: sessions.length });
+    } catch (error) {
+      logger.error('Failed to list sessions:', { socketId: socket.id, error: error.message });
+      socket.emit(WEBSOCKET.EVENTS.ERROR, {
+        message: 'Failed to list sessions',
+        details: error.message
+      });
+    }
+  }
+
+  async handleDetachSession(socket, data) {
+    try {
+      const { projectId } = data;
+      
+      if (!projectId) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Project ID required' });
+        return;
+      }
+
+      await terminalService.detachSession(projectId);
+      
+      socket.emit('terminal:session-detached', {
+        projectId,
+        timestamp: new Date().toISOString()
+      });
+      
+      logger.socket('Detached from tmux session', socket.id, { projectId });
+    } catch (error) {
+      logger.error('Failed to detach session:', { socketId: socket.id, error: error.message });
+      socket.emit(WEBSOCKET.EVENTS.ERROR, {
+        message: 'Failed to detach session',
+        details: error.message
+      });
+    }
+  }
+
+  async handleAttachSession(socket, data) {
+    try {
+      const { projectId } = data;
+      
+      if (!projectId) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Project ID required' });
+        return;
+      }
+
+      const project = await projectService.getProject(projectId);
+      const result = await terminalService.createSession(projectId, {
+        cwd: project.path
+      });
+
+      // Set up terminal callbacks for this session
+      this.setupTerminalSession(projectId);
+      
+      socket.emit('terminal:session-attached', {
+        projectId,
+        ...result,
+        timestamp: new Date().toISOString()
+      });
+      
+      logger.socket('Attached to tmux session', socket.id, { projectId });
+    } catch (error) {
+      logger.error('Failed to attach session:', { socketId: socket.id, error: error.message });
+      socket.emit(WEBSOCKET.EVENTS.ERROR, {
+        message: 'Failed to attach session',
+        details: error.message
+      });
+    }
   }
 
   broadcastSystemStatus() {
