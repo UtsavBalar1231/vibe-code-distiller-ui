@@ -14,6 +14,10 @@ class SocketClient extends EventEmitter {
         this.projectStates = new Map(); // projectId -> {status, readyCallbacks, lastActivity}
         this.pendingInputs = new Map(); // projectId -> input queue
         
+        // Browser notifications
+        this.notificationPermission = 'default';
+        this.checkNotificationPermission();
+        
         this.setupSocket();
     }
     
@@ -152,6 +156,11 @@ class SocketClient extends EventEmitter {
             this.emit('notification', notification);
         });
         
+        this.socket.on('claude-notification', (notification) => {
+            this.handleClaudeNotification(notification);
+            this.emit('claude_notification', notification);
+        });
+        
         // Project events
         this.socket.on('project-status', (data) => {
             console.log('📁 Project status:', data);
@@ -267,6 +276,126 @@ class SocketClient extends EventEmitter {
                 break;
             default:
                 notifications.info(message, { title: title || 'Notification' });
+        }
+    }
+    
+    handleClaudeNotification(notification) {
+        const { sessionId, projectName, message, title, timestamp } = notification;
+        
+        console.log('🔔 Claude notification received:', { projectName, message, title });
+        
+        // Show in-app notification
+        notifications.warning(message, { 
+            title: `${title} - ${projectName}`, 
+            duration: 0 // Persistent notification
+        });
+        
+        // Show browser notification if permission granted
+        this.showBrowserNotification(title, message, projectName);
+    }
+    
+    checkNotificationPermission() {
+        if ('Notification' in window) {
+            this.notificationPermission = Notification.permission;
+            console.log('🔔 Current notification permission:', this.notificationPermission);
+            this.updateNotificationStatus();
+        }
+    }
+    
+    updateNotificationStatus() {
+        const statusElement = document.getElementById('notification-status');
+        if (!statusElement) return;
+        
+        const textElement = statusElement.querySelector('.text');
+        if (!textElement) return;
+        
+        if (!('Notification' in window)) {
+            textElement.textContent = 'Notifications: Not supported';
+            statusElement.style.color = '#6c757d';
+            return;
+        }
+        
+        switch (this.notificationPermission) {
+            case 'granted':
+                textElement.textContent = 'Notifications: Enabled';
+                statusElement.style.color = '#28a745';
+                statusElement.title = 'Notifications enabled';
+                break;
+            case 'denied':
+                textElement.textContent = 'Notifications: Denied';
+                statusElement.style.color = '#dc3545';
+                statusElement.title = 'Notifications denied, please enable in browser settings';
+                break;
+            case 'default':
+                textElement.textContent = 'Notifications: Pending';
+                statusElement.style.color = '#ffc107';
+                statusElement.title = 'Click to enable notifications';
+                break;
+            default:
+                textElement.textContent = 'Notifications: Unknown';
+                statusElement.style.color = '#6c757d';
+        }
+    }
+    
+    requestNotificationPermission() {
+        if ('Notification' in window) {
+            if (Notification.permission === 'default') {
+                // Show a notification request dialog
+                notifications.info('Please allow browser notifications to receive important Claude Code messages', {
+                    title: 'Notification Permission Request',
+                    duration: 0
+                });
+                
+                Notification.requestPermission().then(permission => {
+                    this.notificationPermission = permission;
+                    this.updateNotificationStatus();
+                    console.log('🔔 Notification permission:', permission);
+                    
+                    if (permission === 'granted') {
+                        notifications.success('Browser notifications enabled! You can now receive notifications even when away from the page', {
+                            title: 'Notification Permission Granted',
+                            duration: 3000
+                        });
+                        
+                        // Test notification
+                        this.showBrowserNotification('Claude Code Web Manager', 'Browser notifications enabled!', 'System');
+                    } else if (permission === 'denied') {
+                        notifications.warning('Browser notifications denied. You can manually enable notifications in browser settings', {
+                            title: 'Notification Permission Denied',
+                            duration: 5000
+                        });
+                    }
+                });
+            } else {
+                this.notificationPermission = Notification.permission;
+            }
+        }
+    }
+    
+    showBrowserNotification(title, message, projectName) {
+        if ('Notification' in window && this.notificationPermission === 'granted') {
+            const notificationTitle = `${title} - ${projectName}`;
+            const notificationOptions = {
+                body: message,
+                icon: '/favicon.ico',
+                badge: '/favicon.ico',
+                tag: 'claude-notification',
+                requireInteraction: true,
+                timestamp: Date.now()
+            };
+            
+            const notification = new Notification(notificationTitle, notificationOptions);
+            
+            notification.onclick = () => {
+                // Focus the window
+                window.focus();
+                notification.close();
+            };
+            
+            // Auto-close after 10 seconds
+            setTimeout(() => {
+                notification.close();
+            }, 10000);
         }
     }
     

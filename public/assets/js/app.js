@@ -32,6 +32,12 @@ class ClaudeCodeWebManager extends EventEmitter {
             // Initialize system monitoring
             this.initializeSystemMonitoring();
             
+            // Request notification permission after app is ready
+            this.requestNotificationPermission();
+            
+            // Setup notification status click handler
+            this.setupNotificationStatusHandler();
+            
             this.isInitialized = true;
             this.emit('app_initialized');
             
@@ -544,6 +550,62 @@ class ClaudeCodeWebManager extends EventEmitter {
     
     isReady() {
         return this.isInitialized;
+    }
+    
+    requestNotificationPermission() {
+        // Only request permission if it's not already determined
+        if ('Notification' in window && Notification.permission === 'default') {
+            // Add a click handler to request permission on first user interaction
+            const requestPermissionOnInteraction = () => {
+                if (socket && socket.requestNotificationPermission) {
+                    socket.requestNotificationPermission();
+                }
+                // Remove the listener after first interaction
+                document.removeEventListener('click', requestPermissionOnInteraction, true);
+            };
+            
+            // Add listener to capture any click on the page
+            document.addEventListener('click', requestPermissionOnInteraction, true);
+            
+            // Also try after a short delay as fallback
+            setTimeout(() => {
+                if ('Notification' in window && Notification.permission === 'default') {
+                    requestPermissionOnInteraction();
+                }
+            }, 3000);
+        }
+    }
+    
+    setupNotificationStatusHandler() {
+        const notificationStatus = document.getElementById('notification-status');
+        if (notificationStatus) {
+            notificationStatus.addEventListener('click', () => {
+                if ('Notification' in window) {
+                    if (Notification.permission === 'default') {
+                        // Request permission
+                        if (socket && socket.requestNotificationPermission) {
+                            socket.requestNotificationPermission();
+                        }
+                    } else if (Notification.permission === 'denied') {
+                        // Show instructions to enable in browser settings
+                        notifications.warning('Notification permission denied. Please click the lock icon in the browser address bar and enable notifications.', {
+                            title: 'How to Enable Notifications',
+                            duration: 8000
+                        });
+                    } else if (Notification.permission === 'granted') {
+                        // Show test notification
+                        if (socket && socket.showBrowserNotification) {
+                            socket.showBrowserNotification('Claude Code Web Manager', 'Notifications working properly!', 'Test');
+                        }
+                    }
+                } else {
+                    notifications.error('Your browser does not support notifications', {
+                        title: 'Feature Not Supported',
+                        duration: 3000
+                    });
+                }
+            });
+        }
     }
 }
 
