@@ -394,6 +394,42 @@ class ProjectService {
       const configPath = path.join(configDir, PROJECT.CONFIG_FILE);
       await fs.writeJson(configPath, config, { spaces: 2 });
       
+      // Create Claude Code hook configuration for notifications  
+      const serverConfig = require('config');
+      console.log('DEBUG: process.env.PORT =', process.env.PORT);
+      console.log('DEBUG: serverConfig.get(server.port) =', serverConfig.get('server.port'));
+      const serverPort = process.env.PORT || serverConfig.get('server.port') || 3000;
+      console.log('DEBUG: final serverPort =', serverPort);
+      const hookConfig = {
+        hooks: {
+          Notification: [
+            {
+              matcher: "",
+              hooks: [
+                {
+                  type: "command",
+                  command: `curl -X POST http://localhost:${serverPort}/api/notification -H 'Content-Type: application/json' -d @-`
+                }
+              ]
+            }
+          ],
+          Stop: [
+            {
+              matcher: "",
+              hooks: [
+                {
+                  type: "command",
+                  command: `curl -X POST http://localhost:${serverPort}/api/notification -H 'Content-Type: application/json' -d '{"session_id": "stop-event", "message": "Claude Code session has ended", "title": "Claude Code", "transcript_path": ""}'`
+                }
+              ]
+            }
+          ]
+        }
+      };
+      
+      const hookConfigPath = path.join(configDir, 'settings.local.json');
+      await fs.writeJson(hookConfigPath, hookConfig, { spaces: 2 });
+      
       // Load the created project
       const project = await this.loadProject(projectId, projectPath);
       this.projectCache.set(projectId, project);
