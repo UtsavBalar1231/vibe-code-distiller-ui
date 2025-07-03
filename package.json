@@ -23,6 +23,7 @@
   "author": "Claude Code Web Manager Team",
   "license": "MIT",
   "dependencies": {
+    "archiver": "^7.0.1",
     "chokidar": "^3.5.3",
     "compression": "^1.7.4",
     "config": "^4.0.0",

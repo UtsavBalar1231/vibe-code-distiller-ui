@@ -148,21 +148,54 @@ class ProjectManager extends EventEmitter {
         projectContent.appendChild(projectName);
         projectContent.appendChild(projectMeta);
         
-        // Delete button
-        const deleteButton = DOM.create('button', {
-            className: 'project-delete-btn btn-icon small',
-            html: '<span class="icon">🗑️</span>',
-            attributes: { 'title': 'Delete project' }
+        // Options button
+        const optionsButton = DOM.create('button', {
+            className: 'project-options-btn btn-icon small',
+            html: '<span class="icon">⋮</span>',
+            attributes: { 'title': 'Project options' }
         });
         
-        // Stop event propagation to prevent project selection when clicking delete
-        DOM.on(deleteButton, 'click', (e) => {
-            e.stopPropagation();
-            this.deleteProject(project.id);
+        // Options dropdown
+        const optionsDropdown = DOM.create('div', {
+            className: 'project-options-dropdown',
+            html: `
+                <div class="dropdown-item" data-action="delete">
+                    <span class="text">Delete Project</span>
+                </div>
+                <div class="dropdown-item" data-action="download">
+                    <span class="text">Download Project</span>
+                </div>
+            `
         });
+        
+        // Stop event propagation to prevent project selection when clicking options
+        DOM.on(optionsButton, 'click', (e) => {
+            e.stopPropagation();
+            this.toggleProjectOptions(e, project, optionsDropdown);
+        });
+        
+        // Handle dropdown clicks
+        DOM.on(optionsDropdown, 'click', (e) => {
+            e.stopPropagation();
+            const action = e.target.closest('.dropdown-item')?.dataset.action;
+            if (action === 'delete') {
+                this.deleteProject(project.id);
+            } else if (action === 'download') {
+                this.downloadProject(project.id);
+            }
+            // Hide dropdown after action
+            optionsDropdown.style.display = 'none';
+        });
+        
+        // Options container
+        const optionsContainer = DOM.create('div', {
+            className: 'project-options-container'
+        });
+        optionsContainer.appendChild(optionsButton);
+        optionsContainer.appendChild(optionsDropdown);
         
         projectItem.appendChild(projectContent);
-        projectItem.appendChild(deleteButton);
+        projectItem.appendChild(optionsContainer);
         
         // Click handler for project content
         DOM.on(projectContent, 'click', () => {
@@ -548,6 +581,86 @@ class ProjectManager extends EventEmitter {
         } catch (error) {
             console.error('Failed to delete project:', error);
             notifications.error('Failed to delete project: ' + error.message);
+        }
+    }
+    
+    toggleProjectOptions(event, project, dropdown) {
+        // Hide all other open dropdowns
+        document.querySelectorAll('.project-options-dropdown').forEach(d => {
+            if (d !== dropdown) d.style.display = 'none';
+        });
+        
+        // Toggle current dropdown
+        const isVisible = dropdown.style.display === 'block';
+        dropdown.style.display = isVisible ? 'none' : 'block';
+        
+        // Position dropdown relative to button
+        if (!isVisible) {
+            const rect = event.target.getBoundingClientRect();
+            dropdown.style.position = 'absolute';
+            dropdown.style.top = '100%';
+            dropdown.style.right = '0';
+            dropdown.style.zIndex = '1000';
+        }
+        
+        // Close dropdown when clicking outside
+        if (!isVisible) {
+            const closeDropdown = (e) => {
+                if (!dropdown.contains(e.target) && !event.target.contains(e.target)) {
+                    dropdown.style.display = 'none';
+                    document.removeEventListener('click', closeDropdown);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', closeDropdown), 0);
+        }
+    }
+    
+    async downloadProject(projectId) {
+        try {
+            const project = this.projects.get(projectId);
+            if (!project) return;
+            
+            notifications.info(`Preparing download for "${project.name}"...`);
+            
+            // Create download request using native fetch for blob handling
+            const response = await fetch(`/api/projects/${projectId}/download`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            // Get the blob data
+            const blob = await response.blob();
+            
+            // Extract filename from Content-Disposition header or use project name
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = `${project.name}.zip`;
+            if (contentDisposition) {
+                const match = contentDisposition.match(/filename="([^"]+)"/);
+                if (match) {
+                    filename = match[1];
+                }
+            }
+            
+            // Create download link
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = filename;
+            
+            // Trigger download
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up
+            window.URL.revokeObjectURL(downloadUrl);
+            
+            notifications.success(`"${project.name}" downloaded successfully`);
+            
+        } catch (error) {
+            console.error('Failed to download project:', error);
+            notifications.error('Failed to download project: ' + error.message);
         }
     }
     

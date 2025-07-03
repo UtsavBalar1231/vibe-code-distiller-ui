@@ -2,6 +2,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
 const chokidar = require('chokidar');
+const archiver = require('archiver');
 const config = require('config');
 const logger = require('../utils/logger');
 const { PROJECT, ERROR_CODES, SUCCESS_MESSAGES, FILE_TYPES } = require('../utils/constants');
@@ -583,6 +584,109 @@ class ProjectService {
       logger.error('Failed to get project stats:', error);
       throw new AppError(
         'Failed to get project statistics',
+        500,
+        ERROR_CODES.FILE_SYSTEM_ERROR,
+        error.message
+      );
+    }
+  }
+
+  async downloadProject(projectId, res) {
+    if (!projectId) {
+      throw new AppError('Project ID is required', 400, ERROR_CODES.VALIDATION_ERROR);
+    }
+
+    // Get project to ensure it exists
+    const project = await this.getProject(projectId);
+    const projectPath = path.join(this.projectsRoot, projectId);
+    
+    if (!(await fs.pathExists(projectPath))) {
+      throw new AppError('Project not found', 404, ERROR_CODES.PROJECT_NOT_FOUND);
+    }
+
+    const sanitizedProjectName = sanitize.filename(project.name || projectId);
+    const filename = `${sanitizedProjectName}.zip`;
+    
+    try {
+      // Set response headers
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Cache-Control', 'no-cache');
+      
+      // Create archiver instance
+      const archive = archiver('zip', {
+        zlib: { level: 9 } // Compression level
+      });
+
+      // Handle archiver errors
+      archive.on('error', (err) => {
+        logger.error('Archiver error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            message: 'Failed to create project archive',
+            error: err.message
+          });
+        }
+      });
+
+      // Handle archiver warnings
+      archive.on('warning', (err) => {
+        if (err.code === 'ENOENT') {
+          logger.warn('Archiver warning:', err);
+        } else {
+          logger.error('Archiver warning (will throw):', err);
+          throw err;
+        }
+      });
+
+      // Pipe archive to response
+      archive.pipe(res);
+
+      // Add project directory to archive
+      // Exclude common directories that shouldn't be in downloads
+      const excludePatterns = [
+        'node_modules/**',
+        '.git/**',
+        '.venv/**',
+        '__pycache__/**',
+        'target/**',
+        'build/**',
+        'dist/**',
+        '.next/**',
+        '.nuxt/**',
+        'coverage/**',
+        '.coverage/**',
+        '*.log',
+        '.DS_Store',
+        'Thumbs.db',
+        '.env',
+        '.env.local',
+        '.env.*.local'
+      ];
+
+      archive.glob('**/*', {
+        cwd: projectPath,
+        ignore: excludePatterns,
+        dot: true // Include hidden files like .gitignore
+      });
+
+      // Log the download
+      logger.info('Project download initiated:', {
+        projectId,
+        projectName: project.name,
+        projectPath,
+        filename
+      });
+
+      // Finalize the archive
+      await archive.finalize();
+
+      return { filename };
+    } catch (error) {
+      logger.error('Failed to download project:', error);
+      throw new AppError(
+        'Failed to create project download',
         500,
         ERROR_CODES.FILE_SYSTEM_ERROR,
         error.message
