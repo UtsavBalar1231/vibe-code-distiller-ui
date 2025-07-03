@@ -715,16 +715,20 @@ class ProjectManager extends EventEmitter {
         
         // Ensure terminal is properly displayed if this is the current project
         if (this.currentProject === projectId) {
-            // Small delay to ensure terminal is ready
-            setTimeout(() => {
-                if (terminalManager.hasTerminalsForProject(projectId)) {
+            // Check if we already have a terminal for this project
+            if (!terminalManager.hasTerminalsForProject(projectId)) {
+                console.log(`Creating terminal UI for project ${projectId}`);
+                terminalManager.createTerminalForProject(projectId, true);
+            } else {
+                // Activate existing terminal with longer delay for tmux sessions
+                setTimeout(() => {
                     const terminals = terminalManager.getTerminalsByProject(projectId);
                     if (terminals.length > 0) {
-                        console.log(`Activating terminal for project ${projectId}`);
+                        console.log(`Activating existing terminal for project ${projectId}`);
                         terminalManager.setActiveTerminalSafely(terminals[0].id);
                     }
-                }
-            }, 100);
+                }, 300); // Increased delay for tmux session readiness
+            }
         }
     }
     
