@@ -296,6 +296,31 @@ class SocketManager {
             });
           }
         });
+        
+        // Apply pending resize if any
+        if (socket.pendingResize && socket.pendingResize.projectId === projectId) {
+          const { cols, rows } = socket.pendingResize;
+          try {
+            // Wait a bit for terminal to be fully ready
+            setTimeout(async () => {
+              try {
+                await terminalService.resizeSession(projectId, cols, rows);
+                logger.info('Applied pending resize after terminal setup:', { projectId, cols, rows });
+                delete socket.pendingResize;
+              } catch (resizeError) {
+                logger.error('Failed to apply pending resize:', {
+                  projectId,
+                  error: resizeError.message
+                });
+              }
+            }, 500);
+          } catch (error) {
+            logger.error('Failed to schedule pending resize:', {
+              projectId,
+              error: error.message
+            });
+          }
+        }
       }
 
       // Set up file watching
@@ -500,35 +525,29 @@ class SocketManager {
         }
       }
 
-      // Add delay to ensure terminal is fully initialized before resize
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Check if terminal is active before resizing
+      if (!terminalStatus.active) {
+        logger.debug('Terminal not yet active, skipping resize:', { projectId, cols, rows });
+        // Store the resize request to apply later when terminal becomes active
+        socket.pendingResize = { projectId, cols, rows };
+        return;
+      }
 
-      // Resize existing terminal with retry mechanism
-      let retryCount = 0;
-      const maxRetries = 3;
-      
-      while (retryCount < maxRetries) {
-        try {
-          await terminalService.resizeSession(projectId, cols, rows);
-          break; // Success, exit retry loop
-        } catch (resizeError) {
-          retryCount++;
-          if (retryCount >= maxRetries) {
-            // Final attempt failed, but don't show error to user for resize failures
-            // as they're often timing-related and non-critical
-            logger.warn('Terminal resize failed after retries (non-critical):', {
-              projectId,
-              cols,
-              rows,
-              error: resizeError.message,
-              retries: retryCount
-            });
-            return; // Silent fail for resize operations
-          }
-          
-          // Wait before retry
-          await new Promise(resolve => setTimeout(resolve, 50 * retryCount));
+      // Resize existing terminal
+      try {
+        await terminalService.resizeSession(projectId, cols, rows);
+        // Clear any pending resize
+        if (socket.pendingResize && socket.pendingResize.projectId === projectId) {
+          delete socket.pendingResize;
         }
+      } catch (resizeError) {
+        // If resize fails because terminal is not active, store for later
+        if (resizeError.message && resizeError.message.includes('Terminal not active')) {
+          logger.debug('Terminal not active for resize, will retry later:', { projectId, cols, rows });
+          socket.pendingResize = { projectId, cols, rows };
+          return;
+        }
+        throw resizeError;
       }
       
       logger.socket('Terminal resized', socket.id, { projectId, cols, rows });
