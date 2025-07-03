@@ -45,6 +45,22 @@ class ProjectManager extends EventEmitter {
         socket.onConnected(() => {
             this.loadProjects();
         });
+        
+        // Terminal session events
+        socket.on('terminal_session_created', (data) => {
+            console.log(`✅ Terminal session created for project: ${data.projectId}`);
+            this.handleTerminalSessionCreated(data);
+        });
+        
+        socket.on('project_ready', (data) => {
+            console.log(`✅ Project ready: ${data.projectId}`);
+            this.handleProjectReady(data);
+        });
+        
+        socket.on('project_disconnected', (data) => {
+            console.warn(`❌ Project disconnected: ${data.projectId}`);
+            this.handleProjectDisconnected(data);
+        });
     }
     
     async loadProjects() {
@@ -575,6 +591,55 @@ class ProjectManager extends EventEmitter {
     
     async refreshProjects() {
         await this.loadProjects();
+    }
+    
+    // Terminal session event handlers
+    handleTerminalSessionCreated(data) {
+        const { projectId } = data;
+        console.log(`Terminal session created for ${projectId}, ensuring terminal is visible`);
+        
+        // Ensure terminal is properly displayed if this is the current project
+        if (this.currentProject === projectId) {
+            // Small delay to ensure terminal is ready
+            setTimeout(() => {
+                if (terminalManager.hasTerminalsForProject(projectId)) {
+                    const terminals = terminalManager.getTerminalsByProject(projectId);
+                    if (terminals.length > 0) {
+                        console.log(`Activating terminal for project ${projectId}`);
+                        terminalManager.setActiveTerminalSafely(terminals[0].id);
+                    }
+                }
+            }, 100);
+        }
+    }
+    
+    handleProjectReady(data) {
+        const { projectId } = data;
+        console.log(`Project ${projectId} is ready for terminal operations`);
+        
+        // Update project status in UI if needed
+        const projectElement = DOM.get(`project-${projectId}`);
+        if (projectElement) {
+            DOM.removeClass(projectElement, 'connecting');
+            DOM.addClass(projectElement, 'connected');
+        }
+    }
+    
+    handleProjectDisconnected(data) {
+        const { projectId } = data;
+        console.warn(`Project ${projectId} disconnected`);
+        
+        // Update project status in UI
+        const projectElement = DOM.get(`project-${projectId}`);
+        if (projectElement) {
+            DOM.removeClass(projectElement, 'connected');
+            DOM.addClass(projectElement, 'disconnected');
+        }
+        
+        // Show notification if this is the current project
+        if (this.currentProject === projectId) {
+            notifications.warning(`Project ${projectId} disconnected`, { duration: 3000 });
+        }
     }
 }
 
