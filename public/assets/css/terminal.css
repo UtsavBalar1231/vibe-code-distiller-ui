@@ -73,8 +73,10 @@
 .terminal-wrapper {
     flex: 1;
     padding: var(--spacing-sm);
+    padding-bottom: calc(var(--spacing-sm) + 24px); /* Extra space for tmux status bar */
     overflow: hidden;
     position: relative;
+    min-height: 0; /* Allow flex item to shrink below content size */
 }
 
 /* ===== XTERM.JS OVERRIDES ===== */
@@ -215,6 +217,8 @@
     font-size: var(--font-size-xs);
     color: var(--text-secondary);
     flex-shrink: 0;
+    min-height: 32px; /* Ensure minimum height for status bar */
+    width: 100%; /* Ensure full width */
 }
 
 .terminal-status-left,
@@ -579,6 +583,7 @@
     
     .terminal-wrapper {
         padding: var(--spacing-xs);
+        padding-bottom: calc(var(--spacing-xs) + 20px); /* Extra space for tmux status bar on mobile */
     }
     
     .terminal-suggestions {
