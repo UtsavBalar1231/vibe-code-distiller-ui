@@ -365,6 +365,13 @@ select {
     flex-direction: column;
     gap: var(--spacing-sm);
     max-width: 400px;
+    transition: opacity var(--transition-normal), visibility var(--transition-normal);
+}
+
+.notification-container.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .notification {

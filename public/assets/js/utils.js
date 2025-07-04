@@ -361,9 +361,102 @@ class NotificationManager {
         this.container = DOM.get('notification-container');
         this.notifications = new Map();
         this.nextId = 1;
+        this.isEnabled = Storage.get('notifications-enabled', true);
+        this.pendingNotifications = [];
+        this.init();
+    }
+    
+    init() {
+        this.updateVisibility();
+        this.setupToggle();
+        this.interceptBrowserNotifications();
+    }
+    
+    setupToggle() {
+        const toggleBtn = DOM.get('notification-toggle');
+        if (toggleBtn) {
+            DOM.on(toggleBtn, 'click', () => {
+                this.toggle();
+            });
+        }
+    }
+    
+    toggle() {
+        this.isEnabled = !this.isEnabled;
+        this.updateVisibility();
+        Storage.set('notifications-enabled', this.isEnabled);
+        
+        // Clear all current notifications when disabled
+        if (!this.isEnabled) {
+            this.clear();
+            this.pendingNotifications = [];
+        }
+    }
+    
+    updateVisibility() {
+        const toggleBtn = DOM.get('notification-toggle');
+        if (this.container) {
+            if (this.isEnabled) {
+                DOM.removeClass(this.container, 'hidden');
+            } else {
+                DOM.addClass(this.container, 'hidden');
+            }
+        }
+        
+        if (toggleBtn) {
+            const textElement = toggleBtn.querySelector('.text');
+            const iconElement = toggleBtn.querySelector('.icon');
+            if (textElement) {
+                textElement.textContent = this.isEnabled ? 'Notifications: Enabled' : 'Notifications: Disabled';
+            }
+            if (iconElement) {
+                iconElement.textContent = this.isEnabled ? '🔔' : '🔕';
+            }
+            toggleBtn.title = this.isEnabled ? 'Disable notifications' : 'Enable notifications';
+        }
+    }
+    
+    interceptBrowserNotifications() {
+        // Store original Notification constructor
+        this.originalNotification = window.Notification;
+        
+        // Create a proxy to intercept browser notifications
+        const self = this;
+        if (window.Notification) {
+            window.Notification = function(title, options = {}) {
+                // Check if notifications are enabled
+                if (!self.isEnabled) {
+                    // Create a fake notification object that does nothing
+                    return {
+                        close: () => {},
+                        onclick: null,
+                        onshow: null,
+                        onclose: null,
+                        onerror: null
+                    };
+                }
+                
+                // If enabled, create the real notification
+                return new self.originalNotification(title, options);
+            };
+            
+            // Copy static properties
+            Object.keys(self.originalNotification).forEach(key => {
+                window.Notification[key] = self.originalNotification[key];
+            });
+        }
+    }
+    
+    isNotificationEnabled() {
+        return this.isEnabled;
     }
     
     show(message, type = 'info', options = {}) {
+        // If notifications are disabled, don't show anything
+        if (!this.isEnabled) {
+            return null;
+        }
+        
         const id = this.nextId++;
         const notification = this.createNotification(id, message, type, options);
         
