@@ -89,8 +89,8 @@ const DOM = {
             if (element.classList && element.classList.contains('modal')) {
                 console.log('Setting modal display styles...');
                 element.style.display = 'flex';
-                element.style.opacity = '0';
-                element.style.visibility = 'hidden';
+                element.style.opacity = '';
+                element.style.visibility = '';
                 console.log('Modal styles set to:', {
                     display: element.style.display,
                     opacity: element.style.opacity,
