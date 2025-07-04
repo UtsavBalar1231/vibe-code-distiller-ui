@@ -172,3 +172,6 @@ secrets.json
 local/
 dev/
 development/
+
+# Bug fix plans
+bug_fix/
