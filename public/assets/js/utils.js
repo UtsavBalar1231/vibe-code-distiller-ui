@@ -72,6 +72,7 @@ const DOM = {
     
     // Show element
     show: (element) => {
+        console.log('DOM.show called with:', element);
         if (typeof element === 'string') {
             // Check if it's an ID selector (without #) or CSS selector
             if (element.includes('#') || element.includes('.') || element.includes(' ') || element.includes('>')) {
@@ -83,7 +84,23 @@ const DOM = {
             }
         }
         if (element) {
-            element.style.display = '';
+            console.log('DOM.show processing element:', element, 'isModal:', element.classList && element.classList.contains('modal'));
+            // Special handling for modal elements
+            if (element.classList && element.classList.contains('modal')) {
+                console.log('Setting modal display styles...');
+                element.style.display = 'flex';
+                element.style.opacity = '0';
+                element.style.visibility = 'hidden';
+                console.log('Modal styles set to:', {
+                    display: element.style.display,
+                    opacity: element.style.opacity,
+                    visibility: element.style.visibility
+                });
+            } else {
+                element.style.display = '';
+            }
+        } else {
+            console.error('DOM.show: element not found');
         }
     },
     
@@ -100,7 +117,14 @@ const DOM = {
             }
         }
         if (element) {
-            element.style.display = 'none';
+            // Special handling for modal elements
+            if (element.classList && element.classList.contains('modal')) {
+                element.style.opacity = '0';
+                element.style.visibility = 'hidden';
+                // Don't set display: none for modals, let CSS handle it
+            } else {
+                element.style.display = 'none';
+            }
         }
     },
     
@@ -497,16 +521,43 @@ class ModalManager {
     }
     
     open(modalId) {
+        console.log('ModalManager.open called with:', modalId);
         const modal = DOM.get(modalId);
+        console.log('Modal element found:', modal);
+        
         if (modal) {
+            console.log('Modal current style before open:', {
+                display: modal.style.display,
+                opacity: modal.style.opacity,
+                visibility: modal.style.visibility,
+                classes: modal.className
+            });
+            
             if (this.activeModal) {
+                console.log('Closing existing modal:', this.activeModal);
                 this.close();
             }
             
             this.activeModal = modal;
+            console.log('Calling DOM.show...');
             DOM.show(modal);
+            
+            console.log('Modal style after DOM.show:', {
+                display: modal.style.display,
+                opacity: modal.style.opacity,
+                visibility: modal.style.visibility,
+                classes: modal.className
+            });
+            
             setTimeout(() => {
+                console.log('Adding active class...');
                 modal.classList.add('active');
+                console.log('Modal style after adding active class:', {
+                    display: modal.style.display,
+                    opacity: modal.style.opacity,
+                    visibility: modal.style.visibility,
+                    classes: modal.className
+                });
             }, 10);
             
             // Focus first input
@@ -514,6 +565,8 @@ class ModalManager {
             if (firstInput) {
                 firstInput.focus();
             }
+        } else {
+            console.error('Modal element not found:', modalId);
         }
     }
     
