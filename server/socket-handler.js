@@ -81,6 +81,10 @@ class SocketManager {
       this.handleTerminalResize(socket, data);
     });
 
+    socket.on('terminal-restart', (data) => {
+      this.handleTerminalRestart(socket, data);
+    });
+
     // Tmux session events
     socket.on('terminal:list-sessions', (data) => {
       this.handleListSessions(socket, data);
@@ -605,6 +609,82 @@ class SocketManager {
       
       socket.emit(WEBSOCKET.EVENTS.ERROR, {
         message: 'Failed to resize terminal',
+        details: error.message
+      });
+    }
+  }
+
+  async handleTerminalRestart(socket, data) {
+    try {
+      const { projectId } = data;
+      
+      if (!projectId) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Project ID required' });
+        return;
+      }
+
+      // Check if socket is in the project room
+      const socketRooms = Array.from(socket.rooms);
+      const isInProjectRoom = socketRooms.includes(`project-${projectId}`);
+      
+      if (!isInProjectRoom) {
+        // Auto-rejoin the project if possible
+        try {
+          await this.handleJoinProject(socket, { projectId });
+        } catch (joinError) {
+          socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Not connected to project' });
+          return;
+        }
+      }
+
+      // Update metadata if it's out of sync
+      if (socket.metadata.projectId !== projectId) {
+        socket.metadata.projectId = projectId;
+      }
+
+      logger.info('Terminal restart requested:', { projectId, socketId: socket.id });
+
+      // Force restart terminal session
+      try {
+        await terminalService.forceRestartSession(projectId);
+        
+        // Get project for setting up new session
+        const project = await projectService.getProject(projectId);
+        
+        // Set up project integration for the new session
+        await this.setupProjectIntegration(socket, projectId, project);
+        
+        // Add a small delay to ensure terminal is fully ready before notifying frontend
+        setTimeout(() => {
+          socket.emit(WEBSOCKET.EVENTS.PROJECT_STATUS, {
+            projectId,
+            status: 'terminal_restarted',
+            timestamp: new Date().toISOString()
+          });
+          
+          logger.socket('Terminal restarted successfully', socket.id, { projectId });
+        }, 1000); // 1 second delay for tmux session to fully initialize
+        
+      } catch (restartError) {
+        logger.error('Failed to restart terminal session:', {
+          projectId,
+          error: restartError.message
+        });
+        
+        socket.emit(WEBSOCKET.EVENTS.ERROR, {
+          message: 'Failed to restart terminal',
+          details: restartError.message
+        });
+      }
+
+    } catch (error) {
+      logger.error('Failed to handle terminal restart:', { 
+        socketId: socket.id, 
+        error: error.message 
+      });
+      
+      socket.emit(WEBSOCKET.EVENTS.ERROR, {
+        message: 'Failed to restart terminal',
         details: error.message
       });
     }

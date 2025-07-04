@@ -46,7 +46,6 @@ class SocketClient extends EventEmitter {
             this.updateConnectionStatus();
             this.emit('connected');
             
-            console.log('✅ Connected to server');
             if (notifications.isNotificationEnabled()) {
                 notifications.success('Connected to server', { duration: 2000 });
             }
@@ -57,7 +56,6 @@ class SocketClient extends EventEmitter {
             this.updateConnectionStatus();
             this.emit('disconnected', reason);
             
-            console.log('❌ Disconnected from server:', reason);
             
             if (reason === 'io server disconnect') {
                 // Server initiated disconnect, try to reconnect
@@ -71,7 +69,6 @@ class SocketClient extends EventEmitter {
             this.updateConnectionStatus();
             this.emit('connection_error', error);
             
-            console.error('❌ Connection error:', error);
             
             if (this.reconnectAttempts >= this.maxReconnectAttempts && notifications.isNotificationEnabled()) {
                 notifications.error('Failed to connect to server. Please check your connection.', {
@@ -86,7 +83,6 @@ class SocketClient extends EventEmitter {
             this.updateConnectionStatus();
             this.emit('reconnected', attemptNumber);
             
-            console.log('🔄 Reconnected to server (attempt:', attemptNumber, ')');
             if (notifications.isNotificationEnabled()) {
                 notifications.success('Reconnected to server', { duration: 2000 });
             }
@@ -94,7 +90,6 @@ class SocketClient extends EventEmitter {
             // Rejoin current project if any with delay to ensure server is ready
             if (this.currentProject) {
                 setTimeout(() => {
-                    console.log('🔄 Rejoining project after reconnection:', this.currentProject);
                     this.joinProject(this.currentProject);
                 }, 2000); // Wait 2 seconds before rejoining
             }
@@ -103,17 +98,14 @@ class SocketClient extends EventEmitter {
         this.socket.on('reconnect_attempt', (attemptNumber) => {
             this.connectionStatus = 'reconnecting';
             this.updateConnectionStatus();
-            console.log('🔄 Attempting to reconnect... (attempt:', attemptNumber, ')');
         });
         
         this.socket.on('reconnect_error', (error) => {
-            console.error('❌ Reconnection error:', error);
         });
         
         this.socket.on('reconnect_failed', () => {
             this.connectionStatus = 'failed';
             this.updateConnectionStatus();
-            console.error('❌ Reconnection failed');
             if (notifications.isNotificationEnabled()) {
                 notifications.error('Unable to reconnect to server', { duration: 0 });
             }
@@ -121,13 +113,11 @@ class SocketClient extends EventEmitter {
         
         // Server events
         this.socket.on('connected', (data) => {
-            console.log('✅ Server connection confirmed:', data);
             this.emit('server_connected', data);
             
             // Rejoin current project if we have one
             if (this.currentProject) {
                 setTimeout(() => {
-                    console.log('🔄 Rejoining project after server connection:', this.currentProject);
                     this.joinProject(this.currentProject);
                 }, 1000);
             }
@@ -136,7 +126,6 @@ class SocketClient extends EventEmitter {
         this.socket.on('error', (error) => {
             // Handle specific errors without logging
             if (error.message === 'Not connected to project' && this.currentProject) {
-                console.log('🔄 Project connection lost, attempting to rejoin:', this.currentProject);
                 setTimeout(() => {
                     this.joinProject(this.currentProject);
                 }, 1000);
@@ -171,7 +160,6 @@ class SocketClient extends EventEmitter {
         
         // Project events
         this.socket.on('project-status', (data) => {
-            console.log('📁 Project status:', data);
             this.emit('project_status', data);
         });
         
@@ -183,21 +171,18 @@ class SocketClient extends EventEmitter {
         // Project connection events
         this.socket.on('project-ready', (data) => {
             const { projectId } = data;
-            console.log(`Project ready event received for: ${projectId}`);
             this.markProjectReady(projectId);
             this.emit('project_ready', data);
         });
         
         this.socket.on('project-disconnected', (data) => {
             const { projectId } = data;
-            console.log(`Project disconnected event received for: ${projectId}`);
             this.markProjectDisconnected(projectId);
             this.emit('project_disconnected', data);
         });
         
         this.socket.on('terminal-session-created', (data) => {
             const { projectId } = data;
-            console.log(`Terminal session created for: ${projectId}`);
             // Mark project as ready when terminal session is created
             setTimeout(() => this.markProjectReady(projectId), 100);
             this.emit('terminal_session_created', data);
@@ -300,7 +285,6 @@ class SocketClient extends EventEmitter {
         
         const { sessionId, projectName, message, title, timestamp } = notification;
         
-        console.log('🔔 Claude notification received:', { projectName, message, title });
         
         // Show in-app notification
         notifications.warning(message, { 
@@ -315,7 +299,6 @@ class SocketClient extends EventEmitter {
     checkNotificationPermission() {
         if ('Notification' in window) {
             this.notificationPermission = Notification.permission;
-            console.log('🔔 Current notification permission:', this.notificationPermission);
         }
     }
     
@@ -333,7 +316,6 @@ class SocketClient extends EventEmitter {
                 
                 Notification.requestPermission().then(permission => {
                     this.notificationPermission = permission;
-                    console.log('🔔 Notification permission:', permission);
                     
                     if (permission === 'granted' && notifications.isNotificationEnabled()) {
                         notifications.success('Browser notifications enabled! You can now receive notifications even when away from the page', {
@@ -418,7 +400,6 @@ class SocketClient extends EventEmitter {
         
         this.currentProject = projectId;
         this.socket.emit('join-project', { projectId });
-        console.log('📁 Joining project:', projectId);
         return true;
     }
     
@@ -431,7 +412,6 @@ class SocketClient extends EventEmitter {
         const targetProjectId = projectId || this.currentProject;
         if (targetProjectId) {
             this.socket.emit('leave-project', { projectId: targetProjectId });
-            console.log('📁 Leaving project:', targetProjectId);
             
             if (targetProjectId === this.currentProject) {
                 this.currentProject = null;
@@ -453,7 +433,6 @@ class SocketClient extends EventEmitter {
         
         // Ensure we're connected to the project before sending input
         if (this.currentProject !== projectId || !this.isProjectReady(projectId)) {
-            console.warn('Project connection not ready, ensuring connection:', projectId);
             this.ensureProjectConnection(projectId, () => {
                 this.socket.emit('terminal-input', { projectId, input });
             });
@@ -471,6 +450,16 @@ class SocketClient extends EventEmitter {
         }
         
         this.socket.emit('terminal-resize', { projectId, cols, rows });
+        return true;
+    }
+    
+    restartTerminal(projectId) {
+        if (!this.isConnected()) {
+            console.warn('Cannot restart terminal: not connected to server');
+            return false;
+        }
+        
+        this.socket.emit('terminal-restart', { projectId });
         return true;
     }
     
@@ -566,10 +555,9 @@ class SocketClient extends EventEmitter {
     
     // Debugging methods
     enableDebugLogs() {
-        this.socket.on('connect', () => console.log('🔌 Socket connected'));
-        this.socket.on('disconnect', (reason) => console.log('🔌 Socket disconnected:', reason));
+        this.socket.on('connect', () => {});
+        this.socket.on('disconnect', (reason) => {});
         this.socket.onAny((event, ...args) => {
-            console.log('📡 Socket event:', event, args);
         });
     }
     
@@ -623,14 +611,12 @@ class SocketClient extends EventEmitter {
         
         // Start connection process
         state.status = 'connecting';
-        console.log(`Ensuring project connection for: ${projectId}`);
         
         this.joinProject(projectId);
         
         // Set a backup timeout to mark as ready if no confirmation received
         setTimeout(() => {
             if (state.status === 'connecting') {
-                console.warn(`No ready confirmation for ${projectId}, assuming ready`);
                 this.markProjectReady(projectId);
             }
         }, 2000);
@@ -643,7 +629,6 @@ class SocketClient extends EventEmitter {
         state.status = 'ready';
         state.lastActivity = Date.now();
         
-        console.log(`Project ${projectId} marked as ready`);
         
         // Execute queued callbacks
         while (state.readyCallbacks.length > 0) {
@@ -659,7 +644,6 @@ class SocketClient extends EventEmitter {
         // Process any pending inputs
         const pendingInputs = this.pendingInputs.get(projectId);
         if (pendingInputs && pendingInputs.length > 0) {
-            console.log(`Processing ${pendingInputs.length} pending inputs for ${projectId}`);
             while (pendingInputs.length > 0) {
                 const input = pendingInputs.shift();
                 this.socket.emit('terminal-input', { projectId, input });
@@ -794,7 +778,6 @@ class ConnectionMonitor {
             const timeSinceLastPong = now - this.lastPong;
             
             if (timeSinceLastPong > this.pingTimeout) {
-                console.warn('🏓 Heartbeat timeout detected, attempting reconnection');
                 // Store current project before reconnecting
                 const currentProject = this.client.getCurrentProject();
                 this.client.disconnect();

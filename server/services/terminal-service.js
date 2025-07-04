@@ -421,6 +421,51 @@ class TerminalService {
     }
   }
 
+  async forceRestartSession(sessionId) {
+    logger.info('Force restarting terminal session:', { sessionId });
+    
+    try {
+      // First, try to destroy existing session if any
+      const existingSession = this.sessions.get(sessionId);
+      if (existingSession) {
+        try {
+          await existingSession.kill();
+          this.sessions.delete(sessionId);
+          logger.info('Existing session killed for restart:', { sessionId });
+        } catch (killError) {
+          logger.warn('Failed to kill existing session (proceeding anyway):', {
+            sessionId,
+            error: killError.message
+          });
+          this.sessions.delete(sessionId);
+        }
+      }
+
+      logger.info('Terminal session force restart completed:', { 
+        sessionId,
+        remainingSessions: this.sessions.size 
+      });
+      
+      return { success: true, message: 'Terminal session force restarted' };
+      
+    } catch (error) {
+      logger.error('Failed to force restart terminal session:', {
+        sessionId,
+        error: error.message,
+        stack: error.stack
+      });
+      
+      // Clean up in case of error
+      this.sessions.delete(sessionId);
+      
+      throw new AppError(
+        `Failed to force restart terminal session: ${error.message}`,
+        500,
+        ERROR_CODES.TERMINAL_WRITE_FAILED
+      );
+    }
+  }
+
   getSession(sessionId) {
     const session = this.sessions.get(sessionId);
     if (!session) {

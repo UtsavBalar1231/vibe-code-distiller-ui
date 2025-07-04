@@ -15,7 +15,6 @@ class ProjectManager extends EventEmitter {
     setupEventHandlers() {
         // New project button
         DOM.on('new-project-btn', 'click', () => {
-            console.log('New project button clicked');
             this.showCreateProjectModal();
         });
         
@@ -46,7 +45,6 @@ class ProjectManager extends EventEmitter {
             if (e.target.classList.contains('modal-close') || e.target.closest('.modal-close')) {
                 const modal = e.target.closest('.modal');
                 if (modal && modal.id === 'project-modal') {
-                    console.log('Modal close button clicked');
                     this.closeProjectModal();
                 }
             }
@@ -60,17 +58,14 @@ class ProjectManager extends EventEmitter {
         
         // Terminal session events
         socket.on('terminal_session_created', (data) => {
-            console.log(`✅ Terminal session created for project: ${data.projectId}`);
             this.handleTerminalSessionCreated(data);
         });
         
         socket.on('project_ready', (data) => {
-            console.log(`✅ Project ready: ${data.projectId}`);
             this.handleProjectReady(data);
         });
         
         socket.on('project_disconnected', (data) => {
-            console.warn(`❌ Project disconnected: ${data.projectId}`);
             this.handleProjectDisconnected(data);
         });
     }
@@ -171,6 +166,9 @@ class ProjectManager extends EventEmitter {
         const optionsDropdown = DOM.create('div', {
             className: 'project-options-dropdown',
             html: `
+                <div class="dropdown-item" data-action="restart-terminal">
+                    <span class="text">Restart Terminal</span>
+                </div>
                 <div class="dropdown-item" data-action="delete">
                     <span class="text">Delete Project</span>
                 </div>
@@ -194,6 +192,8 @@ class ProjectManager extends EventEmitter {
                 this.deleteProject(project.id);
             } else if (action === 'download') {
                 this.downloadProject(project.id);
+            } else if (action === 'restart-terminal') {
+                this.restartTerminal(project.id);
             }
             // Hide dropdown after action
             optionsDropdown.style.display = 'none';
@@ -413,17 +413,9 @@ class ProjectManager extends EventEmitter {
         // Debug: Check modal's computed styles before opening
         if (modal) {
             const computedStyle = window.getComputedStyle(modal);
-            console.log('Modal computed styles before opening:', {
-                display: computedStyle.display,
-                opacity: computedStyle.opacity,
-                visibility: computedStyle.visibility,
-                position: computedStyle.position,
-                zIndex: computedStyle.zIndex
-            });
         }
         
         // Try direct modal display first (bypass modal manager temporarily for debugging)
-        console.log('Using direct modal display method');
         if (modal) {
             // Set initial styles
             modal.style.display = 'flex';
@@ -439,7 +431,6 @@ class ProjectManager extends EventEmitter {
             modal.style.opacity = '0';
             modal.style.visibility = 'hidden';
             
-            console.log('Modal styles set, adding active class...');
             
             // Force browser to recognize the changes
             modal.offsetHeight; // Force reflow
@@ -448,7 +439,6 @@ class ProjectManager extends EventEmitter {
                 modal.classList.add('active');
                 modal.style.opacity = '1';
                 modal.style.visibility = 'visible';
-                console.log('Active class added and visibility set');
                 
                 // Focus first input
                 const firstInput = modal.querySelector('input, textarea, select');
@@ -474,13 +464,11 @@ class ProjectManager extends EventEmitter {
     closeProjectModal() {
         const modal = DOM.get('project-modal');
         if (modal) {
-            console.log('Closing project modal');
             modal.classList.remove('active');
             modal.style.opacity = '0';
             modal.style.visibility = 'hidden';
             setTimeout(() => {
                 modal.style.display = 'none';
-                console.log('Modal hidden');
             }, 300);
         }
     }
@@ -503,11 +491,9 @@ class ProjectManager extends EventEmitter {
                 name: formData.get('name')
             };
             
-            console.log('Creating project with data:', projectData);
             const response = await HTTP.post('/api/projects', projectData);
             
             if (response.success) {
-                console.log('Project created successfully, closing modal...');
                 notifications.success('Project created successfully!');
                 
                 // Always use our custom close method since we're using direct DOM manipulation
@@ -774,6 +760,25 @@ class ProjectManager extends EventEmitter {
         }
     }
     
+    async restartTerminal(projectId) {
+        try {
+            const project = this.projects.get(projectId);
+            if (!project) return;
+            
+            const confirmed = confirm(`Restart terminal for "${project.name}"? This will close the current session and create a new one.`);
+            if (!confirmed) return;
+            
+            notifications.info(`Restarting terminal for "${project.name}"...`);
+            
+            // Send restart terminal command to the socket
+            socket.restartTerminal(projectId);
+            
+        } catch (error) {
+            console.error('Failed to restart terminal:', error);
+            notifications.error('Failed to restart terminal: ' + error.message);
+        }
+    }
+    
     handleProjectStatus(data) {
         const { projectId, status } = data;
         
@@ -789,6 +794,9 @@ class ProjectManager extends EventEmitter {
                 break;
             case 'terminal_destroyed':
                 notifications.info('Terminal session destroyed');
+                break;
+            case 'terminal_restarted':
+                notifications.success('Terminal session restarted successfully');
                 break;
         }
         
@@ -819,20 +827,17 @@ class ProjectManager extends EventEmitter {
     // Terminal session event handlers
     handleTerminalSessionCreated(data) {
         const { projectId } = data;
-        console.log(`Terminal session created for ${projectId}, ensuring terminal is visible`);
         
         // Ensure terminal is properly displayed if this is the current project
         if (this.currentProject === projectId) {
             // Check if we already have a terminal for this project
             if (!terminalManager.hasTerminalsForProject(projectId)) {
-                console.log(`Creating terminal UI for project ${projectId}`);
                 terminalManager.createTerminalForProject(projectId, true);
             } else {
                 // Activate existing terminal with longer delay for tmux sessions
                 setTimeout(() => {
                     const terminals = terminalManager.getTerminalsByProject(projectId);
                     if (terminals.length > 0) {
-                        console.log(`Activating existing terminal for project ${projectId}`);
                         terminalManager.setActiveTerminalSafely(terminals[0].id);
                     }
                 }, 300); // Increased delay for tmux session readiness
@@ -842,7 +847,6 @@ class ProjectManager extends EventEmitter {
     
     handleProjectReady(data) {
         const { projectId } = data;
-        console.log(`Project ${projectId} is ready for terminal operations`);
         
         // Update project status in UI if needed
         const projectElement = DOM.get(`project-${projectId}`);
@@ -854,7 +858,6 @@ class ProjectManager extends EventEmitter {
     
     handleProjectDisconnected(data) {
         const { projectId } = data;
-        console.warn(`Project ${projectId} disconnected`);
         
         // Update project status in UI
         const projectElement = DOM.get(`project-${projectId}`);
