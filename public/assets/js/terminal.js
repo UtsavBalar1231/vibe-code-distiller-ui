@@ -891,6 +891,195 @@ class TerminalManager extends EventEmitter {
         }
     }
     
+    performEnhancedResize(terminalData, terminalId) {
+        
+        if (!terminalData) {
+            return;
+        }
+        
+        const maxRetries = 5;
+        const stages = [
+            { delay: 50, description: 'Initial layout settlement' },
+            { delay: 100, description: 'DOM reflow completion' },
+            { delay: 200, description: 'Final layout stabilization' }
+        ];
+        
+        let currentStage = 0;
+        
+        const performStage = () => {
+            if (currentStage >= stages.length) {
+                return;
+            }
+            
+            const stage = stages[currentStage];
+            
+            setTimeout(() => {
+                try {
+                    // Validate layout before resize
+                    if (!this.validateTerminalLayout(terminalData, terminalId)) {
+                    }
+                    
+                    // Perform resize
+                    if (terminalData.fitAddon) {
+                        terminalData.fitAddon.fit();
+                    }
+                    
+                    // Validate status bar position after resize
+                    this.validateStatusBarLayout();
+                    
+                    currentStage++;
+                    performStage();
+                    
+                } catch (error) {
+                    
+                    // Try next stage anyway
+                    currentStage++;
+                    performStage();
+                }
+            }, stage.delay);
+        };
+        
+        // Start the resize process
+        performStage();
+    }
+    
+    
+    validateTerminalLayout(terminalData, terminalId) {
+        try {
+            const wrapper = terminalData.terminal.element?.parentElement;
+            if (!wrapper) {
+                return false;
+            }
+            
+            const hasValidDimensions = wrapper.offsetWidth > 0 && wrapper.offsetHeight > 0;
+            const isVisible = wrapper.style.display !== 'none' && wrapper.offsetParent !== null;
+            
+            if (!hasValidDimensions) {
+            }
+            
+            if (!isVisible) {
+            }
+            
+            // 检查xterm内部元素的尺寸一致性
+            this.validateXtermInternalLayout(terminalData, terminalId);
+            
+            return hasValidDimensions && isVisible;
+            
+        } catch (error) {
+            return false;
+        }
+    }
+    
+    validateXtermInternalLayout(terminalData, terminalId) {
+        try {
+            const xtermElement = terminalData.terminal.element;
+            if (!xtermElement) return;
+            
+            const xtermViewport = xtermElement.querySelector('.xterm-viewport');
+            const xtermScreen = xtermElement.querySelector('.xterm-screen');
+            
+            if (!xtermViewport || !xtermScreen) return;
+            
+            const viewportRect = xtermViewport.getBoundingClientRect();
+            const screenRect = xtermScreen.getBoundingClientRect();
+            const windowHeight = window.innerHeight;
+            
+            
+            // 如果screen溢出窗口，强制修复
+            if (screenRect.bottom > windowHeight || screenRect.height > viewportRect.height + 50) {
+                this.fixXtermScreenOverflow(terminalData, terminalId);
+            }
+            
+        } catch (error) {
+        }
+    }
+    
+    fixXtermScreenOverflow(terminalData, terminalId) {
+        try {
+            
+            // 方法1: 强制调整终端行数
+            const terminal = terminalData.terminal;
+            const currentRows = terminal.rows;
+            const currentCols = terminal.cols;
+            
+            // 减少行数以适应可用空间
+            const newRows = Math.max(10, currentRows - 5);
+            
+            terminal.resize(currentCols, newRows);
+            
+            // 方法2: 强制重新fit
+            setTimeout(() => {
+                if (terminalData.fitAddon) {
+                    terminalData.fitAddon.fit();
+                }
+            }, 100);
+            
+            // 方法3: 强制设置最大高度
+            const xtermScreen = terminal.element?.querySelector('.xterm-screen');
+            if (xtermScreen) {
+                const maxHeight = window.innerHeight - 150; // 留出余量
+                xtermScreen.style.maxHeight = `${maxHeight}px`;
+                xtermScreen.style.overflow = 'hidden';
+            }
+            
+        } catch (error) {
+        }
+    }
+    
+    validateStatusBarLayout() {
+        try {
+            const statusBar = document.querySelector('.status-indicators');
+            if (!statusBar) {
+                return true; // Status bar might not exist, that's okay
+            }
+            
+            const statusBarRect = statusBar.getBoundingClientRect();
+            const isPositionValid = statusBarRect.bottom > 0 && statusBarRect.right > 0;
+            
+            // Always force a layout refresh after terminal restart to prevent browser rendering issues
+            // This mimics the effect of F12 dev tools open/close that fixes the layout
+            this.forceLayoutRefresh();
+            
+            if (!isPositionValid) {
+                console.warn('Status bar position validation failed, attempting additional fixes...');
+            }
+            
+            return true; // Always return true since we're forcing refresh anyway
+            
+        } catch (error) {
+            console.error('Status bar layout validation error:', error);
+            return false;
+        }
+    }
+    
+    forceLayoutRefresh() {
+        // Multiple strategies to force browser layout refresh, similar to F12 toggle effect
+        
+        // Strategy 1: Force reflow on body
+        document.body.style.display = 'none';
+        document.body.offsetHeight; // Trigger reflow
+        document.body.style.display = '';
+        
+        // Strategy 2: Force reflow on all status elements
+        const statusElements = document.querySelectorAll('.status-indicators, .header, .terminal-wrapper');
+        statusElements.forEach(element => {
+            const originalTransform = element.style.transform;
+            element.style.transform = 'translateZ(0)';
+            element.offsetHeight; // Trigger reflow
+            element.style.transform = originalTransform;
+        });
+        
+        // Strategy 3: Force window resize event (similar to viewport change from F12)
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 50);
+        
+        // Strategy 4: Force style recalculation
+        setTimeout(() => {
+            const computedStyle = window.getComputedStyle(document.body);
+        }, 100);
+    }
+    
     setActiveTerminalSafely(terminalId, retryCount = 0) {
         const maxRetries = 3;
         const retryDelay = 50;
@@ -922,8 +1111,7 @@ class TerminalManager extends EventEmitter {
                 // Verify visibility
                 const isVisible = terminalData.element.offsetWidth > 0 && terminalData.element.offsetHeight > 0;
                 if (!isVisible && retryCount < maxRetries) {
-                    console.warn(`Terminal ${terminalId} not visible, retrying... (${retryCount + 1}/${maxRetries})`);
-                    setTimeout(() => {
+                        setTimeout(() => {
                         this.setActiveTerminalSafely(terminalId, retryCount + 1);
                     }, retryDelay);
                     return;
@@ -937,10 +1125,9 @@ class TerminalManager extends EventEmitter {
                 
                 // Sync project selection when terminal is activated
                 if (terminalData.projectId && projectManager) {
-                    projectManager.updateActiveProject(terminalData.projectId);
+                    projectManager.selectProject(terminalData.projectId);
                 }
                 
-                console.log(`Terminal ${terminalId} activated successfully`);
                 
             } catch (error) {
                 console.error(`Failed to activate terminal ${terminalId}:`, error);
@@ -975,10 +1162,8 @@ class TerminalManager extends EventEmitter {
             
             if (welcomeElement) {
                 DOM.hide(welcomeElement);
-                console.log('Welcome screen hidden successfully');
-            } else {
-                console.warn('Welcome screen element not found');
-            }
+                } else {
+                }
         };
         
         // Try immediately and with small delay as fallback
@@ -993,7 +1178,6 @@ class TerminalManager extends EventEmitter {
         try {
             const success = socket.sendTerminalInput(projectId, data);
             if (!success && retryCount < maxRetries) {
-                console.warn(`Failed to send terminal input for ${projectId}, retrying... (${retryCount + 1}/${maxRetries})`);
                 setTimeout(() => {
                     this.sendTerminalInputSafely(projectId, data, terminalId, retryCount + 1);
                 }, retryDelay);
@@ -1001,12 +1185,10 @@ class TerminalManager extends EventEmitter {
             }
             
             if (!success && retryCount >= maxRetries) {
-                console.error(`Failed to send terminal input for ${projectId} after ${maxRetries} retries`);
                 this.showTerminalError(terminalId, 'Failed to process terminal input. Please check your connection.');
             }
             
         } catch (error) {
-            console.error(`Error sending terminal input for ${projectId}:`, error);
             
             if (retryCount < maxRetries) {
                 setTimeout(() => {
@@ -1030,7 +1212,6 @@ class TerminalManager extends EventEmitter {
             terminalData.terminal.writeln(`\r\n\x1b[31m${message}\x1b[0m`);
         }
         
-        console.error(`Terminal ${terminalId}: ${message}`);
     }
     
     updateTerminalSize(terminalId) {
@@ -1166,12 +1347,12 @@ class TerminalManager extends EventEmitter {
         // Update terminal status based on project status
         for (const [terminalId, terminalData] of this.terminals.entries()) {
             if (terminalData.projectId === projectId) {
-                this.updateTerminalProjectStatus(terminalData, status);
+                this.updateTerminalProjectStatus(terminalData, status, terminalId);
             }
         }
     }
     
-    updateTerminalProjectStatus(terminalData, status) {
+    updateTerminalProjectStatus(terminalData, status, terminalId) {
         // Status bar has been removed to prevent overlap with tmux status bar
         // Only handle terminal output now
         switch (status) {
@@ -1180,6 +1361,19 @@ class TerminalManager extends EventEmitter {
                 break;
             case 'claude_stopped':
                 terminalData.terminal.writeln('\r\n\x1b[33mClaude session stopped\x1b[0m');
+                break;
+            case 'terminal_restarted':
+                
+                // Clear terminal without showing disruptive message
+                terminalData.terminal.clear();
+                
+                // Show non-intrusive notification instead of terminal message
+                if (window.notifications) {
+                    window.notifications.success('Terminal session restarted successfully');
+                }
+                
+                // Enhanced resize with proper timing and validation
+                this.performEnhancedResize(terminalData, terminalId);
                 break;
             // terminal_created and terminal_destroyed don't need terminal output
         }
