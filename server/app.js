@@ -32,6 +32,7 @@ const projectRoutes = require('./routes/projects');
 const systemRoutes = require('./routes/system');
 const claudeRoutes = require('./routes/claude');
 const imageRoutes = require('./routes/images');
+const fileRoutes = require('./routes/files');
 
 // Import socket handler
 const socketHandler = require('./socket-handler');
@@ -151,6 +152,7 @@ app.use('/api/projects', basicAuth, projectRoutes);
 app.use('/api/system', basicAuth, systemRoutes);
 app.use('/api/claude', basicAuth, claudeRoutes);
 app.use('/api/images', basicAuth, imageRoutes);
+app.use('/api/files', basicAuth, fileRoutes);
 
 // Serve main application (with auth in production)
 app.get('/', (req, res, next) => {

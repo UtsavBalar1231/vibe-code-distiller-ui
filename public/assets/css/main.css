@@ -366,11 +366,18 @@ body {
     border-bottom: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
+    min-height: 100px;
+    overflow: hidden;
+}
+
+.sidebar-panel:first-child {
+    flex: 0 0 250px; /* Default height for projects panel */
 }
 
 .sidebar-panel:last-child {
     border-bottom: none;
     flex: 1;
+    min-height: 150px;
 }
 
 .panel-header {
@@ -461,7 +468,12 @@ body {
     color: var(--text-secondary);
 }
 
-.project-delete-btn {
+.project-options-container {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.project-options-btn {
     opacity: 0;
     transition: opacity var(--transition-fast);
     background-color: var(--bg-tertiary);
@@ -470,14 +482,55 @@ body {
     flex-shrink: 0;
 }
 
-.project-item:hover .project-delete-btn {
+.project-item:hover .project-options-btn {
     opacity: 1;
 }
 
-.project-delete-btn:hover {
+.project-options-btn:hover {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
+}
+
+.project-options-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-medium);
+    z-index: 1000;
+    min-width: 160px;
+    overflow: hidden;
+}
+
+.project-options-dropdown .dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.project-options-dropdown .dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.project-options-dropdown .dropdown-item:hover {
+    background-color: var(--bg-secondary);
+}
+
+.project-options-dropdown .dropdown-item[data-action="delete"]:hover {
     background-color: var(--accent-danger);
     color: var(--text-inverse);
-    border-color: var(--accent-danger);
+}
+
+.project-options-dropdown .dropdown-item .text {
+    font-size: 14px;
+    font-weight: 500;
 }
 
 .project-type {
@@ -485,6 +538,54 @@ body {
     background-color: var(--bg-tertiary);
     border-radius: var(--border-radius-sm);
     font-size: 10px;
+}
+
+/* ===== SIDEBAR DIVIDER ===== */
+.sidebar-divider {
+    height: 6px;
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+    cursor: ns-resize;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.sidebar-divider:hover {
+    background-color: var(--bg-hover);
+}
+
+.sidebar-divider:active {
+    background-color: var(--accent-primary);
+}
+
+.sidebar-divider-handle {
+    width: 40px;
+    height: 3px;
+    background-color: var(--border-color);
+    border-radius: 2px;
+    transition: background-color var(--transition-fast);
+}
+
+.sidebar-divider:hover .sidebar-divider-handle {
+    background-color: var(--text-secondary);
+}
+
+.sidebar-divider:active .sidebar-divider-handle {
+    background-color: var(--text-inverse);
+}
+
+.sidebar-divider.dragging {
+    background-color: var(--accent-primary);
+}
+
+.sidebar-divider.dragging .sidebar-divider-handle {
+    background-color: var(--text-inverse);
 }
 
 

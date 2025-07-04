@@ -261,11 +261,19 @@ class SocketManager {
               projectId,
               timestamp: new Date().toISOString()
             });
-          }, 200);
+          }, 500); // Increased delay for tmux sessions
         } catch (error) {
           logger.error('Failed to create terminal session automatically:', {
             projectId,
-            error: error.message
+            error: error.message,
+            stack: error.stack
+          });
+          
+          // Send error notification to client
+          socket.emit(WEBSOCKET.EVENTS.ERROR, {
+            message: 'Failed to create terminal session',
+            details: error.message,
+            projectId
           });
         }
       }
@@ -435,6 +443,19 @@ class SocketManager {
         socket.metadata.projectId = projectId;
       }
 
+      // Check if terminal session exists before sending input
+      const currentTerminalStatus = terminalService.getSessionStatus(projectId);
+      if (!currentTerminalStatus.exists) {
+        logger.warn('Terminal session does not exist for project:', { projectId, socketId: socket.id });
+        socket.emit('terminal-input-error', {
+          projectId,
+          message: 'Terminal session not found. Please try selecting the project again.',
+          details: 'Terminal session needs to be created',
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+
       // Send input to terminal service
       await terminalService.writeToSession(projectId, input);
       
@@ -447,7 +468,8 @@ class SocketManager {
       logger.error('Failed to process terminal input:', { 
         socketId: socket.id, 
         projectId: data.projectId,
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       
       // Send specific terminal input error
@@ -541,11 +563,34 @@ class SocketManager {
           delete socket.pendingResize;
         }
       } catch (resizeError) {
-        // If resize fails because terminal is not active, store for later
-        if (resizeError.message && resizeError.message.includes('Terminal not active')) {
-          logger.debug('Terminal not active for resize, will retry later:', { projectId, cols, rows });
-          socket.pendingResize = { projectId, cols, rows };
-          return;
+        // If resize fails because terminal is not active or not found, recreate session
+        if (resizeError.message && (resizeError.message.includes('Terminal not active') || resizeError.message.includes('Terminal session not found'))) {
+          logger.info('Terminal session lost, recreating for resize:', { projectId, cols, rows });
+          try {
+            const project = await projectService.getProject(projectId);
+            await terminalService.createSession(projectId, {
+              cwd: project.path,
+              cols,
+              rows
+            });
+            
+            // Set up callbacks for the new session
+            await this.setupProjectIntegration(socket, projectId, project);
+            
+            logger.info('Terminal session recreated successfully for resize:', { projectId, cols, rows });
+            return; // Terminal created with correct size, no need to resize
+          } catch (createError) {
+            logger.error('Failed to recreate terminal session for resize:', {
+              projectId,
+              error: createError.message
+            });
+            
+            socket.emit(WEBSOCKET.EVENTS.ERROR, {
+              message: 'Failed to recreate terminal session',
+              details: createError.message
+            });
+            return;
+          }
         }
         throw resizeError;
       }

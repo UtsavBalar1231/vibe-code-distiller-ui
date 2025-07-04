@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
 const { SUCCESS_MESSAGES } = require('../utils/constants');
+const path = require('path');
 
 // API status endpoint
 router.get('/status', (req, res) => {
@@ -51,6 +52,7 @@ router.get('/version', (req, res) => {
         'POST /api/claude/:projectId/start',
         'POST /api/claude/:projectId/stop',
         'GET /api/claude/:projectId/status',
+        'POST /api/notification',
         'GET /api/system/status',
         'GET /api/system/logs'
       ]
@@ -127,6 +129,19 @@ router.get('/docs', (req, res) => {
           }
         },
         
+        notifications: {
+          'POST /notification': {
+            description: 'Receive Claude Code notification hooks',
+            body: {
+              session_id: 'string - Claude session ID',
+              transcript_path: 'string - Path to conversation transcript',
+              message: 'string - Notification message',
+              title: 'string - Notification title'
+            },
+            response: 'Success confirmation with notification details'
+          }
+        },
+        
         system: {
           'GET /system/status': {
             description: 'Get system status and metrics',
@@ -160,7 +175,8 @@ router.get('/docs', (req, res) => {
             'project-status - Project status update',
             'system-status - System status update',
             'error - Error message',
-            'notification - System notification'
+            'notification - System notification',
+            'claude-notification - Claude Code hook notifications'
           ]
         }
       },
@@ -186,6 +202,54 @@ router.get('/docs', (req, res) => {
       }
     }
   });
+});
+
+// Claude Code notification endpoint
+router.post('/notification', (req, res) => {
+  try {
+    const { session_id, transcript_path, message, title } = req.body;
+    
+    // Extract project name from transcript path
+    let projectName = 'Unknown Project';
+    if (transcript_path) {
+      const pathSegments = transcript_path.split('/');
+      // Find the segment that contains the project (usually the parent directory of .claude)
+      const claudeIndex = pathSegments.findIndex(segment => segment === '.claude');
+      if (claudeIndex > 0) {
+        projectName = pathSegments[claudeIndex - 1];
+      }
+    }
+    
+    // Create notification object
+    const notification = {
+      sessionId: session_id,
+      projectName,
+      message: message || 'Claude Code notification',
+      title: title || 'Claude Code',
+      timestamp: new Date().toISOString()
+    };
+    
+    // Broadcast to all connected clients via Socket.IO
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('claude-notification', notification);
+      logger.info(`Notification sent to all clients: ${message} (Project: ${projectName})`);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Notification sent successfully',
+      notification
+    });
+    
+  } catch (error) {
+    logger.error('Error processing notification:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process notification',
+      details: error.message
+    });
+  }
 });
 
 // Helper function to format uptime

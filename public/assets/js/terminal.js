@@ -1121,6 +1121,17 @@ class TerminalManager extends EventEmitter {
         for (const [terminalId, terminalData] of this.terminals.entries()) {
             if (terminalData.projectId === projectId) {
                 this.showTerminalError(terminalId, message);
+                
+                // If it's a session not found error, try to reconnect
+                if (details && details.includes('Terminal session needs to be created')) {
+                    console.log(`Attempting to recreate terminal session for ${projectId}`);
+                    // Trigger project rejoin to recreate terminal session
+                    if (projectManager && projectManager.currentProject === projectId) {
+                        setTimeout(() => {
+                            projectManager.selectProject(projectId);
+                        }, 1000);
+                    }
+                }
                 break;
             }
         }

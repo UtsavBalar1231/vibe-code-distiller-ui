@@ -111,4 +111,17 @@ router.get('/:id/stats',
   })
 );
 
+// Download project as ZIP
+router.get('/:id/download',
+  middleware(schemas.project.id, 'params'),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { filename } = await projectService.downloadProject(id, res);
+    
+    // Headers are already set by the service
+    // The response stream is handled by the service
+    // This endpoint just ensures proper error handling
+  })
+);
+
 module.exports = router;
