@@ -429,16 +429,13 @@ class FileManager {
             // Directory menu items
             menuItems.innerHTML = `
                 <div class="context-menu-item" data-action="upload">
-                    <span class="menu-icon">📤</span>
                     <span class="menu-text">Upload Files</span>
                 </div>
                 <div class="context-menu-item" data-action="download-dir">
-                    <span class="menu-icon">📥</span>
                     <span class="menu-text">Download Folder</span>
                 </div>
                 <div class="context-menu-item context-menu-separator"></div>
                 <div class="context-menu-item context-menu-danger" data-action="delete">
-                    <span class="menu-icon">🗑️</span>
                     <span class="menu-text">Delete</span>
                 </div>
             `;
@@ -446,16 +443,13 @@ class FileManager {
             // File menu items
             menuItems.innerHTML = `
                 <div class="context-menu-item" data-action="download">
-                    <span class="menu-icon">📥</span>
                     <span class="menu-text">Download</span>
                 </div>
                 <div class="context-menu-item" data-action="preview">
-                    <span class="menu-icon">👁️</span>
                     <span class="menu-text">Preview</span>
                 </div>
                 <div class="context-menu-item context-menu-separator"></div>
                 <div class="context-menu-item context-menu-danger" data-action="delete">
-                    <span class="menu-icon">🗑️</span>
                     <span class="menu-text">Delete</span>
                 </div>
             `;
@@ -467,6 +461,7 @@ class FileManager {
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const action = item.getAttribute('data-action');
+                menu.classList.remove('active');
                 menu.style.display = 'none';
                 
                 switch (action) {
@@ -493,10 +488,12 @@ class FileManager {
         menu.style.left = event.pageX + 'px';
         menu.style.top = event.pageY + 'px';
         menu.style.display = 'block';
+        menu.classList.add('active');
         
         // Hide menu when clicking outside
         const hideMenu = (e) => {
             if (!menu.contains(e.target)) {
+                menu.classList.remove('active');
                 menu.style.display = 'none';
                 document.removeEventListener('click', hideMenu);
             }
