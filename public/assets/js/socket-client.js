@@ -286,7 +286,7 @@ class SocketClient extends EventEmitter {
         
         // Show in-app notification
         notifications.warning(message, { 
-            title: `${title} - ${projectName}`, 
+            title: title, 
             duration: 0 // Persistent notification
         });
         
@@ -374,7 +374,7 @@ class SocketClient extends EventEmitter {
     
     showBrowserNotification(title, message, projectName) {
         if ('Notification' in window && this.notificationPermission === 'granted') {
-            const notificationTitle = `${title} - ${projectName}`;
+            const notificationTitle = title;
             const notificationOptions = {
                 body: message,
                 icon: '/favicon.ico',
