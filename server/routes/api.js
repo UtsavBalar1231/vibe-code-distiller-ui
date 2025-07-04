@@ -210,7 +210,7 @@ router.post('/notification', (req, res) => {
     const { session_id, transcript_path, message, title } = req.body;
     
     // Extract project name from transcript path
-    let projectName = 'Unknown Project';
+    let projectName = 'Current Project';
     if (transcript_path) {
       const pathSegments = transcript_path.split('/');
       // Find the segment that contains the project (usually the parent directory of .claude)

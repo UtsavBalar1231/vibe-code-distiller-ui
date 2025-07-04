@@ -47,7 +47,9 @@ class SocketClient extends EventEmitter {
             this.emit('connected');
             
             console.log('✅ Connected to server');
-            notifications.success('Connected to server', { duration: 2000 });
+            if (notifications.isNotificationEnabled()) {
+                notifications.success('Connected to server', { duration: 2000 });
+            }
         });
         
         this.socket.on('disconnect', (reason) => {
@@ -71,7 +73,7 @@ class SocketClient extends EventEmitter {
             
             console.error('❌ Connection error:', error);
             
-            if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            if (this.reconnectAttempts >= this.maxReconnectAttempts && notifications.isNotificationEnabled()) {
                 notifications.error('Failed to connect to server. Please check your connection.', {
                     duration: 0
                 });
@@ -85,7 +87,9 @@ class SocketClient extends EventEmitter {
             this.emit('reconnected', attemptNumber);
             
             console.log('🔄 Reconnected to server (attempt:', attemptNumber, ')');
-            notifications.success('Reconnected to server', { duration: 2000 });
+            if (notifications.isNotificationEnabled()) {
+                notifications.success('Reconnected to server', { duration: 2000 });
+            }
             
             // Rejoin current project if any with delay to ensure server is ready
             if (this.currentProject) {
@@ -110,7 +114,9 @@ class SocketClient extends EventEmitter {
             this.connectionStatus = 'failed';
             this.updateConnectionStatus();
             console.error('❌ Reconnection failed');
-            notifications.error('Unable to reconnect to server', { duration: 0 });
+            if (notifications.isNotificationEnabled()) {
+                notifications.error('Unable to reconnect to server', { duration: 0 });
+            }
         });
         
         // Server events
@@ -145,7 +151,9 @@ class SocketClient extends EventEmitter {
             } else {
                 // Log other errors
                 console.error('❌ Server error:', error);
-                notifications.error(error.message || 'Server error occurred');
+                if (notifications.isNotificationEnabled()) {
+                    notifications.error(error.message || 'Server error occurred');
+                }
             }
             
             this.emit('server_error', error);
@@ -250,6 +258,11 @@ class SocketClient extends EventEmitter {
     }
     
     handleNotification(notification) {
+        // Check if notifications are enabled before showing
+        if (!notifications.isNotificationEnabled()) {
+            return;
+        }
+        
         const { type, message, title } = notification;
         
         switch (type) {
@@ -280,13 +293,18 @@ class SocketClient extends EventEmitter {
     }
     
     handleClaudeNotification(notification) {
+        // Check if notifications are enabled before showing
+        if (!notifications.isNotificationEnabled()) {
+            return;
+        }
+        
         const { sessionId, projectName, message, title, timestamp } = notification;
         
         console.log('🔔 Claude notification received:', { projectName, message, title });
         
         // Show in-app notification
         notifications.warning(message, { 
-            title: `${title} - ${projectName}`, 
+            title: title, 
             duration: 0 // Persistent notification
         });
         
@@ -298,60 +316,26 @@ class SocketClient extends EventEmitter {
         if ('Notification' in window) {
             this.notificationPermission = Notification.permission;
             console.log('🔔 Current notification permission:', this.notificationPermission);
-            this.updateNotificationStatus();
         }
     }
     
-    updateNotificationStatus() {
-        const statusElement = document.getElementById('notification-status');
-        if (!statusElement) return;
-        
-        const textElement = statusElement.querySelector('.text');
-        if (!textElement) return;
-        
-        if (!('Notification' in window)) {
-            textElement.textContent = 'Notifications: Not supported';
-            statusElement.style.color = '#6c757d';
-            return;
-        }
-        
-        switch (this.notificationPermission) {
-            case 'granted':
-                textElement.textContent = 'Notifications: Enabled';
-                statusElement.style.color = '#28a745';
-                statusElement.title = 'Notifications enabled';
-                break;
-            case 'denied':
-                textElement.textContent = 'Notifications: Denied';
-                statusElement.style.color = '#dc3545';
-                statusElement.title = 'Notifications denied, please enable in browser settings';
-                break;
-            case 'default':
-                textElement.textContent = 'Notifications: Pending';
-                statusElement.style.color = '#ffc107';
-                statusElement.title = 'Click to enable notifications';
-                break;
-            default:
-                textElement.textContent = 'Notifications: Unknown';
-                statusElement.style.color = '#6c757d';
-        }
-    }
     
     requestNotificationPermission() {
         if ('Notification' in window) {
             if (Notification.permission === 'default') {
                 // Show a notification request dialog
-                notifications.info('Please allow browser notifications to receive important Claude Code messages', {
-                    title: 'Notification Permission Request',
-                    duration: 0
-                });
+                if (notifications.isNotificationEnabled()) {
+                    notifications.info('Please allow browser notifications to receive important Claude Code messages', {
+                        title: 'Notification Permission Request',
+                        duration: 0
+                    });
+                }
                 
                 Notification.requestPermission().then(permission => {
                     this.notificationPermission = permission;
-                    this.updateNotificationStatus();
                     console.log('🔔 Notification permission:', permission);
                     
-                    if (permission === 'granted') {
+                    if (permission === 'granted' && notifications.isNotificationEnabled()) {
                         notifications.success('Browser notifications enabled! You can now receive notifications even when away from the page', {
                             title: 'Notification Permission Granted',
                             duration: 3000
@@ -359,7 +343,7 @@ class SocketClient extends EventEmitter {
                         
                         // Test notification
                         this.showBrowserNotification('Claude Code Web Manager', 'Browser notifications enabled!', 'System');
-                    } else if (permission === 'denied') {
+                    } else if (permission === 'denied' && notifications.isNotificationEnabled()) {
                         notifications.warning('Browser notifications denied. You can manually enable notifications in browser settings', {
                             title: 'Notification Permission Denied',
                             duration: 5000
@@ -373,8 +357,13 @@ class SocketClient extends EventEmitter {
     }
     
     showBrowserNotification(title, message, projectName) {
+        // Check if notifications are enabled
+        if (!notifications.isNotificationEnabled()) {
+            return;
+        }
+        
         if ('Notification' in window && this.notificationPermission === 'granted') {
-            const notificationTitle = `${title} - ${projectName}`;
+            const notificationTitle = title;
             const notificationOptions = {
                 body: message,
                 icon: '/favicon.ico',
@@ -718,6 +707,10 @@ class SocketErrorHandler {
     }
     
     handleServerError(error) {
+        if (!notifications.isNotificationEnabled()) {
+            return;
+        }
+        
         const { code, message, details } = error;
         
         switch (code) {
@@ -745,6 +738,10 @@ class SocketErrorHandler {
     handleConnectionError(error) {
         console.error('Connection error:', error);
         
+        if (!notifications.isNotificationEnabled()) {
+            return;
+        }
+        
         if (error.message.includes('ECONNREFUSED')) {
             notifications.error('Cannot connect to server. Please check if the server is running.');
         } else if (error.message.includes('timeout')) {
@@ -757,7 +754,7 @@ class SocketErrorHandler {
     handleGenericError(error) {
         console.error('Generic error:', error);
         // Only show notification for critical errors
-        if (error.message.includes('socket') || error.message.includes('connection')) {
+        if ((error.message.includes('socket') || error.message.includes('connection')) && notifications.isNotificationEnabled()) {
             notifications.error('A connection error occurred.');
         }
     }

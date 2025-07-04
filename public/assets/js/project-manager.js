@@ -15,6 +15,7 @@ class ProjectManager extends EventEmitter {
     setupEventHandlers() {
         // New project button
         DOM.on('new-project-btn', 'click', () => {
+            console.log('New project button clicked');
             this.showCreateProjectModal();
         });
         
@@ -38,6 +39,17 @@ class ProjectManager extends EventEmitter {
         DOM.on('project-form', 'submit', (e) => {
             e.preventDefault();
             this.handleProjectFormSubmit(e.target);
+        });
+        
+        // Modal close buttons - add specific handler for project modal
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal-close') || e.target.closest('.modal-close')) {
+                const modal = e.target.closest('.modal');
+                if (modal && modal.id === 'project-modal') {
+                    console.log('Modal close button clicked');
+                    this.closeProjectModal();
+                }
+            }
         });
         
         // Socket events
@@ -398,7 +410,79 @@ class ProjectManager extends EventEmitter {
         if (title) title.textContent = 'Create New Project';
         if (form) form.reset();
         
-        modals.open('project-modal');
+        // Debug: Check modal's computed styles before opening
+        if (modal) {
+            const computedStyle = window.getComputedStyle(modal);
+            console.log('Modal computed styles before opening:', {
+                display: computedStyle.display,
+                opacity: computedStyle.opacity,
+                visibility: computedStyle.visibility,
+                position: computedStyle.position,
+                zIndex: computedStyle.zIndex
+            });
+        }
+        
+        // Try direct modal display first (bypass modal manager temporarily for debugging)
+        console.log('Using direct modal display method');
+        if (modal) {
+            // Set initial styles
+            modal.style.display = 'flex';
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100vw';
+            modal.style.height = '100vh';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
+            modal.style.zIndex = '1000';
+            modal.style.opacity = '0';
+            modal.style.visibility = 'hidden';
+            
+            console.log('Modal styles set, adding active class...');
+            
+            // Force browser to recognize the changes
+            modal.offsetHeight; // Force reflow
+            
+            setTimeout(() => {
+                modal.classList.add('active');
+                modal.style.opacity = '1';
+                modal.style.visibility = 'visible';
+                console.log('Active class added and visibility set');
+                
+                // Focus first input
+                const firstInput = modal.querySelector('input, textarea, select');
+                if (firstInput) {
+                    firstInput.focus();
+                }
+            }, 10);
+            
+            // Add backdrop click handler
+            const handleBackdropClick = (e) => {
+                if (e.target === modal) {
+                    this.closeProjectModal();
+                    modal.removeEventListener('click', handleBackdropClick);
+                }
+            };
+            modal.addEventListener('click', handleBackdropClick);
+        } else {
+            console.error('Project modal element not found');
+            notifications.error('Failed to open project creation dialog');
+        }
+    }
+    
+    closeProjectModal() {
+        const modal = DOM.get('project-modal');
+        if (modal) {
+            console.log('Closing project modal');
+            modal.classList.remove('active');
+            modal.style.opacity = '0';
+            modal.style.visibility = 'hidden';
+            setTimeout(() => {
+                modal.style.display = 'none';
+                console.log('Modal hidden');
+            }, 300);
+        }
     }
     
     showImportProjectModal() {
@@ -407,16 +491,27 @@ class ProjectManager extends EventEmitter {
     
     async handleProjectFormSubmit(form) {
         try {
+            // Prevent multiple submissions
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Creating...';
+            }
+            
             const formData = new FormData(form);
             const projectData = {
                 name: formData.get('name')
             };
             
+            console.log('Creating project with data:', projectData);
             const response = await HTTP.post('/api/projects', projectData);
             
             if (response.success) {
+                console.log('Project created successfully, closing modal...');
                 notifications.success('Project created successfully!');
-                modals.close();
+                
+                // Always use our custom close method since we're using direct DOM manipulation
+                this.closeProjectModal();
                 
                 // Add to projects map
                 this.projects.set(response.project.id, response.project);
@@ -431,7 +526,20 @@ class ProjectManager extends EventEmitter {
             }
         } catch (error) {
             console.error('Failed to create project:', error);
-            notifications.error('Failed to create project: ' + error.message);
+            
+            // Show specific error message for conflict
+            if (error.message.includes('409')) {
+                notifications.error('Project name already exists. Please choose a different name.');
+            } else {
+                notifications.error('Failed to create project: ' + error.message);
+            }
+        } finally {
+            // Always restore button state
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Create Project';
+            }
         }
     }
     

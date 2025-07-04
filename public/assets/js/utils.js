@@ -72,6 +72,7 @@ const DOM = {
     
     // Show element
     show: (element) => {
+        console.log('DOM.show called with:', element);
         if (typeof element === 'string') {
             // Check if it's an ID selector (without #) or CSS selector
             if (element.includes('#') || element.includes('.') || element.includes(' ') || element.includes('>')) {
@@ -83,7 +84,23 @@ const DOM = {
             }
         }
         if (element) {
-            element.style.display = '';
+            console.log('DOM.show processing element:', element, 'isModal:', element.classList && element.classList.contains('modal'));
+            // Special handling for modal elements
+            if (element.classList && element.classList.contains('modal')) {
+                console.log('Setting modal display styles...');
+                element.style.display = 'flex';
+                element.style.opacity = '';
+                element.style.visibility = '';
+                console.log('Modal styles set to:', {
+                    display: element.style.display,
+                    opacity: element.style.opacity,
+                    visibility: element.style.visibility
+                });
+            } else {
+                element.style.display = '';
+            }
+        } else {
+            console.error('DOM.show: element not found');
         }
     },
     
@@ -100,7 +117,14 @@ const DOM = {
             }
         }
         if (element) {
-            element.style.display = 'none';
+            // Special handling for modal elements
+            if (element.classList && element.classList.contains('modal')) {
+                element.style.opacity = '0';
+                element.style.visibility = 'hidden';
+                // Don't set display: none for modals, let CSS handle it
+            } else {
+                element.style.display = 'none';
+            }
         }
     },
     
@@ -337,9 +361,102 @@ class NotificationManager {
         this.container = DOM.get('notification-container');
         this.notifications = new Map();
         this.nextId = 1;
+        this.isEnabled = Storage.get('notifications-enabled', true);
+        this.pendingNotifications = [];
+        this.init();
+    }
+    
+    init() {
+        this.updateVisibility();
+        this.setupToggle();
+        this.interceptBrowserNotifications();
+    }
+    
+    setupToggle() {
+        const toggleBtn = DOM.get('notification-toggle');
+        if (toggleBtn) {
+            DOM.on(toggleBtn, 'click', () => {
+                this.toggle();
+            });
+        }
+    }
+    
+    toggle() {
+        this.isEnabled = !this.isEnabled;
+        this.updateVisibility();
+        Storage.set('notifications-enabled', this.isEnabled);
+        
+        // Clear all current notifications when disabled
+        if (!this.isEnabled) {
+            this.clear();
+            this.pendingNotifications = [];
+        }
+    }
+    
+    updateVisibility() {
+        const toggleBtn = DOM.get('notification-toggle');
+        if (this.container) {
+            if (this.isEnabled) {
+                DOM.removeClass(this.container, 'hidden');
+            } else {
+                DOM.addClass(this.container, 'hidden');
+            }
+        }
+        
+        if (toggleBtn) {
+            const textElement = toggleBtn.querySelector('.text');
+            const iconElement = toggleBtn.querySelector('.icon');
+            if (textElement) {
+                textElement.textContent = this.isEnabled ? 'Notifications: Enabled' : 'Notifications: Disabled';
+            }
+            if (iconElement) {
+                iconElement.textContent = this.isEnabled ? '🔔' : '🔕';
+            }
+            toggleBtn.title = this.isEnabled ? 'Disable notifications' : 'Enable notifications';
+        }
+    }
+    
+    interceptBrowserNotifications() {
+        // Store original Notification constructor
+        this.originalNotification = window.Notification;
+        
+        // Create a proxy to intercept browser notifications
+        const self = this;
+        if (window.Notification) {
+            window.Notification = function(title, options = {}) {
+                // Check if notifications are enabled
+                if (!self.isEnabled) {
+                    // Create a fake notification object that does nothing
+                    return {
+                        close: () => {},
+                        onclick: null,
+                        onshow: null,
+                        onclose: null,
+                        onerror: null
+                    };
+                }
+                
+                // If enabled, create the real notification
+                return new self.originalNotification(title, options);
+            };
+            
+            // Copy static properties
+            Object.keys(self.originalNotification).forEach(key => {
+                window.Notification[key] = self.originalNotification[key];
+            });
+        }
+    }
+    
+    isNotificationEnabled() {
+        return this.isEnabled;
     }
     
     show(message, type = 'info', options = {}) {
+        // If notifications are disabled, don't show anything
+        if (!this.isEnabled) {
+            return null;
+        }
+        
         const id = this.nextId++;
         const notification = this.createNotification(id, message, type, options);
         
@@ -497,16 +614,43 @@ class ModalManager {
     }
     
     open(modalId) {
+        console.log('ModalManager.open called with:', modalId);
         const modal = DOM.get(modalId);
+        console.log('Modal element found:', modal);
+        
         if (modal) {
+            console.log('Modal current style before open:', {
+                display: modal.style.display,
+                opacity: modal.style.opacity,
+                visibility: modal.style.visibility,
+                classes: modal.className
+            });
+            
             if (this.activeModal) {
+                console.log('Closing existing modal:', this.activeModal);
                 this.close();
             }
             
             this.activeModal = modal;
+            console.log('Calling DOM.show...');
             DOM.show(modal);
+            
+            console.log('Modal style after DOM.show:', {
+                display: modal.style.display,
+                opacity: modal.style.opacity,
+                visibility: modal.style.visibility,
+                classes: modal.className
+            });
+            
             setTimeout(() => {
+                console.log('Adding active class...');
                 modal.classList.add('active');
+                console.log('Modal style after adding active class:', {
+                    display: modal.style.display,
+                    opacity: modal.style.opacity,
+                    visibility: modal.style.visibility,
+                    classes: modal.className
+                });
             }, 10);
             
             // Focus first input
@@ -514,6 +658,8 @@ class ModalManager {
             if (firstInput) {
                 firstInput.focus();
             }
+        } else {
+            console.error('Modal element not found:', modalId);
         }
     }
     

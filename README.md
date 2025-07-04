@@ -1,183 +1,234 @@
 # Claude Code Web Manager
 
-A Node.js web application that provides a browser-based interface for managing Claude Code CLI projects. Specifically optimized for Raspberry Pi environments with a simplified interface focused on project selection and terminal interaction.
+A personal web interface for managing Claude Code CLI on your Raspberry Pi. This lightweight application provides a browser-based terminal and project management interface, making it easy to interact with Claude Code from any device on your local network.
 
 ## Features
 
-- 🌐 **Web-based Interface**: Browser-based interface for Claude Code CLI management
+- 🌐 **Web Interface**: Access Claude Code CLI through your browser
 - 🖥️ **Terminal Integration**: Real-time terminal interface using xterm.js
 - 💾 **Persistent Sessions**: Tmux integration for session persistence across devices
-- 📁 **Project Management**: Easy project selection and management
-- 🔄 **Real-time Communication**: WebSocket-based real-time updates
-- 🍓 **Raspberry Pi Optimized**: Lightweight and optimized for ARM devices
-- 🔒 **Optional Authentication**: Configurable authentication system
-- 📊 **System Monitoring**: Built-in system information and status monitoring
+- 📁 **Project Management**: Browse and manage your coding projects
+- 🔄 **Real-time Updates**: Live terminal output and project changes
+- 📊 **System Monitoring**: Keep an eye on your Raspberry Pi's resources
+- 🎨 **Dark Theme**: Easy on the eyes interface
+- 🔔 **Notifications**: Desktop notifications for important events
+- 📱 **Mobile Friendly**: Works on phones and tablets too
+- 🔧 **File Management**: Upload, download, and manage project files
+- 🖼️ **Image Support**: View and manage images in your projects
 
 ## Quick Start
 
 ### Prerequisites
-
-- Node.js 18.0.0+
-- NPM 8.0.0+
+- Raspberry Pi with Node.js 18+ installed
 - Claude Code CLI installed and configured
-- tmux (optional, for persistent sessions)
+- Basic familiarity with terminal/command line
 
 ### Installation
 
-1. Clone the repository:
+1. **Clone and install**:
 ```bash
-git clone <repository-url>
-cd claudeCodeUi
-```
-
-2. Install dependencies:
-```bash
+git clone <your-repo-url>
+cd claude-code-web-manager
 npm install
 ```
 
-3. Install tmux for persistent sessions (optional):
+2. **Start the application**:
 ```bash
-./install-tmux.sh
-```
-
-4. Start the application:
-```bash
-# Development mode
-npm run dev
-
-# Production mode
 npm start
-
-# With PM2 process manager (recommended for production)
-npm run pm2:start
 ```
 
-5. Open your browser and navigate to:
-```
-http://localhost:3000
-```
+3. **Access from any device**:
+Open your browser and go to `http://your-pi-ip:8080`
 
-## Usage
-
-1. **Select a Project**: Use the sidebar to browse and select your Claude Code projects
-2. **Terminal Interface**: Interact with Claude Code CLI through the integrated terminal
-3. **Real-time Updates**: All terminal output and project changes are updated in real-time
-4. **Session Management**: Multiple terminal sessions are supported with auto-reconnection
-
-### Tmux Session Management
-
-When tmux is enabled, your terminal sessions persist even when you close the browser:
-
-- **View Sessions**: Press `Ctrl+Shift+S` to view active tmux sessions
-- **Detach Session**: Sessions automatically detach when you close the browser
-- **Reattach Session**: When you return, the system automatically reconnects to existing sessions
-- **Cross-Device Access**: Start work on one device and continue on another
+That's it! You can now manage your Claude Code projects from any device on your network.
 
 ## Configuration
 
-Configuration files are located in the `config/` directory:
+The main configuration file is `config/default.json`. Here are the key settings you might want to adjust:
 
-- `config/default.json` - Development configuration
-- `config/production.json` - Production overrides
-- `ecosystem.config.js` - PM2 deployment configuration
-
-Key configuration options:
-- Server port and host settings
-- Claude executable path
-- Authentication settings
-- WebSocket timeouts
-- Logging levels
-
-## PM2 Process Management
-
-For production deployment, use PM2:
-
-```bash
-# Start with PM2
-npm run pm2:start
-
-# Stop PM2 process
-npm run pm2:stop
-
-# Restart PM2 process
-npm run pm2:restart
-
-# Delete PM2 process
-npm run pm2:delete
-
-# View PM2 status
-pm2 status
+```json
+{
+  "server": {
+    "port": 8080,
+    "host": "0.0.0.0"
+  },
+  "claude": {
+    "executable": "claude",
+    "maxSessions": 5
+  },
+  "terminal": {
+    "tmux": {
+      "enabled": true,
+      "sessionPrefix": "claude-web"
+    }
+  }
+}
 ```
 
-## System Requirements
-
-- **Supported OS**: Linux, macOS
-- **Architecture**: ARM64, x64
-- **Memory**: Minimum 256MB RAM (optimized for 128MB on Raspberry Pi)
-- **Node.js**: 18.0.0 or higher
-- **Browser**: Modern browsers with WebSocket support
-
-## API Endpoints
-
-- `/api/status` - Application health and status
-- `/api/projects` - Project management operations
-- `/api/claude` - Claude AI integration endpoints
-- `/api/system` - System monitoring information
-
-## Development
-
-### Project Structure
+## Project Structure
 
 ```
-├── server/                 # Backend Express.js application
-│   ├── app.js             # Main application entry
-│   ├── socket-handler.js  # WebSocket event handling
-│   ├── middleware/        # Express middleware
-│   ├── routes/           # API route definitions
-│   ├── services/         # Core business logic
-│   └── utils/            # Utilities and helpers
-├── public/               # Frontend static files
-│   ├── index.html        # Main application page
-│   └── assets/          # CSS, JS, and library files
-├── config/              # Configuration files
-└── logs/               # Application logs
+├── server/                    # Backend Node.js application
+│   ├── app.js                # Main server file
+│   ├── services/             # Core services
+│   │   ├── claude-manager.js # Claude Code session management
+│   │   ├── terminal-service.js # Terminal handling
+│   │   └── project-service.js # Project operations
+│   └── routes/               # API endpoints
+├── public/                   # Frontend files
+│   ├── index.html           # Main page
+│   └── assets/              # CSS, JS, and libraries
+├── config/                  # Configuration files
+└── logs/                   # Application logs
 ```
 
-### Development Commands
+## How It Works
 
-```bash
-npm run dev        # Start development server with nodemon
-npm start          # Start production server
-npm run pm2:start  # Start with PM2 process manager
-```
+### Terminal Sessions
+- Each project gets its own terminal session
+- Sessions persist even when you close your browser (thanks to tmux)
+- You can reconnect from any device and continue where you left off
+
+### Project Management
+- Browse your projects in the sidebar
+- Click any project to open it in the terminal
+- Create new projects with the "+" button
+- Upload files by dragging and dropping
+
+### Keyboard Shortcuts
+- `Ctrl+N`: Create new project
+- `Ctrl+,`: Open settings
+- `Ctrl+Shift+S`: Show tmux session manager
+- `Escape`: Close modals/menus
+
+## Features Explained
+
+### Tmux Integration
+When enabled, your terminal sessions become persistent:
+- Start coding on your laptop
+- Switch to your phone/tablet and continue
+- Sessions survive browser crashes and network disconnections
+- Press `Ctrl+Shift+S` to see all active sessions
+
+### File Management
+- Upload files by dragging them into the interface
+- Download individual files or entire project folders
+- Basic file operations (create, delete, rename)
+- Syntax highlighting for code files
+
+### System Monitoring
+Keep track of your Raspberry Pi's health:
+- CPU usage and temperature
+- Memory usage
+- Active processes
+- Network activity
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Port already in use**: Change the port in `config/default.json`
-2. **Claude CLI not found**: Update the Claude executable path in configuration
-3. **WebSocket connection failed**: Check firewall settings and CORS configuration
-4. **Memory issues on Raspberry Pi**: Ensure PM2 memory limits are properly configured
+**Port 8080 is busy**:
+```bash
+# Kill whatever is using port 8080
+sudo lsof -ti:8080 | xargs kill -9
+# Or change the port in config/default.json
+```
+
+**Can't find Claude CLI**:
+- Make sure `claude` command works in your terminal
+- Update the path in `config/default.json` if needed
+
+**Can't connect from other devices**:
+- Make sure your Pi's firewall allows port 8080
+- Check that you're using the correct IP address
 
 ### Logs
+Check the logs if something goes wrong:
+```bash
+tail -f logs/app.log        # General logs
+tail -f logs/error.log      # Error logs only
+```
 
-Application logs are stored in the `logs/` directory:
-- `app.log` - General application logs
-- `error.log` - Error logs only
+## Advanced Usage
+
+### Using PM2 (Optional)
+If you want the app to start automatically and stay running:
+
+```bash
+# Install PM2 globally
+npm install -g pm2
+
+# Start the app with PM2
+npm run pm2:start
+
+# Make it start on boot
+pm2 startup
+pm2 save
+```
+
+### Custom Shell Commands
+Add your own shortcuts by modifying the terminal service or creating custom scripts in your project directories.
+
+## Development
+
+### File Structure
+- `server/app.js` - Main Express application
+- `server/services/` - Core business logic
+- `server/routes/` - API endpoints
+- `public/assets/js/` - Frontend JavaScript
+- `public/assets/css/` - Styling
+
+### Adding Features
+1. Backend: Add new routes in `server/routes/`
+2. Frontend: Add new JavaScript modules in `public/assets/js/`
+3. Styling: Update CSS in `public/assets/css/`
+
+### Testing
+Use Playwright to test the interface in a real browser:
+```bash
+# Install Playwright
+npm install -D playwright
+
+# Run tests (create your own test files)
+npx playwright test
+```
+
+## Tips & Tricks
+
+### Performance on Raspberry Pi
+- The app is optimized for Pi's limited resources
+- Close unused terminal sessions to save memory
+- Use tmux to keep sessions alive without browser overhead
+
+### Multi-Device Usage
+- Bookmark `http://your-pi-ip:8080` on all your devices
+- Use the same session across devices for seamless coding
+- The interface adapts to phone/tablet screen sizes
+
+### Security Note
+This app is designed for personal use on your local network. It doesn't have authentication enabled by default since it's meant to be used only by you on your own Pi.
+
+## What's New
+
+### Recent Updates
+- **Tmux Integration**: Persistent terminal sessions across devices
+- **File Management**: Upload and download project files
+- **Image Support**: View and manage images in projects
+- **Notifications**: Desktop notifications for important events
+- **Mobile Optimization**: Better experience on phones and tablets
+- **System Monitoring**: Real-time Pi resource monitoring
 
 ## License
 
-This project is licensed under the MIT License.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+MIT License - Feel free to modify and use as you like!
 
 ## Support
 
-For issues and questions, please refer to the project's issue tracker.
+This is a personal project designed for individual use. If you run into issues:
+1. Check the logs in the `logs/` directory
+2. Look at the browser console for errors
+3. Make sure all dependencies are installed correctly
+
+---
+
+*Happy coding with Claude on your Raspberry Pi! 🍓*

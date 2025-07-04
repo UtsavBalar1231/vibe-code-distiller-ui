@@ -127,6 +127,7 @@ e2e/playwright-report/
 
 # Terminal session files
 .sessions/
+tmux-sessions.json
 
 # Configuration backups
 config/*.backup
@@ -171,3 +172,6 @@ secrets.json
 local/
 dev/
 development/
+
+# Bug fix plans
+bug_fix/
