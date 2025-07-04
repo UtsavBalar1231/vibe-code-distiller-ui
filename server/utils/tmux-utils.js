@@ -78,6 +78,10 @@ class TmuxUtils {
       logger.info(`Killed tmux session: ${sessionName}`);
       return true;
     } catch (error) {
+      if (error.message.includes("can't find session")) {
+        logger.debug(`Tmux session already gone: ${sessionName}`);
+        return true; // Session doesn't exist, which is what we wanted
+      }
       logger.error(`Failed to kill tmux session: ${error.message}`);
       return false;
     }
