@@ -26,7 +26,8 @@ const upload = multer({
 
 // Helper function to get project path (simplified)
 function getProjectPath(projectId) {
-  const projectsRoot = '/home/lanpangzi/projects'; // Use hardcoded path for now
+  const config = require('config');
+  const projectsRoot = config.get('projects.rootDir').replace('~', process.env.HOME || '/home/distiller');
   return path.join(projectsRoot, projectId);
 }
 
