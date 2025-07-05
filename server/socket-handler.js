@@ -2,6 +2,7 @@ const logger = require('./utils/logger');
 const { WEBSOCKET, ERROR_CODES } = require('./utils/constants');
 const claudeManager = require('./services/claude-manager');
 const terminalService = require('./services/terminal-service-wrapper');
+const standardTerminalService = require('./services/terminal-service'); // For temporary terminals
 const projectService = require('./services/project-service');
 const fileService = require('./services/file-service');
 
@@ -27,7 +28,8 @@ class SocketManager {
         ip: socket.request.connection.remoteAddress,
         userAgent: socket.request.headers['user-agent'],
         connectedAt: Date.now(),
-        projectId: null
+        projectId: null,
+        temporaryTerminals: new Set() // Track temporary terminals for this socket
       };
       
       next();
@@ -96,6 +98,19 @@ class SocketManager {
 
     socket.on('terminal:attach-session', (data) => {
       this.handleAttachSession(socket, data);
+    });
+
+    // Temporary terminal events
+    socket.on('create-temporary-terminal', (data) => {
+      this.handleCreateTemporaryTerminal(socket, data);
+    });
+
+    socket.on('temporary-terminal-input', (data) => {
+      this.handleTemporaryTerminalInput(socket, data);
+    });
+
+    socket.on('temporary-terminal-resize', (data) => {
+      this.handleTemporaryTerminalResize(socket, data);
     });
 
     // Claude Code events
@@ -861,6 +876,25 @@ class SocketManager {
       projectId: socket.metadata.projectId
     });
     
+    // Clean up temporary terminals associated with this socket
+    if (socket.metadata.temporaryTerminals && socket.metadata.temporaryTerminals.size > 0) {
+      for (const terminalId of socket.metadata.temporaryTerminals) {
+        try {
+          standardTerminalService.destroyTemporarySession(terminalId);
+          logger.info('Cleaned up temporary terminal on disconnect:', { 
+            terminalId, 
+            socketId: socket.id 
+          });
+        } catch (error) {
+          logger.error('Failed to cleanup temporary terminal on disconnect:', { 
+            terminalId, 
+            socketId: socket.id,
+            error: error.message 
+          });
+        }
+      }
+    }
+    
     // Leave project room if connected
     if (socket.metadata.projectId) {
       this.handleLeaveProject(socket, { projectId: socket.metadata.projectId });
@@ -975,6 +1009,165 @@ class SocketManager {
       socket.emit(WEBSOCKET.EVENTS.ERROR, {
         message: 'Failed to attach session',
         details: error.message
+      });
+    }
+  }
+
+  // Temporary terminal event handlers
+  async handleCreateTemporaryTerminal(socket, data) {
+    try {
+      const { terminalId } = data;
+      
+      if (!terminalId) {
+        socket.emit('temporary-terminal-error', { 
+          terminalId,
+          message: 'Terminal ID required' 
+        });
+        return;
+      }
+
+      // Set up callbacks BEFORE creating session to catch initial output
+      const callbacks = {
+        onData: (output) => {
+          socket.emit('temporary-terminal-output', {
+            terminalId,
+            data: output
+          });
+        },
+        onExit: () => {
+          socket.emit('temporary-terminal-error', {
+            terminalId,
+            message: 'Terminal session ended'
+          });
+        },
+        onError: (error) => {
+          socket.emit('temporary-terminal-error', {
+            terminalId,
+            message: error.message
+          });
+        }
+      };
+
+      // Create temporary terminal session with callbacks using standard service
+      await standardTerminalService.createTemporarySession(terminalId, {
+        cols: 80,
+        rows: 24,
+        callbacks: callbacks
+      });
+
+      // Track this temporary terminal for cleanup on disconnect
+      socket.metadata.temporaryTerminals.add(terminalId);
+
+      // Notify client that terminal is created
+      socket.emit('temporary-terminal-created', {
+        terminalId,
+        sessionId: terminalId,
+        timestamp: new Date().toISOString()
+      });
+
+      logger.info('Temporary terminal created:', { 
+        terminalId, 
+        socketId: socket.id 
+      });
+
+    } catch (error) {
+      logger.error('Failed to create temporary terminal:', { 
+        terminalId: data.terminalId,
+        socketId: socket.id,
+        error: error.message 
+      });
+      
+      socket.emit('temporary-terminal-error', {
+        terminalId: data.terminalId,
+        message: 'Failed to create temporary terminal: ' + error.message
+      });
+    }
+  }
+
+  async handleTemporaryTerminalInput(socket, data) {
+    try {
+      const { terminalId, data: input } = data;
+      
+      if (!terminalId || !input) {
+        socket.emit('temporary-terminal-error', { 
+          terminalId,
+          message: 'Terminal ID and input required' 
+        });
+        return;
+      }
+
+      // Check if temporary terminal session exists
+      if (!standardTerminalService.isTemporarySessionActive(terminalId)) {
+        socket.emit('temporary-terminal-error', {
+          terminalId,
+          message: 'Temporary terminal session not found'
+        });
+        return;
+      }
+
+      // Send input to temporary terminal
+      await standardTerminalService.writeToTemporarySession(terminalId, input);
+      
+      logger.debug('Temporary terminal input processed:', { 
+        terminalId,
+        socketId: socket.id,
+        inputLength: input.length 
+      });
+
+    } catch (error) {
+      logger.error('Failed to process temporary terminal input:', { 
+        terminalId: data.terminalId,
+        socketId: socket.id,
+        error: error.message 
+      });
+      
+      socket.emit('temporary-terminal-error', {
+        terminalId: data.terminalId,
+        message: 'Failed to process input: ' + error.message
+      });
+    }
+  }
+
+  async handleTemporaryTerminalResize(socket, data) {
+    try {
+      const { terminalId, cols, rows } = data;
+      
+      if (!terminalId || !cols || !rows) {
+        socket.emit('temporary-terminal-error', { 
+          terminalId,
+          message: 'Terminal ID, columns and rows required' 
+        });
+        return;
+      }
+
+      // Check if temporary terminal session exists
+      if (!standardTerminalService.isTemporarySessionActive(terminalId)) {
+        socket.emit('temporary-terminal-error', {
+          terminalId,
+          message: 'Temporary terminal session not found'
+        });
+        return;
+      }
+
+      // Resize temporary terminal
+      await standardTerminalService.resizeTemporarySession(terminalId, cols, rows);
+      
+      logger.debug('Temporary terminal resized:', { 
+        terminalId,
+        socketId: socket.id,
+        size: `${cols}x${rows}`
+      });
+
+    } catch (error) {
+      logger.error('Failed to resize temporary terminal:', { 
+        terminalId: data.terminalId,
+        socketId: socket.id,
+        error: error.message 
+      });
+      
+      socket.emit('temporary-terminal-error', {
+        terminalId: data.terminalId,
+        message: 'Failed to resize terminal: ' + error.message
       });
     }
   }
