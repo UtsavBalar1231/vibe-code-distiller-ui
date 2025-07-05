@@ -49,7 +49,8 @@ class TmuxUtils {
       const sessions = stdout.trim().split('\n').filter(Boolean);
       return sessions.filter(session => session.startsWith(this.SESSION_PREFIX));
     } catch (error) {
-      if (error.message.includes('no server running')) {
+      if (error.message.includes('no server running') || 
+          error.message.includes('No such file or directory')) {
         return [];
       }
       throw error;

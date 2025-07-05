@@ -468,7 +468,7 @@ router.get('/:projectId/preview',
         mimeType = imageMimeTypes[extension] || 'image/jpeg';
       }
       
-      res.json({
+      const responseData = {
         success: true,
         file: {
           name: filename,
@@ -482,13 +482,14 @@ router.get('/:projectId/preview',
           content
         },
         timestamp: new Date().toISOString()
-      });
+      };
+      
+      res.json(responseData);
     } catch (error) {
-      logger.error('Failed to preview file:', error);
       throw new AppError(
-        'Failed to preview file',
-        500,
-        ERROR_CODES.FILE_ACCESS_ERROR
+        error.message || 'Failed to preview file',
+        error.statusCode || 500,
+        error.code || ERROR_CODES.FILE_ACCESS_ERROR
       );
     }
   })

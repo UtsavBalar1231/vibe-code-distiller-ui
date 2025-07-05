@@ -575,11 +575,16 @@ select {
 #file-preview-modal .modal-content {
     max-width: 90vw;
     max-height: 90vh;
-    overflow: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 #file-preview-modal .modal-body {
     padding: 0;
+    overflow: auto;
+    flex: 1;
+    min-height: 0;
 }
 
 #file-preview-modal pre {
@@ -593,13 +598,32 @@ select {
     margin: 0;
     white-space: pre-wrap;
     word-wrap: break-word;
+    max-height: 70vh;
 }
 
 #file-preview-modal .file-info {
     padding: var(--spacing-md);
-    background-color: var(--bg-tertiary);
+}
+
+#file-preview-modal img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
     border-radius: var(--border-radius-md);
-    margin: var(--spacing-md);
+}
+
+/* Loading state for preview */
+.preview-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    color: var(--text-secondary);
+}
+
+.preview-loading .loading-spinner {
+    margin-right: var(--spacing-sm);
 }
 
 #file-preview-modal .file-info p {
