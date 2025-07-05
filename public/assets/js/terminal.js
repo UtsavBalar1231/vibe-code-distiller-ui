@@ -6,7 +6,6 @@ class TerminalManager extends EventEmitter {
         this.terminals = new Map();
         this.activeTerminal = null;
         this.terminalCounter = 0;
-        this.temporaryTerminalCounter = 0;
         this.container = DOM.get('terminal-content');
         this.tabsContainer = DOM.get('terminal-tabs');
         this.welcomeScreen = DOM.get('welcome-screen');
@@ -20,11 +19,6 @@ class TerminalManager extends EventEmitter {
         socket.onProjectStatus(this.handleProjectStatus.bind(this));
         socket.on('terminal_input_error', this.handleTerminalInputError.bind(this));
         
-        // Temporary terminal events
-        socket.on('temporary-terminal-output', this.handleTemporaryTerminalOutput.bind(this));
-        socket.on('temporary-terminal-created', this.handleTemporaryTerminalCreated.bind(this));
-        socket.on('temporary-terminal-error', this.handleTemporaryTerminalError.bind(this));
-        
         // Tmux session events
         socket.on('terminal:sessions-list', this.handleSessionsList.bind(this));
         socket.on('terminal:session-attached', this.handleSessionAttached.bind(this));
@@ -32,13 +26,8 @@ class TerminalManager extends EventEmitter {
     }
     
     setupTerminalControls() {
-        // Setup New Terminal button
-        const newTerminalBtn = DOM.get('new-terminal-btn');
-        if (newTerminalBtn) {
-            DOM.on(newTerminalBtn, 'click', () => {
-                this.createTemporaryTerminal();
-            });
-        }
+        // Terminal control buttons have been removed as per UI simplification
+        // Functionality is still available via keyboard shortcuts
     }
     
     setupKeyboardShortcuts() {
@@ -80,25 +69,8 @@ class TerminalManager extends EventEmitter {
         });
     }
     
-    createTemporaryTerminal() {
-        const terminalId = `temp-${++this.temporaryTerminalCounter}`;
-        const result = this.createTerminal(null, { 
-            isTemporary: true, 
-            terminalId,
-            title: `Terminal ${this.temporaryTerminalCounter}`
-        });
-        
-        // Notify server to create temporary terminal session
-        if (socket.isConnected()) {
-            socket.emit('create-temporary-terminal', { terminalId });
-        }
-        
-        return result;
-    }
-
     createTerminal(projectId = null, options = {}) {
-        const isTemporary = options.isTemporary || false;
-        const terminalId = options.terminalId || `terminal-${++this.terminalCounter}`;
+        const terminalId = `terminal-${++this.terminalCounter}`;
         const isClaudeTerminal = Boolean(projectId);
         
         // Load saved settings
@@ -178,7 +150,7 @@ class TerminalManager extends EventEmitter {
         this.setupMobileTouchGestures(terminalWrapper, terminal);
         
         // Create tab
-        const tab = this.createTerminalTab(terminalId, projectId, isClaudeTerminal, isTemporary, options.title);
+        const tab = this.createTerminalTab(terminalId, projectId, isClaudeTerminal);
         
         // Store terminal data
         const terminalData = {
@@ -190,8 +162,6 @@ class TerminalManager extends EventEmitter {
             webLinksAddon,
             projectId,
             isClaudeTerminal,
-            isTemporary,
-            title: options.title,
             // statusBar removed to prevent overlap with tmux status bar
             history: [],
             historyIndex: -1,
@@ -237,12 +207,6 @@ class TerminalManager extends EventEmitter {
         terminal.onData((data) => {
             const terminalData = this.terminals.get(terminalId);
             if (!terminalData) return;
-            
-            // For temporary terminals, send to dedicated temporary terminal handler
-            if (terminalData.isTemporary && socket.isConnected()) {
-                this.sendTemporaryTerminalInput(terminalId, data);
-                return;
-            }
             
             // For interactive applications like Claude Code, send all input directly to server
             // without local processing to ensure interactive prompts work correctly
@@ -314,21 +278,18 @@ class TerminalManager extends EventEmitter {
         });
         
         // Store the lastCommandSent reference for this terminal
-        const currentTerminalData = this.terminals.get(terminalId);
-        if (currentTerminalData) {
-            currentTerminalData.getLastCommandSent = () => lastCommandSent;
-            currentTerminalData.clearLastCommandSent = () => { lastCommandSent = ''; };
+        const terminalData = this.terminals.get(terminalId);
+        if (terminalData) {
+            terminalData.getLastCommandSent = () => lastCommandSent;
+            terminalData.clearLastCommandSent = () => { lastCommandSent = ''; };
             
             // Also store a flag to track if we've received the initial prompt
-            currentTerminalData.hasReceivedInitialPrompt = false;
+            terminalData.hasReceivedInitialPrompt = false;
         }
         
         // Handle terminal resize
         terminal.onResize((size) => {
-            const currentTerminalData = this.terminals.get(terminalId);
-            if (currentTerminalData && currentTerminalData.isTemporary && socket.isConnected()) {
-                socket.emit('temporary-terminal-resize', { terminalId, cols: size.cols, rows: size.rows });
-            } else if (projectId && socket.isConnected()) {
+            if (projectId && socket.isConnected()) {
                 socket.resizeTerminal(projectId, size.cols, size.rows);
             }
         });
@@ -343,11 +304,7 @@ class TerminalManager extends EventEmitter {
         });
         
         // Don't write initial prompt when connected to server - let the shell handle its natural prompt
-        // For temporary terminals, also let the server handle the prompt
-        const isConnectedTerminal = (projectId && socket.isConnected()) || 
-                                   (currentTerminalData && currentTerminalData.isTemporary && socket.isConnected());
-        
-        if (!isConnectedTerminal) {
+        if (!projectId || !socket.isConnected()) {
             this.writePrompt(terminal);
         }
     }
@@ -682,24 +639,24 @@ class TerminalManager extends EventEmitter {
         });
     }
     
-    createTerminalTab(terminalId, projectId, isClaudeTerminal, isTemporary = false, customTitle = null) {
+    createTerminalTab(terminalId, projectId, isClaudeTerminal) {
         const tab = DOM.create('button', {
-            className: `terminal-tab ${isTemporary ? 'temporary' : ''}`,
+            className: 'terminal-tab',
             attributes: { 'data-terminal-id': terminalId }
         });
         
         const icon = DOM.create('span', {
             className: 'icon',
-            text: isTemporary ? '⚡' : (isClaudeTerminal ? '🤖' : '💻')
+            text: isClaudeTerminal ? '🤖' : '💻'
         });
         
         const title = DOM.create('span', {
-            className: 'tab-title',
-            text: customTitle || (projectId ? `${projectId}` : `Terminal ${this.terminalCounter}`)
+            className: 'title',
+            text: projectId ? `${projectId}` : `Terminal ${this.terminalCounter}`
         });
         
         const closeBtn = DOM.create('button', {
-            className: 'tab-close',
+            className: 'close-btn',
             text: '×',
             events: {
                 click: (e) => {
@@ -1256,51 +1213,11 @@ class TerminalManager extends EventEmitter {
         }
         
     }
-
-    sendTemporaryTerminalInput(terminalId, data) {
-        try {
-            socket.emit('temporary-terminal-input', { terminalId, data });
-        } catch (error) {
-            console.error('Failed to send temporary terminal input:', error);
-            this.showTerminalError(terminalId, 'Failed to send terminal input');
-        }
-    }
-
-    handleTemporaryTerminalOutput(data) {
-        const { terminalId, data: output } = data;
-        const terminalData = this.terminals.get(terminalId);
-        if (terminalData && terminalData.isTemporary) {
-            terminalData.terminal.write(output);
-        }
-    }
-
-    handleTemporaryTerminalCreated(data) {
-        const { terminalId, sessionId } = data;
-        const terminalData = this.terminals.get(terminalId);
-        if (terminalData && terminalData.isTemporary) {
-            terminalData.sessionId = sessionId;
-            // Send initial resize to set up the pty size
-            const { cols, rows } = terminalData.terminal;
-            socket.emit('temporary-terminal-resize', { terminalId, cols, rows });
-        }
-    }
-
-    handleTemporaryTerminalError(data) {
-        const { terminalId, message } = data;
-        this.showTerminalError(terminalId, message);
-    }
     
     updateTerminalSize(terminalId) {
         const terminalData = this.terminals.get(terminalId);
-        if (!terminalData || !socket.isConnected()) return;
-        
-        const { cols, rows } = terminalData.terminal;
-        
-        if (terminalData.isTemporary) {
-            // Handle temporary terminal resize
-            socket.emit('temporary-terminal-resize', { terminalId, cols, rows });
-        } else if (terminalData.projectId) {
-            // Handle project terminal resize
+        if (terminalData && terminalData.projectId && socket.isConnected()) {
+            const { cols, rows } = terminalData.terminal;
             socket.resizeTerminal(terminalData.projectId, cols, rows);
         }
     }

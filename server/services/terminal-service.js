@@ -366,14 +366,11 @@ class TerminalSession {
 class TerminalService {
   constructor() {
     this.sessions = new Map();
-    this.temporarySessions = new Map(); // Separate map for temporary terminals
     this.maxSessions = 10; // Allow more terminal sessions than Claude sessions
-    this.maxTemporarySessions = 5; // Limit for temporary terminals
     
     // Clean up inactive sessions periodically
     setInterval(() => {
       this.cleanupInactiveSessions();
-      this.cleanupInactiveTemporarySessions();
     }, 300000); // Every 5 minutes
   }
 
@@ -505,26 +502,16 @@ class TerminalService {
 
   async destroyAllSessions() {
     const promises = [];
-    
-    // Destroy regular sessions
     for (const [sessionId, session] of this.sessions.entries()) {
       promises.push(session.kill().catch(err => {
         logger.error('Error destroying session:', { sessionId, error: err.message });
       }));
     }
     
-    // Destroy temporary sessions
-    for (const [terminalId, session] of this.temporarySessions.entries()) {
-      promises.push(session.kill().catch(err => {
-        logger.error('Error destroying temporary session:', { terminalId, error: err.message });
-      }));
-    }
-    
     await Promise.all(promises);
     this.sessions.clear();
-    this.temporarySessions.clear();
     
-    logger.info('All terminal sessions (including temporary) destroyed');
+    logger.info('All terminal sessions destroyed');
   }
 
   cleanupInactiveSessions() {
@@ -581,134 +568,6 @@ class TerminalService {
   isSessionActive(sessionId) {
     const session = this.sessions.get(sessionId);
     return session && session.status === 'active';
-  }
-
-  // Temporary terminal methods
-  async createTemporarySession(terminalId, options = {}) {
-    if (this.temporarySessions.size >= this.maxTemporarySessions) {
-      throw new AppError(
-        `Maximum number of temporary terminals (${this.maxTemporarySessions}) reached`,
-        503,
-        ERROR_CODES.SYSTEM_OVERLOAD
-      );
-    }
-
-    // Close existing temporary session if any
-    if (this.temporarySessions.has(terminalId)) {
-      await this.destroyTemporarySession(terminalId);
-    }
-
-    // Extract callbacks from options
-    const { callbacks, ...sessionOptions } = options;
-
-    // Create session with default home directory for temporary terminals
-    const temporaryOptions = {
-      ...sessionOptions,
-      cwd: sessionOptions.cwd || os.homedir(), // Default to home directory
-      env: {
-        ...process.env,
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        ...sessionOptions.env
-      }
-    };
-
-    const session = new TerminalSession(terminalId, temporaryOptions);
-    this.temporarySessions.set(terminalId, session);
-
-    // Set callbacks BEFORE starting the session
-    if (callbacks) {
-      session.setCallbacks(callbacks);
-    }
-
-    try {
-      const result = await session.start();
-      logger.info('Temporary terminal session created:', { 
-        terminalId, 
-        temporarySessions: this.temporarySessions.size 
-      });
-      return result;
-    } catch (error) {
-      this.temporarySessions.delete(terminalId);
-      throw error;
-    }
-  }
-
-  async destroyTemporarySession(terminalId) {
-    const session = this.temporarySessions.get(terminalId);
-    if (!session) {
-      throw new AppError('Temporary terminal session not found', 404, ERROR_CODES.TERMINAL_NOT_FOUND);
-    }
-
-    try {
-      await session.kill();
-      this.temporarySessions.delete(terminalId);
-      
-      logger.info('Temporary terminal session destroyed:', { 
-        terminalId, 
-        temporarySessions: this.temporarySessions.size 
-      });
-      
-      return { success: true, message: 'Temporary terminal session destroyed' };
-    } catch (error) {
-      // Remove from sessions even if kill failed
-      this.temporarySessions.delete(terminalId);
-      throw error;
-    }
-  }
-
-  getTemporarySession(terminalId) {
-    const session = this.temporarySessions.get(terminalId);
-    if (!session) {
-      throw new AppError('Temporary terminal session not found', 404, ERROR_CODES.TERMINAL_NOT_FOUND);
-    }
-    return session;
-  }
-
-  writeToTemporarySession(terminalId, data) {
-    const session = this.getTemporarySession(terminalId);
-    return session.write(data);
-  }
-
-  resizeTemporarySession(terminalId, cols, rows) {
-    const session = this.getTemporarySession(terminalId);
-    return session.resize(cols, rows);
-  }
-
-  isTemporarySessionActive(terminalId) {
-    const session = this.temporarySessions.get(terminalId);
-    return session && session.status === 'active';
-  }
-
-  getAllTemporarySessions() {
-    const sessions = {};
-    for (const [terminalId, session] of this.temporarySessions.entries()) {
-      sessions[terminalId] = session.getStatus();
-    }
-    return sessions;
-  }
-
-  setupTemporarySessionCallbacks(terminalId, callbacks) {
-    const session = this.temporarySessions.get(terminalId);
-    if (session) {
-      session.setCallbacks(callbacks);
-    }
-  }
-
-  cleanupInactiveTemporarySessions() {
-    const now = Date.now();
-    const inactiveThreshold = 15 * 60 * 1000; // 15 minutes for temporary sessions (shorter than regular)
-    
-    for (const [terminalId, session] of this.temporarySessions.entries()) {
-      if (session.status === 'exited' || 
-          (session.lastActivity && (now - session.lastActivity) > inactiveThreshold)) {
-        logger.info('Cleaning up inactive temporary terminal session:', { terminalId });
-        session.kill().catch(err => {
-          logger.error('Error cleaning up temporary session:', { terminalId, error: err.message });
-        });
-        this.temporarySessions.delete(terminalId);
-      }
-    }
   }
 }
 
