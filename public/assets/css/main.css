@@ -588,6 +588,54 @@ body {
     background-color: var(--text-inverse);
 }
 
+/* ===== VERTICAL DIVIDER ===== */
+.vertical-divider {
+    width: 6px;
+    background-color: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    position: relative;
+    cursor: ew-resize;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.vertical-divider:hover {
+    background-color: var(--bg-hover);
+}
+
+.vertical-divider:active {
+    background-color: var(--accent-primary);
+}
+
+.vertical-divider-handle {
+    width: 3px;
+    height: 40px;
+    background-color: var(--border-color);
+    border-radius: 2px;
+    transition: background-color var(--transition-fast);
+}
+
+.vertical-divider:hover .vertical-divider-handle {
+    background-color: var(--text-secondary);
+}
+
+.vertical-divider:active .vertical-divider-handle {
+    background-color: var(--text-inverse);
+}
+
+.vertical-divider.dragging {
+    background-color: var(--accent-primary);
+}
+
+.vertical-divider.dragging .vertical-divider-handle {
+    background-color: var(--text-inverse);
+}
+
 
 
 /* ===== MAIN CONTENT ===== */
@@ -755,6 +803,11 @@ body {
     
     .mobile-backdrop.active {
         pointer-events: auto;
+    }
+    
+    /* Hide vertical divider on mobile */
+    .vertical-divider {
+        display: none;
     }
     
     /* Sidebar as overlay */
