@@ -479,6 +479,7 @@ class FileManager {
                 menu.classList.remove('active');
                 menu.style.display = 'none';
                 
+                
                 switch (action) {
                     case 'upload':
                         this.uploadToDirectory(filePath);
@@ -584,8 +585,25 @@ class FileManager {
     }
 
     async previewFile(filePath) {
+        if (!this.currentProjectId) {
+            notifications.error('Please select a project first');
+            return;
+        }
+        
+        if (!filePath) {
+            notifications.error('Invalid file path');
+            return;
+        }
+        
         try {
-            const response = await fetch(`/api/files/${this.currentProjectId}/preview?path=${encodeURIComponent(filePath)}`);
+            const apiUrl = `/api/files/${this.currentProjectId}/preview?path=${encodeURIComponent(filePath)}`;
+            
+            const response = await fetch(apiUrl);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const data = await response.json();
             
             if (!data.success) {
@@ -594,12 +612,28 @@ class FileManager {
             
             this.showPreviewModal(data.file);
         } catch (error) {
-            console.error('Error previewing file:', error);
-            notifications.error('Failed to preview file');
+            
+            // More detailed error messages
+            if (error.message.includes('404')) {
+                notifications.error('File not found');
+            } else if (error.message.includes('403')) {
+                notifications.error('Access denied to file');
+            } else if (error.message.includes('413')) {
+                notifications.error('File too large for preview (max 5MB)');
+            } else if (error.message.includes('400') && error.message.includes('directory')) {
+                notifications.error('Cannot preview directories');
+            } else {
+                notifications.error(`Failed to preview file: ${error.message}`);
+            }
         }
     }
 
     showPreviewModal(fileData) {
+        if (!fileData) {
+            notifications.error('No file data available for preview');
+            return;
+        }
+        
         // Create preview modal if it doesn't exist
         let modal = document.getElementById('file-preview-modal');
         if (!modal) {
@@ -610,7 +644,7 @@ class FileManager {
                 <div class="modal-content large">
                     <div class="modal-header">
                         <h3 id="preview-file-title">File Preview</h3>
-                        <button class="btn btn-icon modal-close" onclick="this.closest('.modal').style.display='none'">
+                        <button class="btn btn-icon modal-close">
                             <span class="icon">✕</span>
                         </button>
                     </div>
@@ -624,6 +658,11 @@ class FileManager {
         
         const titleElement = modal.querySelector('#preview-file-title');
         const contentElement = modal.querySelector('#preview-content');
+        
+        if (!titleElement || !contentElement) {
+            notifications.error('Modal structure error');
+            return;
+        }
         
         titleElement.textContent = `Preview: ${fileData.name}`;
         
@@ -641,7 +680,33 @@ class FileManager {
             </div>`;
         }
         
+        // Add event listeners for modal close
+        const closeBtn = modal.querySelector('.modal-close');
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                modal.classList.remove('active');
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                }, 200);
+            };
+        }
+        
+        // Close modal when clicking backdrop
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                }, 200);
+            }
+        };
+        
         modal.style.display = 'block';
+        
+        // Add active class for proper animation
+        setTimeout(() => {
+            modal.classList.add('active');
+        }, 10);
     }
 
     escapeHtml(text) {
