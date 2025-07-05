@@ -115,6 +115,7 @@ When enabled, your terminal sessions become persistent:
 - Download individual files or entire project folders
 - Basic file operations (create, delete, rename)
 - Syntax highlighting for code files
+- **Double-click files**: Send file path to terminal for easy Claude Code queries
 
 ### System Monitoring
 Keep track of your Raspberry Pi's health:

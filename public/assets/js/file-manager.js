@@ -404,11 +404,26 @@ class FileManager {
     }
 
     sendToTerminal(filePath) {
-        const terminal = window.terminal;
-        if (terminal && terminal.activeSession) {
+        const terminalManager = window.terminalManager;
+        const socketClient = window.socket;
+        
+        if (!terminalManager || !socketClient) {
+            notifications.warning('Terminal system not available');
+            return;
+        }
+        
+        const activeTerminal = terminalManager.getActiveTerminal();
+        if (activeTerminal && activeTerminal.projectId) {
             const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
-            terminal.sendText(relativePath);
-            notifications.info(`File path sent to terminal: ${relativePath}`);
+            
+            // Send the file path to the terminal via socket
+            const success = socketClient.sendTerminalInput(activeTerminal.projectId, relativePath);
+            
+            if (success) {
+                notifications.info(`File path sent to terminal: ${relativePath}`);
+            } else {
+                notifications.warning('Failed to send file path to terminal');
+            }
         } else {
             notifications.warning('No active terminal session');
         }
