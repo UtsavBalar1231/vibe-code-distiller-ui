@@ -166,6 +166,9 @@ class ProjectManager extends EventEmitter {
         const optionsDropdown = DOM.create('div', {
             className: 'project-options-dropdown',
             html: `
+                <div class="dropdown-item" data-action="create-terminal">
+                    <span class="text">Create New Terminal</span>
+                </div>
                 <div class="dropdown-item" data-action="restart-terminal">
                     <span class="text">Restart Terminal</span>
                 </div>
@@ -194,6 +197,8 @@ class ProjectManager extends EventEmitter {
                 this.downloadProject(project.id);
             } else if (action === 'restart-terminal') {
                 this.restartTerminal(project.id);
+            } else if (action === 'create-terminal') {
+                this.createNewTerminal(project.id);
             }
             // Hide dropdown after action
             optionsDropdown.style.display = 'none';
@@ -609,6 +614,39 @@ class ProjectManager extends EventEmitter {
         } catch (error) {
             console.error('Failed to open terminal:', error);
             notifications.error('Failed to open terminal: ' + error.message);
+        }
+    }
+    
+    async createNewTerminal(projectId) {
+        try {
+            // Generate unique terminal ID for this new terminal
+            const uniqueTerminalId = `${projectId}-${Date.now()}`;
+            
+            // Get project details to pass to backend
+            const project = this.projects.get(projectId);
+            if (!project) {
+                throw new Error('Project not found');
+            }
+            
+            // Create the terminal in frontend first
+            const terminalId = terminalManager.createTerminalForProject(projectId, false, uniqueTerminalId);
+            
+            // Create the backend session for this specific terminal
+            socket.emit('project_action', {
+                projectId: uniqueTerminalId, // Use unique ID as session ID
+                action: 'create_terminal',
+                payload: {
+                    originalProjectId: projectId, // Original project for directory context
+                    projectPath: project.path,
+                    reason: 'user_created_new_terminal'
+                }
+            });
+            
+            notifications.success('New terminal created for project');
+            
+        } catch (error) {
+            console.error('Failed to create new terminal:', error);
+            notifications.error('Failed to create new terminal: ' + error.message);
         }
     }
     
