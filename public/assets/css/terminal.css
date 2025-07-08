@@ -27,7 +27,7 @@
     --terminal-bright-white: #e5e5e5;
     
     /* Terminal Font */
-    --terminal-font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    --terminal-font-family: 'Consolas', 'Liberation Mono', 'Menlo', 'Courier', monospace;
     --terminal-font-size: 14px;
     --terminal-line-height: 1.2;
 }

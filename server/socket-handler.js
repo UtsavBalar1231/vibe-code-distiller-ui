@@ -97,6 +97,18 @@ class SocketManager {
     socket.on('terminal:attach-session', (data) => {
       this.handleAttachSession(socket, data);
     });
+    
+    socket.on('terminal:create-new-session', (data) => {
+      this.handleCreateNewSession(socket, data);
+    });
+    
+    socket.on('terminal:create-project-session', (data) => {
+      this.handleCreateProjectSession(socket, data);
+    });
+    
+    socket.on('terminal:delete-session', (data) => {
+      this.handleDeleteSession(socket, data);
+    });
 
     // Claude Code events
     socket.on(WEBSOCKET.EVENTS.CLAUDE_COMMAND, (data) => {
@@ -202,7 +214,6 @@ class SocketManager {
     try {
       // Check if Claude session exists
       const claudeStatus = claudeManager.getSessionStatus(projectId);
-      let terminalStatus = await terminalService.getSessionStatus(projectId);
 
       // Set up Claude session callbacks if session exists
       if (claudeStatus.exists) {
@@ -233,117 +244,17 @@ class SocketManager {
         });
       }
 
-      // Create or reconnect to terminal session
-      if (!terminalStatus.exists || !terminalStatus.active) {
-        try {
-          const action = terminalStatus.exists ? 'reconnecting to' : 'creating';
-          logger.info(`${action} terminal session for project:`, { projectId });
-          
-          await terminalService.createSession(projectId, {
-            cwd: project.path,
-            cols: 80, // Default terminal size
-            rows: 24
-          });
-          terminalStatus = await terminalService.getSessionStatus(projectId);
-          
-          logger.info('Terminal session ready for project:', { projectId, isReconnect: terminalStatus.exists });
-          
-          // Notify client that terminal session is ready
-          socket.emit(WEBSOCKET.EVENTS.PROJECT_STATUS, {
-            projectId,
-            status: 'terminal_ready',
-            timestamp: new Date().toISOString()
-          });
-          
-          // Emit terminal session created/reconnected event
-          socket.emit('terminal-session-created', {
-            projectId,
-            sessionId: projectId,
-            isReconnect: terminalStatus.metadata ? true : false,
-            timestamp: new Date().toISOString()
-          });
-          
-          // Mark project as ready after a small delay
-          setTimeout(() => {
-            socket.emit('project-ready', {
-              projectId,
-              timestamp: new Date().toISOString()
-            });
-          }, 500); // Increased delay for tmux sessions
-        } catch (error) {
-          logger.error('Failed to create/reconnect terminal session:', {
-            projectId,
-            error: error.message,
-            stack: error.stack
-          });
-          
-          // Send error notification to client
-          socket.emit(WEBSOCKET.EVENTS.ERROR, {
-            message: 'Failed to create/reconnect terminal session',
-            details: error.message,
-            projectId
-          });
-        }
-      }
-
-      // Set up terminal session callbacks if session is active in memory
-      if (terminalStatus.exists && terminalStatus.active) {
-        terminalService.setupSessionCallbacks(projectId, {
-          onData: (data) => {
-            socket.emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
-              projectId,
-              data,
-              timestamp: new Date().toISOString()
-            });
-          },
-          onExit: (exitCode, signal) => {
-            socket.emit(WEBSOCKET.EVENTS.NOTIFICATION, {
-              type: 'terminal_session_ended',
-              message: `Terminal session ended (code: ${exitCode})`,
-              projectId,
-              timestamp: new Date().toISOString()
-            });
-          },
-          onError: (error) => {
-            socket.emit(WEBSOCKET.EVENTS.ERROR, {
-              message: 'Terminal session error',
-              details: error.message,
-              projectId
-            });
-          }
+      // NOTE: Terminal sessions are now completely decoupled from projects
+      // Users must manually attach to terminal sessions using session names
+      // This allows multiple terminals per project and cross-project session sharing
+      
+      // Mark project as ready immediately since terminal attachment is separate
+      setTimeout(() => {
+        socket.emit('project-ready', {
+          projectId,
+          timestamp: new Date().toISOString()
         });
-        
-        // Apply pending resize if any (only for active sessions)
-        if (socket.pendingResize && socket.pendingResize.projectId === projectId) {
-          const { cols, rows } = socket.pendingResize;
-          try {
-            // Wait a bit for terminal to be fully ready
-            setTimeout(async () => {
-              try {
-                // Double check that session is still active before resize
-                const currentStatus = await terminalService.getSessionStatus(projectId);
-                if (currentStatus.active) {
-                  await terminalService.resizeSession(projectId, cols, rows);
-                  logger.info('Applied pending resize after terminal setup:', { projectId, cols, rows });
-                } else {
-                  logger.warn('Skipping resize - session not active:', { projectId });
-                }
-                delete socket.pendingResize;
-              } catch (resizeError) {
-                logger.error('Failed to apply pending resize:', {
-                  projectId,
-                  error: resizeError.message
-                });
-              }
-            }, 500);
-          } catch (error) {
-            logger.error('Failed to schedule pending resize:', {
-              projectId,
-              error: error.message
-            });
-          }
-        }
-      }
+      }, 100);
 
       // Set up file watching
       fileService.startWatching(project.path, projectId, {
@@ -430,40 +341,20 @@ class SocketManager {
 
   async handleTerminalInput(socket, data) {
     try {
-      const { projectId, input } = data;
+      const { sessionName, input } = data;
       
-      if (!projectId || !input) {
-        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Project ID and input required' });
+      if (!sessionName || !input) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Session name and input required' });
         return;
       }
 
-      // Check if socket is in the project room instead of relying on metadata
-      const socketRooms = Array.from(socket.rooms);
-      const isInProjectRoom = socketRooms.includes(`project-${projectId}`);
-      
-      if (!isInProjectRoom) {
-        // Auto-rejoin the project if possible
-        try {
-          await this.handleJoinProject(socket, { projectId });
-          logger.info('Auto-rejoined project for terminal input', { socketId: socket.id, projectId });
-        } catch (joinError) {
-          socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Not connected to project' });
-          return;
-        }
-      }
-
-      // Update metadata if it's out of sync
-      if (socket.metadata.projectId !== projectId) {
-        socket.metadata.projectId = projectId;
-      }
-
       // Check if terminal session exists and is active before sending input
-      const currentTerminalStatus = await terminalService.getSessionStatus(projectId);
+      const currentTerminalStatus = await terminalService.getSessionStatus(sessionName);
       if (!currentTerminalStatus.exists) {
-        logger.warn('Terminal session does not exist for project:', { projectId, socketId: socket.id });
+        logger.warn('Terminal session does not exist:', { sessionName, socketId: socket.id });
         socket.emit('terminal-input-error', {
-          projectId,
-          message: 'Terminal session not found. Please try selecting the project again.',
+          sessionName,
+          message: 'Terminal session not found. Please try connecting again.',
           details: 'Terminal session needs to be created',
           timestamp: new Date().toISOString()
         });
@@ -472,22 +363,48 @@ class SocketManager {
       
       // If session exists but is not active, try to reconnect
       if (!currentTerminalStatus.active) {
-        logger.info('Terminal session exists but not active, attempting reconnection:', { projectId });
+        logger.info('Terminal session exists but not active, attempting reconnection:', { sessionName });
         try {
-          const project = await projectService.getProject(projectId);
-          await terminalService.createSession(projectId, {
-            cwd: project.path,
+          await terminalService.createSession(sessionName, {
+            cwd: process.cwd(),
             cols: 80,
             rows: 24
           });
-          logger.info('Successfully reconnected to terminal session:', { projectId });
+          
+          // Set up terminal session callbacks after reconnection
+          terminalService.setupSessionCallbacks(sessionName, {
+            onData: (data) => {
+              socket.emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
+                sessionName,
+                data,
+                timestamp: new Date().toISOString()
+              });
+            },
+            onExit: (exitCode, signal) => {
+              socket.emit(WEBSOCKET.EVENTS.NOTIFICATION, {
+                type: 'terminal_session_ended',
+                message: `Terminal session ${sessionName} ended (code: ${exitCode})`,
+                sessionName,
+                timestamp: new Date().toISOString()
+              });
+            },
+            onError: (error) => {
+              socket.emit(WEBSOCKET.EVENTS.ERROR, {
+                message: 'Terminal session error',
+                details: error.message,
+                sessionName
+              });
+            }
+          });
+          
+          logger.info('Successfully reconnected to terminal session:', { sessionName });
         } catch (reconnectError) {
           logger.error('Failed to reconnect terminal session:', {
-            projectId,
+            sessionName,
             error: reconnectError.message
           });
           socket.emit('terminal-input-error', {
-            projectId,
+            sessionName,
             message: 'Failed to reconnect to terminal session',
             details: reconnectError.message,
             timestamp: new Date().toISOString()
@@ -497,24 +414,24 @@ class SocketManager {
       }
 
       // Send input to terminal service
-      await terminalService.writeToSession(projectId, input);
+      await terminalService.writeToSession(sessionName, input);
       
       logger.socket('Terminal input processed', socket.id, { 
-        projectId, 
+        sessionName, 
         inputLength: input.length 
       });
 
     } catch (error) {
       logger.error('Failed to process terminal input:', { 
         socketId: socket.id, 
-        projectId: data.projectId,
+        sessionName: data.sessionName,
         error: error.message,
         stack: error.stack
       });
       
       // Send specific terminal input error
       socket.emit('terminal-input-error', {
-        projectId: data.projectId,
+        sessionName: data.sessionName,
         message: 'Failed to process terminal input',
         details: error.message,
         timestamp: new Date().toISOString()
@@ -987,32 +904,211 @@ class SocketManager {
 
   async handleAttachSession(socket, data) {
     try {
-      const { projectId } = data;
+      const { sessionName } = data;
       
-      if (!projectId) {
-        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Project ID required' });
+      if (!sessionName) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Session name required' });
         return;
       }
 
-      const project = await projectService.getProject(projectId);
-      const result = await terminalService.createSession(projectId, {
-        cwd: project.path
-      });
+      // Check if tmux session exists
+      const TmuxUtils = require('./utils/tmux-utils');
+      const sessionExists = await TmuxUtils.hasSession(sessionName);
+      
+      if (!sessionExists) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: `Session ${sessionName} not found` });
+        return;
+      }
 
-      // Set up terminal callbacks for this session
-      this.setupTerminalSession(projectId);
+      // Check if we already have a terminal session connected to this tmux session
+      let terminalSessionExists = terminalService.isSessionActive(sessionName);
+      
+      if (!terminalSessionExists) {
+        // Create a new terminal session that connects to the existing tmux session
+        logger.info('Creating terminal session for existing tmux session:', { sessionName });
+        
+        // Create terminal session that will attach to existing tmux session
+        await terminalService.createSession(sessionName, {
+          cwd: process.cwd(), // Use current working directory
+          cols: 80,
+          rows: 24
+        });
+      }
+
+      // Set up terminal session callbacks for this specific session
+      terminalService.setupSessionCallbacks(sessionName, {
+        onData: (data) => {
+          socket.emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
+            sessionName,
+            data,
+            timestamp: new Date().toISOString()
+          });
+        },
+        onExit: (exitCode, signal) => {
+          socket.emit(WEBSOCKET.EVENTS.NOTIFICATION, {
+            type: 'terminal_session_ended',
+            message: `Terminal session ${sessionName} ended (code: ${exitCode})`,
+            sessionName,
+            timestamp: new Date().toISOString()
+          });
+        },
+        onError: (error) => {
+          socket.emit(WEBSOCKET.EVENTS.ERROR, {
+            message: 'Terminal session error',
+            details: error.message,
+            sessionName
+          });
+        }
+      });
       
       socket.emit('terminal:session-attached', {
-        projectId,
-        ...result,
+        sessionName,
         timestamp: new Date().toISOString()
       });
       
-      logger.socket('Attached to tmux session', socket.id, { projectId });
+      logger.socket('Attached to tmux session', socket.id, { sessionName });
     } catch (error) {
       logger.error('Failed to attach session:', { socketId: socket.id, error: error.message });
       socket.emit(WEBSOCKET.EVENTS.ERROR, {
         message: 'Failed to attach session',
+        details: error.message
+      });
+    }
+  }
+  
+  async handleCreateNewSession(socket, data) {
+    try {
+      const { cols = 80, rows = 24 } = data;
+      
+      // Generate a unique session name without project dependency
+      const TmuxUtils = require('./utils/tmux-utils');
+      const timestamp = Date.now();
+      const sessionName = `claude-web-session-${timestamp}`;
+      
+      // Create new terminal session
+      const result = await terminalService.createSessionDirect(sessionName, {
+        cwd: process.cwd(), // Use current working directory
+        cols,
+        rows
+      });
+      
+      logger.info('New terminal session created:', { sessionName, sessionId: result.sessionId, tmuxSession: result.tmuxSessionName });
+      
+      // Broadcast to all clients that a new session was created
+      this.io.emit('terminal:session-created', {
+        sessionName: result.tmuxSessionName,
+        sessionId: result.sessionId,
+        tmuxSession: result.tmuxSessionName
+      });
+      
+      socket.emit('terminal:session-created', {
+        sessionName: result.tmuxSessionName,
+        sessionId: result.sessionId,
+        tmuxSession: result.tmuxSessionName
+      });
+      
+    } catch (error) {
+      logger.error('Failed to create new session:', { socketId: socket.id, error: error.message });
+      socket.emit(WEBSOCKET.EVENTS.ERROR, {
+        message: 'Failed to create new session',
+        details: error.message
+      });
+    }
+  }
+  
+  async handleCreateProjectSession(socket, data) {
+    try {
+      const { projectName, projectPath, cols = 80, rows = 24 } = data;
+      
+      if (!projectName) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Project name required' });
+        return;
+      }
+      
+      logger.info('Creating new project session:', { 
+        socketId: socket.id, 
+        projectName, 
+        projectPath, 
+        cols, 
+        rows 
+      });
+      
+      // Get next sequence number for this project
+      const TmuxUtils = require('./utils/tmux-utils');
+      const sequenceNumber = await TmuxUtils.getNextSequenceNumber(projectName);
+      
+      // Generate session name using project name and sequence number
+      const sessionName = `claude-web-${projectName}-${sequenceNumber}`;
+      
+      // Create new terminal session
+      const result = await terminalService.createSessionDirect(sessionName, {
+        cwd: projectPath || process.cwd(),
+        cols,
+        rows
+      });
+      
+      // Broadcast session creation event to all clients
+      this.io.emit('terminal:session-created', {
+        sessionName,
+        projectName,
+        sequenceNumber,
+        timestamp: Date.now()
+      });
+      
+      logger.info('Project session created successfully:', { 
+        socketId: socket.id, 
+        sessionName,
+        projectName,
+        sequenceNumber
+      });
+      
+    } catch (error) {
+      logger.error('Failed to create project session:', { 
+        socketId: socket.id, 
+        projectName: data.projectName, 
+        error: error.message 
+      });
+      socket.emit(WEBSOCKET.EVENTS.ERROR, {
+        message: 'Failed to create project session',
+        details: error.message
+      });
+    }
+  }
+  
+  async handleDeleteSession(socket, data) {
+    try {
+      const { sessionName } = data;
+      
+      if (!sessionName) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Session name required' });
+        return;
+      }
+      
+      // Validate session name format
+      if (!sessionName.startsWith('claude-web-')) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Invalid session name format' });
+        return;
+      }
+      
+      // Delete the tmux session
+      const TmuxUtils = require('./utils/tmux-utils');
+      const result = await TmuxUtils.killSession(sessionName);
+      
+      if (result) {
+        logger.info('Session deleted:', { sessionName, socketId: socket.id });
+        
+        // Broadcast to all clients that the session was deleted
+        this.io.emit('terminal:session-deleted', { sessionName });
+        
+        socket.emit('terminal:session-deleted', { sessionName, success: true });
+      } else {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Failed to delete session' });
+      }
+      
+    } catch (error) {
+      logger.error('Failed to delete session:', { socketId: socket.id, error: error.message });
+      socket.emit(WEBSOCKET.EVENTS.ERROR, {
+        message: 'Failed to delete session',
         details: error.message
       });
     }

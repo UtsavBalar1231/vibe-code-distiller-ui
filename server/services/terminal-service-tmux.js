@@ -414,47 +414,6 @@ class TmuxTerminalService {
     }, 300000); // Every 5 minutes
   }
 
-  /**
-   * Discover existing tmux sessions by querying tmux directly
-   * @returns {Map<string, object>} Map of projectId to session info
-   */
-  async discoverProjectSessions() {
-    try {
-      const tmuxSessions = await TmuxUtils.listSessions();
-      const projectSessions = new Map();
-      
-      logger.info('Discovered tmux sessions:', { count: tmuxSessions.length });
-      
-      for (const sessionName of tmuxSessions) {
-        const parsed = TmuxUtils.parseSessionName(sessionName);
-        if (parsed) {
-          const info = await TmuxUtils.getSessionInfo(sessionName);
-          projectSessions.set(parsed.projectId, {
-            tmuxSession: sessionName,
-            projectId: parsed.projectId,
-            created: info ? info.created : new Date(parsed.timestamp),
-            attached: info ? info.attached : false,
-            timestamp: parsed.timestamp
-          });
-        }
-      }
-      
-      return projectSessions;
-    } catch (error) {
-      logger.error('Failed to discover tmux sessions:', error);
-      return new Map();
-    }
-  }
-
-  /**
-   * Find existing tmux session for a project
-   * @param {string} projectId 
-   * @returns {object|null} Session info or null if not found
-   */
-  async findExistingSession(projectId) {
-    const sessions = await this.discoverProjectSessions();
-    return sessions.get(projectId) || null;
-  }
 
   async createSession(sessionId, options = {}) {
     if (this.sessions.size >= this.maxSessions) {
@@ -465,40 +424,38 @@ class TmuxTerminalService {
       );
     }
 
-    // Check if we have an existing tmux session for this project
-    const existingSession = await this.findExistingSession(sessionId);
-    let tmuxSessionName;
-    let isReconnect = false;
+    // Use sessionId directly as session name
+    return this.connectToSessionByName(sessionId, options);
+  }
 
-    if (existingSession && await TmuxUtils.hasSession(existingSession.tmuxSession)) {
-      // Reuse existing tmux session
-      tmuxSessionName = existingSession.tmuxSession;
-      isReconnect = true;
-      logger.info('Reusing existing tmux session:', { sessionId, tmuxSession: tmuxSessionName });
-    } else {
-      // Create new tmux session
-      tmuxSessionName = TmuxUtils.generateSessionName(sessionId);
-      logger.info('Creating new tmux session:', { sessionId, tmuxSession: tmuxSessionName });
+  async connectToSessionByName(sessionName, options = {}) {
+    logger.info('Connecting to session by name:', { sessionName });
+
+    // Check if tmux session exists
+    if (!await TmuxUtils.hasSession(sessionName)) {
+      throw new AppError(`Tmux session ${sessionName} not found`, 404, ERROR_CODES.TERMINAL_NOT_FOUND);
     }
 
     // Close existing terminal connection if any
-    if (this.sessions.has(sessionId)) {
-      const existing = this.sessions.get(sessionId);
+    if (this.sessions.has(sessionName)) {
+      const existing = this.sessions.get(sessionName);
       await existing.detach();
     }
 
-    const session = new TmuxTerminalSession(sessionId, tmuxSessionName, options);
-    this.sessions.set(sessionId, session);
+    const session = new TmuxTerminalSession(sessionName, sessionName, options);
+    this.sessions.set(sessionName, session);
 
     try {
-      const result = await session.start(isReconnect);
-      logger.info('Terminal session created:', { sessionId, sessions: this.sessions.size });
+      // Always use reconnect mode for existing sessions
+      const result = await session.start(true);
+      logger.info('Connected to session by name:', { sessionName, sessions: this.sessions.size });
       return result;
     } catch (error) {
-      this.sessions.delete(sessionId);
+      this.sessions.delete(sessionName);
       throw error;
     }
   }
+
 
   async destroySession(sessionId) {
     const session = this.sessions.get(sessionId);
@@ -539,20 +496,14 @@ class TmuxTerminalService {
         }
       }
 
-      // Kill any existing tmux session for this project
-      const existingSession = await this.findExistingSession(sessionId);
-      if (existingSession && existingSession.tmuxSession) {
-        const killResult = await TmuxUtils.killSession(existingSession.tmuxSession);
+      // Kill tmux session if it exists
+      const tmuxExists = await TmuxUtils.hasSession(sessionId);
+      if (tmuxExists) {
+        const killResult = await TmuxUtils.killSession(sessionId);
         if (killResult) {
-          logger.info('Tmux session killed for restart:', { 
-            sessionId, 
-            tmuxSession: existingSession.tmuxSession 
-          });
+          logger.info('Tmux session killed for restart:', { sessionId });
         } else {
-          logger.warn('Tmux session could not be killed (proceeding anyway):', {
-            sessionId,
-            tmuxSession: existingSession.tmuxSession
-          });
+          logger.warn('Tmux session could not be killed (proceeding anyway):', { sessionId });
         }
       }
 
@@ -596,21 +547,98 @@ class TmuxTerminalService {
   }
 
   async listAvailableSessions() {
-    const projectSessions = await this.discoverProjectSessions();
-    const available = [];
+    try {
+      const tmuxSessions = await TmuxUtils.listSessions();
+      const available = [];
+      
+      for (const sessionName of tmuxSessions) {
+        const info = await TmuxUtils.getSessionInfo(sessionName);
+        available.push({
+          sessionName,
+          created: info ? info.created : new Date(),
+          attached: info ? info.attached : false,
+          active: this.sessions.has(sessionName)
+        });
+      }
+      
+      return available;
+    } catch (error) {
+      logger.error('Failed to list available sessions:', error);
+      return [];
+    }
+  }
+  
+  async createNewSession(projectId, options = {}) {
+    // If projectId is not provided, create a session with timestamp
+    if (!projectId) {
+      const timestamp = Date.now();
+      const sessionName = `claude-web-session-${timestamp}`;
+      return this.createSessionDirect(sessionName, options);
+    }
+
+    const sessionId = `${projectId}-${Date.now()}`;
     
-    for (const [projectId, sessionInfo] of projectSessions) {
-      available.push({
-        projectId: projectId,
-        tmuxSession: sessionInfo.tmuxSession,
-        created: sessionInfo.created,
-        attached: sessionInfo.attached,
-        timestamp: sessionInfo.timestamp,
-        active: this.sessions.has(projectId)
-      });
+    // Check session limit
+    if (this.sessions.size >= this.maxSessions) {
+      throw new AppError(
+        `Maximum number of terminal sessions (${this.maxSessions}) reached`,
+        503,
+        ERROR_CODES.SYSTEM_OVERLOAD
+      );
     }
     
-    return available;
+    // Always create a new tmux session with sequence number
+    const sequenceNumber = await TmuxUtils.getNextSequenceNumber(projectId);
+    const tmuxSessionName = TmuxUtils.generateSessionName(projectId, sequenceNumber);
+    
+    logger.info('Creating new tmux session:', { projectId, sessionId, tmuxSession: tmuxSessionName, sequenceNumber });
+    
+    const session = new TmuxTerminalSession(sessionId, tmuxSessionName, options);
+    this.sessions.set(sessionId, session);
+    
+    try {
+      const result = await session.start(false); // Never reconnect for new sessions
+      logger.info('New terminal session created:', { sessionId, sessions: this.sessions.size });
+      return {
+        ...result,
+        sessionId,
+        tmuxSession: tmuxSessionName,
+        projectId,
+        sequenceNumber
+      };
+    } catch (error) {
+      this.sessions.delete(sessionId);
+      throw error;
+    }
+  }
+
+  async createSessionDirect(sessionName, options = {}) {
+    // Check session limit
+    if (this.sessions.size >= this.maxSessions) {
+      throw new AppError(
+        `Maximum number of terminal sessions (${this.maxSessions}) reached`,
+        503,
+        ERROR_CODES.SYSTEM_OVERLOAD
+      );
+    }
+    
+    logger.info('Creating new session directly:', { sessionName });
+    
+    const session = new TmuxTerminalSession(sessionName, sessionName, options);
+    this.sessions.set(sessionName, session);
+    
+    try {
+      const result = await session.start(false); // Never reconnect for new sessions
+      logger.info('New session created directly:', { sessionName, sessions: this.sessions.size });
+      return {
+        ...result,
+        sessionId: sessionName,
+        tmuxSession: sessionName
+      };
+    } catch (error) {
+      this.sessions.delete(sessionName);
+      throw error;
+    }
   }
 
   getSession(sessionId) {
@@ -633,16 +661,18 @@ class TmuxTerminalService {
 
   async getSessionStatus(sessionId) {
     const session = this.sessions.get(sessionId);
-    const existingSession = await this.findExistingSession(sessionId);
     
-    if (!session && !existingSession) {
+    // Check if tmux session exists
+    const tmuxExists = await TmuxUtils.hasSession(sessionId);
+    
+    if (!session && !tmuxExists) {
       return { exists: false };
     }
     
     return {
       exists: true,
       active: !!session,
-      metadata: existingSession || null,
+      tmuxExists,
       ...(session ? session.getStatus() : {})
     };
   }
@@ -658,18 +688,24 @@ class TmuxTerminalService {
       };
     }
     
-    // Include discovered inactive sessions
-    const projectSessions = await this.discoverProjectSessions();
-    for (const [projectId, sessionInfo] of projectSessions) {
-      if (!sessions[projectId]) {
-        sessions[projectId] = {
-          sessionId: projectId,
-          tmuxSessionName: sessionInfo.tmuxSession,
-          ...sessionInfo,
-          active: false,
-          status: 'detached'
-        };
+    // Include tmux sessions that aren't active in memory
+    try {
+      const tmuxSessions = await TmuxUtils.listSessions();
+      for (const sessionName of tmuxSessions) {
+        if (!sessions[sessionName]) {
+          const info = await TmuxUtils.getSessionInfo(sessionName);
+          sessions[sessionName] = {
+            sessionId: sessionName,
+            tmuxSessionName: sessionName,
+            created: info ? info.created : new Date(),
+            attached: info ? info.attached : false,
+            active: false,
+            status: 'detached'
+          };
+        }
       }
+    } catch (error) {
+      logger.error('Failed to get tmux sessions for getAllSessions:', error);
     }
     
     return sessions;
@@ -685,14 +721,16 @@ class TmuxTerminalService {
       }));
     }
     
-    // Kill all discovered tmux sessions
-    const projectSessions = await this.discoverProjectSessions();
-    for (const [projectId, sessionInfo] of projectSessions) {
-      if (sessionInfo.tmuxSession) {
-        promises.push(TmuxUtils.killSession(sessionInfo.tmuxSession).catch(err => {
-          logger.error('Error killing tmux session:', { projectId, error: err.message });
+    // Kill all tmux sessions
+    try {
+      const tmuxSessions = await TmuxUtils.listSessions();
+      for (const sessionName of tmuxSessions) {
+        promises.push(TmuxUtils.killSession(sessionName).catch(err => {
+          logger.error('Error killing tmux session:', { sessionName, error: err.message });
         }));
       }
+    } catch (error) {
+      logger.error('Failed to list tmux sessions for destruction:', error);
     }
     
     await Promise.all(promises);

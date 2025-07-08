@@ -61,6 +61,10 @@ class ProjectManager extends EventEmitter {
             this.handleTerminalSessionCreated(data);
         });
         
+        socket.on('terminal:session-created', (data) => {
+            this.handleProjectSessionCreated(data);
+        });
+        
         socket.on('project_ready', (data) => {
             this.handleProjectReady(data);
         });
@@ -166,6 +170,9 @@ class ProjectManager extends EventEmitter {
         const optionsDropdown = DOM.create('div', {
             className: 'project-options-dropdown',
             html: `
+                <div class="dropdown-item" data-action="create-terminal">
+                    <span class="text">Create New Terminal</span>
+                </div>
                 <div class="dropdown-item" data-action="restart-terminal">
                     <span class="text">Restart Terminal</span>
                 </div>
@@ -192,6 +199,8 @@ class ProjectManager extends EventEmitter {
                 this.deleteProject(project.id);
             } else if (action === 'download') {
                 this.downloadProject(project.id);
+            } else if (action === 'create-terminal') {
+                this.createNewTerminal(project.id);
             } else if (action === 'restart-terminal') {
                 this.restartTerminal(project.id);
             }
@@ -264,16 +273,9 @@ class ProjectManager extends EventEmitter {
             this.updateBreadcrumb(project);
             this.updateInfoPanel(project);
             
-            // Create terminal if needed, or activate existing one
-            if (!terminalManager.hasTerminalsForProject(projectId)) {
-                terminalManager.createTerminalForProject(projectId, true);
-            } else {
-                // Activate the first terminal for this project
-                const existingTerminals = terminalManager.getTerminalsByProject(projectId);
-                if (existingTerminals.length > 0) {
-                    terminalManager.setActiveTerminal(existingTerminals[0].id);
-                }
-            }
+            // NOTE: Terminal management is now independent of project selection
+            // Users control terminals via the terminal tab bar
+            // Projects only affect the file management system
             
             this.emit('project_selected', project);
             
@@ -602,9 +604,8 @@ class ProjectManager extends EventEmitter {
     
     async openInTerminal(projectId) {
         try {
-            // Create new terminal for project
-            terminalManager.createTerminalForProject(projectId, false);
-            notifications.success('Terminal opened for project');
+            // Use the "Create New Terminal" button in the project menu instead
+            this.createNewTerminal(projectId);
             
         } catch (error) {
             console.error('Failed to open terminal:', error);
@@ -659,8 +660,8 @@ class ProjectManager extends EventEmitter {
             // Remove from projects map
             this.projects.delete(projectId);
             
-            // Close any terminals for this project
-            terminalManager.closeTerminalsForProject(projectId);
+            // NOTE: Terminals are now independent of projects
+            // Users can manually close terminal sessions if needed
             
             // If this was the current project, clear selection
             if (this.currentProject === projectId) {
@@ -779,6 +780,36 @@ class ProjectManager extends EventEmitter {
         }
     }
     
+    async createNewTerminal(projectId) {
+        try {
+            const project = this.projects.get(projectId);
+            if (!project) {
+                notifications.error('Project not found');
+                return;
+            }
+            
+            notifications.info(`Creating new terminal for "${project.name}"...`);
+            
+            // Check socket connection
+            if (!socket || !socket.isConnected()) {
+                notifications.error('Connection lost. Please refresh the page.');
+                return;
+            }
+            
+            // Send socket request to create new session for project
+            socket.socket.emit('terminal:create-project-session', {
+                projectName: project.name,
+                projectPath: project.path,
+                cols: 80,
+                rows: 24
+            });
+            
+        } catch (error) {
+            console.error('Failed to create new terminal:', error);
+            notifications.error('Failed to create new terminal: ' + error.message);
+        }
+    }
+    
     handleProjectStatus(data) {
         const { projectId, status } = data;
         
@@ -828,21 +859,17 @@ class ProjectManager extends EventEmitter {
     handleTerminalSessionCreated(data) {
         const { projectId } = data;
         
-        // Ensure terminal is properly displayed if this is the current project
-        if (this.currentProject === projectId) {
-            // Check if we already have a terminal for this project
-            if (!terminalManager.hasTerminalsForProject(projectId)) {
-                terminalManager.createTerminalForProject(projectId, true);
-            } else {
-                // Activate existing terminal with longer delay for tmux sessions
-                setTimeout(() => {
-                    const terminals = terminalManager.getTerminalsByProject(projectId);
-                    if (terminals.length > 0) {
-                        terminalManager.setActiveTerminalSafely(terminals[0].id);
-                    }
-                }, 300); // Increased delay for tmux session readiness
-            }
-        }
+        // NOTE: Terminal display is now managed by the terminal tab system
+        // Project events no longer directly control terminal visibility
+    }
+    
+    handleProjectSessionCreated(data) {
+        const { sessionName, projectName, sequenceNumber } = data;
+        
+        notifications.success(`New terminal session created for "${projectName}": ${sessionName}`);
+        
+        // The terminal manager will handle the actual connection
+        // This is just for project-level notifications
     }
     
     handleProjectReady(data) {

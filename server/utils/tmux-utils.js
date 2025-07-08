@@ -6,7 +6,10 @@ const logger = require('./logger');
 class TmuxUtils {
   static SESSION_PREFIX = 'claude-web';
   
-  static generateSessionName(projectId) {
+  static generateSessionName(projectId, sequenceNumber = null) {
+    if (sequenceNumber !== null) {
+      return `${this.SESSION_PREFIX}-${projectId}-${sequenceNumber}`;
+    }
     return `${this.SESSION_PREFIX}-${projectId}-${Date.now()}`;
   }
   
@@ -15,7 +18,7 @@ class TmuxUtils {
     if (match) {
       return {
         projectId: match[1],
-        timestamp: parseInt(match[2])
+        identifier: parseInt(match[2]) // Can be timestamp or sequence number
       };
     }
     return null;
@@ -54,6 +57,30 @@ class TmuxUtils {
         return [];
       }
       throw error;
+    }
+  }
+  
+  static async getNextSequenceNumber(projectId) {
+    try {
+      const sessions = await this.listSessions();
+      const projectSessions = sessions.filter(session => {
+        const parsed = this.parseSessionName(session);
+        return parsed && parsed.projectId === projectId;
+      });
+      
+      if (projectSessions.length === 0) {
+        return 1;
+      }
+      
+      const sequenceNumbers = projectSessions.map(session => {
+        const parsed = this.parseSessionName(session);
+        return parsed ? parsed.identifier : 0;
+      }).filter(num => num > 0 && num < 1000000000); // Filter out timestamps
+      
+      return sequenceNumbers.length > 0 ? Math.max(...sequenceNumbers) + 1 : 1;
+    } catch (error) {
+      logger.error(`Failed to get next sequence number: ${error.message}`);
+      return 1;
     }
   }
   
