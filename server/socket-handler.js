@@ -371,9 +371,19 @@ class SocketManager {
             rows: 24
           });
           
+          // Wait for session to be fully ready before setting callbacks
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Verify session is actually active before setting callbacks
+          const verifyStatus = await terminalService.getSessionStatus(sessionName);
+          if (!verifyStatus.active) {
+            throw new Error('Session failed to become active after reconnection');
+          }
+          
           // Set up terminal session callbacks after reconnection
           terminalService.setupSessionCallbacks(sessionName, {
             onData: (data) => {
+              logger.debug('Terminal output from reconnected session:', { sessionName, dataLength: data.length });
               socket.emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
                 sessionName,
                 data,
@@ -935,9 +945,19 @@ class SocketManager {
         });
       }
 
+      // Wait for session to be fully ready before setting callbacks
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Verify session is ready
+      const finalStatus = await terminalService.getSessionStatus(sessionName);
+      if (!finalStatus.active) {
+        throw new Error(`Session ${sessionName} failed to become active`);
+      }
+      
       // Set up terminal session callbacks for this specific session
       terminalService.setupSessionCallbacks(sessionName, {
         onData: (data) => {
+          logger.debug('Terminal output from attached session:', { sessionName, dataLength: data.length });
           socket.emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
             sessionName,
             data,
@@ -960,6 +980,75 @@ class SocketManager {
           });
         }
       });
+      
+      // After setting up callbacks, immediately send current terminal content with exact cursor position
+      setTimeout(async () => {
+        try {
+          const TmuxUtils = require('./utils/tmux-utils');
+          
+          // First, get the current cursor position BEFORE capturing content
+          const cursorPosition = await TmuxUtils.getCursorPosition(sessionName);
+          const currentContent = await TmuxUtils.capturePane(sessionName);
+          
+          if (currentContent && currentContent.trim()) {
+            logger.info('Restoring terminal state for client:', { 
+              sessionName, 
+              contentLength: currentContent.length,
+              cursorPosition,
+              preview: currentContent.substring(0, 100).replace(/\r?\n/g, '\\n')
+            });
+            
+            // Format content for proper terminal display
+            const clearScreen = '\x1b[2J\x1b[H'; // Clear screen and move cursor to top
+            const formattedContent = currentContent.replace(/\n/g, '\r\n'); // Ensure proper line endings
+            
+            // Send clear screen first
+            socket.emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
+              sessionName,
+              data: clearScreen,
+              timestamp: new Date().toISOString()
+            });
+            
+            // Then send the formatted content
+            setTimeout(() => {
+              socket.emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
+                sessionName,
+                data: formattedContent,
+                timestamp: new Date().toISOString()
+              });
+              
+              // Finally, restore exact cursor position using ANSI escape sequence
+              if (cursorPosition) {
+                setTimeout(() => {
+                  // ANSI escape sequence to set cursor position: \033[row;colH
+                  // Note: ANSI sequences are 1-based, tmux cursor positions are 0-based
+                  const row = cursorPosition.cursorY + 1;
+                  const col = cursorPosition.cursorX + 1;
+                  const setCursorPosition = `\x1b[${row};${col}H`;
+                  
+                  logger.info('Restoring cursor position:', { 
+                    sessionName, 
+                    tmuxX: cursorPosition.cursorX, 
+                    tmuxY: cursorPosition.cursorY,
+                    ansiRow: row,
+                    ansiCol: col
+                  });
+                  
+                  socket.emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
+                    sessionName,
+                    data: setCursorPosition,
+                    timestamp: new Date().toISOString()
+                  });
+                }, 100); // Small delay to ensure content is rendered first
+              }
+            }, 50); // Small delay to ensure clear screen happens first
+          } else {
+            logger.info('No terminal content found, no state to restore:', { sessionName });
+          }
+        } catch (error) {
+          logger.error('Failed to restore terminal state:', { sessionName, error: error.message });
+        }
+      }, 500); // Give callbacks time to be set up
       
       socket.emit('terminal:session-attached', {
         sessionName,

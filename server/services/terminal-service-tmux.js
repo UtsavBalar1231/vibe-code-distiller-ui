@@ -83,19 +83,8 @@ class TmuxTerminalSession {
       this.status = 'active';
       this.lastActivity = Date.now();
       
-      // If reconnecting, capture current pane content
-      if (isReconnect) {
-        setTimeout(async () => {
-          try {
-            const paneContent = await TmuxUtils.capturePane(this.tmuxSessionName);
-            if (paneContent && this.callbacks.onData) {
-              this.callbacks.onData(paneContent);
-            }
-          } catch (error) {
-            logger.error('Failed to capture pane content:', error);
-          }
-        }, 500);
-      }
+      // For reconnections, the WebSocket handler will manage content sending
+      // No need to duplicate content capture here
       
       logger.info('Tmux terminal session started:', {
         sessionId: this.sessionId,
@@ -434,6 +423,14 @@ class TmuxTerminalService {
     // Check if tmux session exists
     if (!await TmuxUtils.hasSession(sessionName)) {
       throw new AppError(`Tmux session ${sessionName} not found`, 404, ERROR_CODES.TERMINAL_NOT_FOUND);
+    }
+
+    // Ensure status bar is disabled for existing sessions too
+    // This prevents delayed status bar appearance when reconnecting
+    try {
+      await TmuxUtils.disableStatusBar(sessionName);
+    } catch (error) {
+      logger.warn('Failed to disable status bar for existing session:', { sessionName, error: error.message });
     }
 
     // Close existing terminal connection if any
