@@ -233,9 +233,12 @@ class SocketManager {
         });
       }
 
-      // Create terminal session if it doesn't exist
-      if (!terminalStatus.exists) {
+      // Create or reconnect to terminal session
+      if (!terminalStatus.exists || !terminalStatus.active) {
         try {
+          const action = terminalStatus.exists ? 'reconnecting to' : 'creating';
+          logger.info(`${action} terminal session for project:`, { projectId });
+          
           await terminalService.createSession(projectId, {
             cwd: project.path,
             cols: 80, // Default terminal size
@@ -243,7 +246,7 @@ class SocketManager {
           });
           terminalStatus = await terminalService.getSessionStatus(projectId);
           
-          logger.info('Terminal session created automatically for project:', { projectId });
+          logger.info('Terminal session ready for project:', { projectId, isReconnect: terminalStatus.exists });
           
           // Notify client that terminal session is ready
           socket.emit(WEBSOCKET.EVENTS.PROJECT_STATUS, {
@@ -252,10 +255,11 @@ class SocketManager {
             timestamp: new Date().toISOString()
           });
           
-          // Emit terminal session created event
+          // Emit terminal session created/reconnected event
           socket.emit('terminal-session-created', {
             projectId,
             sessionId: projectId,
+            isReconnect: terminalStatus.metadata ? true : false,
             timestamp: new Date().toISOString()
           });
           
@@ -267,7 +271,7 @@ class SocketManager {
             });
           }, 500); // Increased delay for tmux sessions
         } catch (error) {
-          logger.error('Failed to create terminal session automatically:', {
+          logger.error('Failed to create/reconnect terminal session:', {
             projectId,
             error: error.message,
             stack: error.stack
@@ -275,15 +279,15 @@ class SocketManager {
           
           // Send error notification to client
           socket.emit(WEBSOCKET.EVENTS.ERROR, {
-            message: 'Failed to create terminal session',
+            message: 'Failed to create/reconnect terminal session',
             details: error.message,
             projectId
           });
         }
       }
 
-      // Set up terminal session callbacks if session exists
-      if (terminalStatus.exists) {
+      // Set up terminal session callbacks if session is active in memory
+      if (terminalStatus.exists && terminalStatus.active) {
         terminalService.setupSessionCallbacks(projectId, {
           onData: (data) => {
             socket.emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
@@ -309,15 +313,21 @@ class SocketManager {
           }
         });
         
-        // Apply pending resize if any
+        // Apply pending resize if any (only for active sessions)
         if (socket.pendingResize && socket.pendingResize.projectId === projectId) {
           const { cols, rows } = socket.pendingResize;
           try {
             // Wait a bit for terminal to be fully ready
             setTimeout(async () => {
               try {
-                await terminalService.resizeSession(projectId, cols, rows);
-                logger.info('Applied pending resize after terminal setup:', { projectId, cols, rows });
+                // Double check that session is still active before resize
+                const currentStatus = await terminalService.getSessionStatus(projectId);
+                if (currentStatus.active) {
+                  await terminalService.resizeSession(projectId, cols, rows);
+                  logger.info('Applied pending resize after terminal setup:', { projectId, cols, rows });
+                } else {
+                  logger.warn('Skipping resize - session not active:', { projectId });
+                }
                 delete socket.pendingResize;
               } catch (resizeError) {
                 logger.error('Failed to apply pending resize:', {
@@ -447,7 +457,7 @@ class SocketManager {
         socket.metadata.projectId = projectId;
       }
 
-      // Check if terminal session exists before sending input
+      // Check if terminal session exists and is active before sending input
       const currentTerminalStatus = await terminalService.getSessionStatus(projectId);
       if (!currentTerminalStatus.exists) {
         logger.warn('Terminal session does not exist for project:', { projectId, socketId: socket.id });
@@ -458,6 +468,32 @@ class SocketManager {
           timestamp: new Date().toISOString()
         });
         return;
+      }
+      
+      // If session exists but is not active, try to reconnect
+      if (!currentTerminalStatus.active) {
+        logger.info('Terminal session exists but not active, attempting reconnection:', { projectId });
+        try {
+          const project = await projectService.getProject(projectId);
+          await terminalService.createSession(projectId, {
+            cwd: project.path,
+            cols: 80,
+            rows: 24
+          });
+          logger.info('Successfully reconnected to terminal session:', { projectId });
+        } catch (reconnectError) {
+          logger.error('Failed to reconnect terminal session:', {
+            projectId,
+            error: reconnectError.message
+          });
+          socket.emit('terminal-input-error', {
+            projectId,
+            message: 'Failed to reconnect to terminal session',
+            details: reconnectError.message,
+            timestamp: new Date().toISOString()
+          });
+          return;
+        }
       }
 
       // Send input to terminal service
@@ -520,31 +556,34 @@ class SocketManager {
         socket.metadata.projectId = projectId;
       }
 
-      // Check if terminal session exists, if not, create it first
+      // Check if terminal session exists and is active, create/reconnect if needed
       const terminalStatus = await terminalService.getSessionStatus(projectId);
-      if (!terminalStatus.exists) {
+      if (!terminalStatus.exists || !terminalStatus.active) {
         try {
           const project = await projectService.getProject(projectId);
+          const action = terminalStatus.exists ? 'reconnecting to' : 'creating';
+          logger.info(`${action} terminal session for resize:`, { projectId, cols, rows });
+          
           await terminalService.createSession(projectId, {
             cwd: project.path,
             cols,
             rows
           });
           
-          logger.info('Terminal session created for resize:', { projectId, cols, rows });
+          logger.info('Terminal session ready for resize:', { projectId, cols, rows });
           
           // Set up callbacks for the new session
           await this.setupProjectIntegration(socket, projectId, project);
           
           return; // Terminal already created with correct size, no need to resize
         } catch (createError) {
-          logger.error('Failed to create terminal session for resize:', {
+          logger.error('Failed to create/reconnect terminal session for resize:', {
             projectId,
             error: createError.message
           });
           
           socket.emit(WEBSOCKET.EVENTS.ERROR, {
-            message: 'Failed to create terminal session',
+            message: 'Failed to create/reconnect terminal session',
             details: createError.message
           });
           return;
