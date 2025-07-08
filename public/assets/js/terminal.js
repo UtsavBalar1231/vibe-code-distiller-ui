@@ -83,6 +83,9 @@ class TerminalManager extends EventEmitter {
         // Load saved settings
         const savedFontSize = Storage.get('terminal-font-size') || 14;
         
+        // Calculate initial terminal size based on container
+        const { rows, cols } = this.calculateTerminalSize(parseInt(savedFontSize));
+        
         // Create terminal instance with fixed high-contrast theme
         const terminal = new Terminal({
             fontFamily: 'Consolas, "Liberation Mono", Menlo, Courier, monospace',
@@ -96,6 +99,8 @@ class TerminalManager extends EventEmitter {
             cursorStyle: 'block',
             scrollback: 1000,
             tabStopWidth: 4,
+            rows: rows,
+            cols: cols,
             theme: this.getThemeConfig(this.getCurrentTheme()),
             allowTransparency: false,
             bellSound: null,
@@ -138,8 +143,18 @@ class TerminalManager extends EventEmitter {
         // Open terminal in wrapper
         terminal.open(terminalWrapper);
         
-        // Fit terminal to container with proper timing
+        // Fit terminal to container with proper timing and force initial resize
         this.fitTerminalSafely(fitAddon, terminalWrapper, terminalId);
+        
+        // Force an additional fit after DOM is fully rendered
+        setTimeout(() => {
+            try {
+                fitAddon.fit();
+                console.log(`Terminal ${terminalId} force-fitted after DOM render`);
+            } catch (error) {
+                console.warn(`Failed to force-fit terminal ${terminalId}:`, error);
+            }
+        }, 200);
         
         // Send initial size to server for tmux sessions (with delay for reconnections)
         if (projectId && socket.isConnected()) {
@@ -235,8 +250,13 @@ class TerminalManager extends EventEmitter {
                 // Always call fit when terminal container is resized, regardless of active state
                 // This ensures terminal fills the available space properly
                 try {
-                    fitAddon.fit();
-                    this.updateTerminalSize(terminalId);
+                    // Use debouncing to avoid excessive fitting
+                    clearTimeout(terminalData.resizeTimeout);
+                    terminalData.resizeTimeout = setTimeout(() => {
+                        fitAddon.fit();
+                        this.updateTerminalSize(terminalId);
+                        console.log(`Terminal ${terminalId} resized via ResizeObserver`);
+                    }, 100);
                 } catch (error) {
                     console.warn(`Failed to fit terminal ${terminalId} in ResizeObserver:`, error);
                 }
@@ -478,6 +498,37 @@ class TerminalManager extends EventEmitter {
             return 'light';
         }
         return 'dark'; // Default to dark theme
+    }
+    
+    calculateTerminalSize(fontSize = 14) {
+        try {
+            // Get container dimensions
+            const container = this.container;
+            if (!container) {
+                return { rows: 24, cols: 80 }; // Default fallback
+            }
+            
+            // Calculate available space
+            const containerRect = container.getBoundingClientRect();
+            const availableWidth = containerRect.width || window.innerWidth * 0.6; // Fallback to 60% of window width
+            const availableHeight = containerRect.height || window.innerHeight * 0.6; // Fallback to 60% of window height
+            
+            // Character dimensions based on font size
+            const charWidth = fontSize * 0.6; // Approximate character width
+            const charHeight = fontSize * 1.2; // Line height
+            
+            // Calculate rows and columns with padding
+            const padding = 32; // Account for padding
+            const cols = Math.max(80, Math.floor((availableWidth - padding) / charWidth));
+            const rows = Math.max(24, Math.floor((availableHeight - padding) / charHeight));
+            
+            console.log(`Terminal size calculated: ${cols}x${rows} (container: ${availableWidth}x${availableHeight})`);
+            
+            return { rows, cols };
+        } catch (error) {
+            console.warn('Failed to calculate terminal size:', error);
+            return { rows: 24, cols: 80 }; // Safe fallback
+        }
     }
     
     getThemeConfig(themeName) {
@@ -902,6 +953,19 @@ class TerminalManager extends EventEmitter {
         // Clean up
         if (terminalData.resizeObserver) {
             terminalData.resizeObserver.disconnect();
+        }
+        
+        // Clear timeout handlers
+        if (terminalData.resizeTimeout) {
+            clearTimeout(terminalData.resizeTimeout);
+        }
+        if (terminalData.windowResizeTimeout) {
+            clearTimeout(terminalData.windowResizeTimeout);
+        }
+        
+        // Remove window resize handler
+        if (terminalData.windowResizeHandler) {
+            window.removeEventListener('resize', terminalData.windowResizeHandler);
         }
         
         terminalData.terminal.dispose();
@@ -1821,11 +1885,16 @@ class TerminalManager extends EventEmitter {
             // Make sure wrapper is visible
             wrapper.style.display = 'block';
             
+            // Calculate initial terminal size for session terminal
+            const { rows, cols } = this.calculateTerminalSize(14);
+            
             // Create xterm.js terminal
             const terminal = new Terminal({
                 cursorBlink: true,
                 fontSize: 14,
                 fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                rows: rows,
+                cols: cols,
                 theme: {
                     background: '#1e1e1e',
                     foreground: '#d4d4d4',
@@ -1853,19 +1922,35 @@ class TerminalManager extends EventEmitter {
                 }
             }, 100); // Delay to ensure DOM is ready
             
+            // Force an additional fit after DOM is fully rendered for session terminals
+            setTimeout(() => {
+                try {
+                    fitAddon.fit();
+                    console.log(`Session terminal ${terminalData.sessionName} force-fitted after DOM render`);
+                } catch (error) {
+                    console.warn(`Failed to force-fit session terminal ${terminalData.sessionName}:`, error);
+                }
+            }, 300);
+            
             // Setup terminal events (this will handle input properly)
             this.setupTerminalEvents(terminal, terminalData.sessionName, null);
             
-            // Handle resize
-            window.addEventListener('resize', () => {
+            // Handle resize with debouncing
+            const handleResize = () => {
                 // Always fit when window is resized, regardless of active state
                 try {
-                    fitAddon.fit();
-                    console.log(`Session terminal ${terminalData.sessionName} fitted on window resize`);
+                    clearTimeout(terminalData.windowResizeTimeout);
+                    terminalData.windowResizeTimeout = setTimeout(() => {
+                        fitAddon.fit();
+                        console.log(`Session terminal ${terminalData.sessionName} fitted on window resize`);
+                    }, 150);
                 } catch (error) {
                     console.warn(`Failed to fit session terminal ${terminalData.sessionName} on window resize:`, error);
                 }
-            });
+            };
+            
+            window.addEventListener('resize', handleResize);
+            terminalData.windowResizeHandler = handleResize;
             
             console.log('Terminal element created successfully for:', terminalData.sessionName);
             this.hideWelcomeScreen();
@@ -2042,6 +2127,17 @@ class TerminalManager extends EventEmitter {
             if (terminalData.element) {
                 terminalData.element.remove();
             }
+            
+            // Clear timeout handlers for session terminals
+            if (terminalData.windowResizeTimeout) {
+                clearTimeout(terminalData.windowResizeTimeout);
+            }
+            
+            // Remove window resize handler for session terminals
+            if (terminalData.windowResizeHandler) {
+                window.removeEventListener('resize', terminalData.windowResizeHandler);
+            }
+            
             // Clean up attachment state
             terminalData.isAttached = false;
             console.log(`🧹 Cleaned up session ${sessionName}`);
