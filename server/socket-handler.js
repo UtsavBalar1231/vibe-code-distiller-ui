@@ -1109,7 +1109,16 @@ class SocketManager {
     try {
       const { projectName, projectPath, cols = 80, rows = 24 } = data;
       
+      logger.info('🔧 Received create project session request:', { 
+        socketId: socket.id, 
+        projectName, 
+        projectPath, 
+        cols, 
+        rows 
+      });
+      
       if (!projectName) {
+        logger.warn('❌ Project name missing in create session request');
         socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Project name required' });
         return;
       }
@@ -1129,6 +1138,8 @@ class SocketManager {
       // Generate session name using project name and sequence number
       const sessionName = `claude-web-${projectName}-${sequenceNumber}`;
       
+      logger.info('🎯 Generated session name:', { sessionName, projectName, sequenceNumber });
+      
       // Create new terminal session
       const result = await terminalService.createSessionDirect(sessionName, {
         cwd: projectPath || process.cwd(),
@@ -1136,15 +1147,28 @@ class SocketManager {
         rows
       });
       
+      logger.info('✅ Terminal session created, broadcasting event:', { 
+        sessionName,
+        projectName,
+        sequenceNumber,
+        result: result 
+      });
+      
       // Broadcast session creation event to all clients
-      this.io.emit('terminal:session-created', {
+      const eventData = {
         sessionName,
         projectName,
         sequenceNumber,
         timestamp: Date.now()
-      });
+      };
       
-      logger.info('Project session created successfully:', { 
+      logger.info('📡 Broadcasting terminal:session-created event:', eventData);
+      this.io.emit('terminal:session-created', eventData);
+      
+      // Also send to requesting client specifically
+      socket.emit('terminal:session-created', eventData);
+      
+      logger.info('🎉 Project session created successfully:', { 
         socketId: socket.id, 
         sessionName,
         projectName,
@@ -1152,10 +1176,11 @@ class SocketManager {
       });
       
     } catch (error) {
-      logger.error('Failed to create project session:', { 
+      logger.error('❌ Failed to create project session:', { 
         socketId: socket.id, 
         projectName: data.projectName, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       socket.emit(WEBSOCKET.EVENTS.ERROR, {
         message: 'Failed to create project session',
@@ -1168,34 +1193,73 @@ class SocketManager {
     try {
       const { sessionName } = data;
       
+      logger.info('Delete session request received:', { sessionName, socketId: socket.id });
+      
       if (!sessionName) {
+        logger.warn('Delete session request missing sessionName:', { socketId: socket.id });
         socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Session name required' });
         return;
       }
       
       // Validate session name format
       if (!sessionName.startsWith('claude-web-')) {
+        logger.warn('Invalid session name format:', { sessionName, socketId: socket.id });
         socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Invalid session name format' });
         return;
       }
       
-      // Delete the tmux session
+      // Check if session exists before trying to delete
       const TmuxUtils = require('./utils/tmux-utils');
+      const sessionExists = await TmuxUtils.hasSession(sessionName);
+      
+      if (!sessionExists) {
+        logger.warn('Session does not exist:', { sessionName, socketId: socket.id });
+        // Still broadcast deletion event since session is effectively gone
+        this.io.emit('terminal:session-deleted', { sessionName, success: true });
+        socket.emit('terminal:session-deleted', { sessionName, success: true });
+        return;
+      }
+      
+      // Delete the tmux session
+      logger.info('Deleting tmux session:', { sessionName, socketId: socket.id });
       const result = await TmuxUtils.killSession(sessionName);
       
       if (result) {
-        logger.info('Session deleted:', { sessionName, socketId: socket.id });
+        logger.info('Session deleted successfully:', { sessionName, socketId: socket.id });
+        
+        // Also destroy any associated terminal service session
+        try {
+          if (terminalService.isSessionActive(sessionName)) {
+            await terminalService.destroySession(sessionName);
+            logger.info('Terminal service session destroyed:', { sessionName });
+          }
+        } catch (terminalError) {
+          logger.warn('Failed to destroy terminal service session (continuing anyway):', { 
+            sessionName, 
+            error: terminalError.message 
+          });
+        }
         
         // Broadcast to all clients that the session was deleted
-        this.io.emit('terminal:session-deleted', { sessionName });
+        this.io.emit('terminal:session-deleted', { sessionName, success: true });
         
+        // Send confirmation to requesting client
         socket.emit('terminal:session-deleted', { sessionName, success: true });
       } else {
-        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Failed to delete session' });
+        logger.error('Failed to delete session:', { sessionName, socketId: socket.id });
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { 
+          message: 'Failed to delete session',
+          details: 'Tmux session deletion returned false'
+        });
       }
       
     } catch (error) {
-      logger.error('Failed to delete session:', { socketId: socket.id, error: error.message });
+      logger.error('Error deleting session:', { 
+        sessionName: data.sessionName,
+        socketId: socket.id, 
+        error: error.message,
+        stack: error.stack
+      });
       socket.emit(WEBSOCKET.EVENTS.ERROR, {
         message: 'Failed to delete session',
         details: error.message
