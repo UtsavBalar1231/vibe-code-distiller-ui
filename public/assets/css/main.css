@@ -953,48 +953,11 @@ body {
     }
 }
 
-/* Persistent Terminal Tabs */
-.terminal-tab.persistent-tab {
-    border: 1px solid var(--accent-secondary);
-    background-color: var(--bg-secondary);
-}
-
-.terminal-tab.persistent-tab:hover {
-    background-color: var(--bg-hover);
-    border-color: var(--accent-primary);
-}
-
-.persistent-indicator {
-    color: var(--accent-success);
-    font-size: 8px;
-    margin-left: var(--spacing-xs);
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.6; }
-    100% { opacity: 1; }
-}
-
-/* Resource Monitoring */
-#tmux-sessions-count .text {
-    font-weight: 500;
-}
-
-#tmux-sessions-count .icon {
-    color: var(--accent-info);
-}
-
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
     * {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
-    }
-    
-    .persistent-indicator {
-        animation: none;
     }
 }
