@@ -49,6 +49,8 @@ class SocketClient extends EventEmitter {
             this.updateConnectionStatus();
             this.emit('connected');
             
+            console.log('🔌 Socket connected successfully, ID:', this.socket.id);
+            
             if (notifications.isNotificationEnabled()) {
                 notifications.success('Connected to server', { duration: 2000 });
             }

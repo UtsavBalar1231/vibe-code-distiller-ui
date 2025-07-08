@@ -17,17 +17,22 @@ class TerminalManager extends EventEmitter {
         socket.onTerminalOutput(this.handleTerminalOutput.bind(this));
         socket.onClaudeResponse(this.handleClaudeResponse.bind(this));
         socket.onProjectStatus(this.handleProjectStatus.bind(this));
-        socket.on('terminal_input_error', this.handleTerminalInputError.bind(this));
+        socket.socket.on('terminal_input_error', this.handleTerminalInputError.bind(this));
         
         // Tmux session events
-        socket.on('terminal:sessions-list', this.handleSessionsList.bind(this));
-        socket.on('terminal:session-attached', this.handleSessionAttached.bind(this));
-        socket.on('terminal:session-detached', this.handleSessionDetached.bind(this));
-        socket.on('terminal:session-created', (data) => {
-            console.log('🎉 Received terminal:session-created event:', data);
+        socket.socket.on('terminal:sessions-list', this.handleSessionsList.bind(this));
+        socket.socket.on('terminal:session-attached', this.handleSessionAttached.bind(this));
+        socket.socket.on('terminal:session-detached', this.handleSessionDetached.bind(this));
+        socket.socket.on('terminal:session-created', (data) => {
             this.handleSessionCreated(data);
         });
-        socket.on('terminal:session-deleted', this.handleSessionDeleted.bind(this));
+        socket.socket.on('terminal:session-deleted', this.handleSessionDeleted.bind(this));
+        
+        
+        // Error handling events
+        socket.socket.on('error', this.handleSocketError.bind(this));
+        socket.socket.on('connect_error', this.handleConnectionError.bind(this));
+        socket.socket.on('disconnect', this.handleDisconnection.bind(this));
         
         // Note: loadAllSessions will be called after DOM is ready
     }
@@ -1376,9 +1381,7 @@ class TerminalManager extends EventEmitter {
     
     showTerminalError(terminalId, message) {
         // Show user-friendly error notification
-        if (window.notifications) {
-            notifications.error(message, { duration: 3000 });
-        }
+        notifications.error(message, { duration: 3000 });
         
         // Optionally write error to terminal
         const terminalData = this.terminals.get(terminalId);
@@ -1567,9 +1570,7 @@ class TerminalManager extends EventEmitter {
                 terminalData.terminal.clear();
                 
                 // Show non-intrusive notification instead of terminal message
-                if (window.notifications) {
-                    window.notifications.success('Terminal session restarted successfully');
-                }
+                notifications.success('Terminal session restarted successfully');
                 
                 // Enhanced resize with proper timing and validation
                 this.performEnhancedResize(terminalData, terminalId);
@@ -1649,7 +1650,7 @@ class TerminalManager extends EventEmitter {
     
     async loadAllSessionsAndSelect(targetSessionName) {
         try {
-            console.log('📡 Calling /api/sessions API for target:', targetSessionName);
+            // API call to get session info
             const response = await fetch('/api/sessions');
             const data = await response.json();
             
@@ -1768,7 +1769,35 @@ class TerminalManager extends EventEmitter {
     }
     
     async deleteSession(sessionName) {
-        socket.socket.emit('terminal:delete-session', { sessionName });
+        try {
+            if (!socket || !socket.isConnected()) {
+                notifications.error('Connection lost. Please refresh the page.');
+                return;
+            }
+            
+            if (!sessionName || !sessionName.startsWith('claude-web-')) {
+                notifications.error('Invalid session name format');
+                return;
+            }
+            
+            // Show deleting notification
+            notifications.info(`Deleting session ${sessionName}...`);
+            
+            // Send delete request
+            socket.socket.emit('terminal:delete-session', { sessionName });
+            
+            // Set up timeout for deletion
+            setTimeout(() => {
+                // Check if session still exists after 5 seconds
+                const sessionTab = document.getElementById(`tab-${sessionName}`);
+                if (sessionTab) {
+                    notifications.error(`Failed to delete session ${sessionName}. Please try again.`);
+                }
+            }, 5000);
+            
+        } catch (error) {
+            notifications.error('Failed to delete session: ' + error.message);
+        }
     }
     
     showDeleteConfirmation(sessionName) {
@@ -2069,98 +2098,138 @@ class TerminalManager extends EventEmitter {
                 this.createTerminalForProject(projectId);
             }
             
-            toaster.show({
-                message: `Reconnected to existing session for project ${projectId}`,
-                type: 'success',
-                duration: 3000
-            });
+            notifications.success(`Reconnected to existing session for project ${projectId}`, { duration: 3000 });
         }
     }
     
     handleSessionDetached(data) {
         const { projectId } = data;
         
-        toaster.show({
-            message: `Detached from session. Session remains active in background.`,
-            type: 'info',
-            duration: 3000
-        });
+        notifications.info(`Detached from session. Session remains active in background.`, { duration: 3000 });
     }
     
     handleSessionCreated(data) {
         const { sessionName, sessionId, tmuxSession, projectName, sequenceNumber } = data;
         const displayName = sessionName || tmuxSession;
         
-        console.log('🎉 Session created event received:', {
-            sessionName,
-            displayName,
-            projectName,
-            sequenceNumber
-        });
+        // Use a retry mechanism to ensure session is fully ready
+        this.loadSessionsWithRetry(displayName, 0);
         
-        // Give tmux session time to be fully created, then reload sessions
-        setTimeout(() => {
-            console.log('🔄 Loading sessions and selecting:', displayName);
-            this.loadAllSessionsAndSelect(displayName);
-        }, 1500); // Reduced delay but still enough for tmux session readiness
+        notifications.success(projectName 
+            ? `New terminal session created for "${projectName}": ${displayName}`
+            : `New terminal session created: ${displayName}`);
+    }
+    
+    async loadSessionsWithRetry(targetSessionName, retryCount = 0) {
+        const maxRetries = 5;
+        const retryDelay = 500;
         
-        toaster.show({
-            message: projectName 
-                ? `New terminal session created for "${projectName}": ${displayName}`
-                : `New terminal session created: ${displayName}`,
-            type: 'success'
-        });
+        try {
+            const response = await fetch('/api/sessions');
+            const data = await response.json();
+            
+            if (data.success) {
+                const claudeWebSessions = data.sessions.filter(session => 
+                    session.name.startsWith('claude-web-')
+                );
+                
+                // Check if target session exists in the response
+                const targetExists = claudeWebSessions.find(session => 
+                    session.name === targetSessionName
+                );
+                
+                if (targetExists) {
+                    this.displayAllSessions(claudeWebSessions);
+                    
+                    // Select the target session after a short delay
+                    setTimeout(async () => {
+                        await this.selectSessionTab(targetSessionName);
+                    }, 100);
+                    return;
+                } else if (retryCount < maxRetries) {
+                    setTimeout(() => {
+                        this.loadSessionsWithRetry(targetSessionName, retryCount + 1);
+                    }, retryDelay);
+                    return;
+                } else {
+                    // Target session not found after max retries, load all sessions
+                    this.displayAllSessions(claudeWebSessions);
+                    if (claudeWebSessions.length > 0) {
+                        setTimeout(async () => {
+                            await this.selectSessionTab(claudeWebSessions[0].name);
+                        }, 100);
+                    }
+                }
+            } else {
+                throw new Error(data.error || 'Failed to load sessions');
+            }
+        } catch (error) {
+            if (retryCount < maxRetries) {
+                setTimeout(() => {
+                    this.loadSessionsWithRetry(targetSessionName, retryCount + 1);
+                }, retryDelay);
+            } else {
+                notifications.error('Failed to refresh terminal sessions. Please refresh the page.');
+            }
+        }
     }
     
     handleSessionDeleted(data) {
-        const { sessionName } = data;
+        const { sessionName, success } = data;
         
-        // Remove the tab
-        const tabElement = document.getElementById(`tab-${sessionName}`);
-        if (tabElement) {
-            tabElement.remove();
+        if (!sessionName) {
+            return;
         }
         
-        // Remove terminal data and clean up
-        const terminalData = this.terminals.get(sessionName);
-        if (terminalData) {
-            if (terminalData.element) {
-                terminalData.element.remove();
+        try {
+            // Remove the tab
+            const tabElement = document.getElementById(`tab-${sessionName}`);
+            if (tabElement) {
+                tabElement.remove();
             }
             
-            // Clear timeout handlers for session terminals
-            if (terminalData.windowResizeTimeout) {
-                clearTimeout(terminalData.windowResizeTimeout);
+            // Remove terminal data and clean up
+            const terminalData = this.terminals.get(sessionName);
+            if (terminalData) {
+                if (terminalData.element) {
+                    terminalData.element.remove();
+                }
+                
+                // Clear timeout handlers for session terminals
+                if (terminalData.windowResizeTimeout) {
+                    clearTimeout(terminalData.windowResizeTimeout);
+                }
+                
+                // Remove window resize handler for session terminals
+                if (terminalData.windowResizeHandler) {
+                    window.removeEventListener('resize', terminalData.windowResizeHandler);
+                }
+                
+                // Clean up attachment state
+                terminalData.isAttached = false;
             }
             
-            // Remove window resize handler for session terminals
-            if (terminalData.windowResizeHandler) {
-                window.removeEventListener('resize', terminalData.windowResizeHandler);
+            this.terminals.delete(sessionName);
+            
+            // If this was the active terminal, select another one
+            if (this.activeTerminal === sessionName) {
+                this.activeTerminal = null;
+                const remainingTabs = this.tabsContainer.querySelectorAll('.terminal-tab');
+                if (remainingTabs.length > 0) {
+                    const firstTab = remainingTabs[0];
+                    const firstSessionName = firstTab.id.replace('tab-', '');
+                    (async () => await this.selectSessionTab(firstSessionName))();
+                } else {
+                    this.showWelcomeScreen();
+                }
             }
             
-            // Clean up attachment state
-            terminalData.isAttached = false;
-            console.log(`🧹 Cleaned up session ${sessionName}`);
+            // Show success message
+            notifications.success(`Session "${sessionName}" deleted successfully`);
+            
+        } catch (error) {
+            notifications.error(`Error cleaning up deleted session: ${error.message}`);
         }
-        this.terminals.delete(sessionName);
-        
-        // If this was the active terminal, select another one
-        if (this.activeTerminal === sessionName) {
-            this.activeTerminal = null;
-            const remainingTabs = this.tabsContainer.querySelectorAll('.terminal-tab');
-            if (remainingTabs.length > 0) {
-                const firstTab = remainingTabs[0];
-                const firstSessionName = firstTab.id.replace('tab-', '');
-                (async () => await this.selectSessionTab(firstSessionName))();
-            } else {
-                this.showWelcomeScreen();
-            }
-        }
-        
-        toaster.show({
-            message: `Session ${sessionName} deleted`,
-            type: 'info'
-        });
     }
     
     showSessionsDialog(sessions) {
@@ -2266,6 +2335,63 @@ class TerminalManager extends EventEmitter {
         if (this.welcomeScreen) {
             this.welcomeScreen.style.display = 'none';
         }
+    }
+    
+    // Error handling methods
+    handleSocketError(error) {
+        console.error('🔌 Socket error:', error);
+        notifications.error('Connection error: ' + (error.message || 'Unknown error'), { duration: 5000 });
+    }
+    
+    handleConnectionError(error) {
+        console.error('🔌 Connection error:', error);
+        notifications.error('Failed to connect to server. Please check your connection.', { duration: 5000 });
+    }
+    
+    handleDisconnection(reason) {
+        console.warn('🔌 Disconnected from server:', reason);
+        
+        if (reason === 'io server disconnect') {
+            // Server disconnected the client
+            notifications.warning('Disconnected from server. Please refresh the page.', { duration: 8000 });
+        } else {
+            // Client disconnected
+            notifications.info('Connection lost. Attempting to reconnect...', { duration: 3000 });
+        }
+        
+        // Mark all terminals as disconnected
+        this.terminals.forEach((terminalData) => {
+            if (terminalData.isAttached) {
+                terminalData.isAttached = false;
+            }
+        });
+    }
+    
+    // Enhanced error handling for terminal operations
+    handleTerminalOperationError(operation, sessionName, error) {
+        console.error(`❌ Terminal ${operation} failed:`, { sessionName, error });
+        
+        let message = `Failed to ${operation}`;
+        if (sessionName) {
+            message += ` for session "${sessionName}"`;
+        }
+        message += ': ' + (error.message || error);
+        
+        notifications.error(message, { duration: 5000 });
+    }
+    
+    // Utility method to check connection status
+    isConnected() {
+        return socket && socket.isConnected();
+    }
+    
+    // Utility method to ensure connection before operations
+    ensureConnection(operationName = 'operation') {
+        if (!this.isConnected()) {
+            notifications.error(`Cannot perform ${operationName}: Not connected to server`);
+            return false;
+        }
+        return true;
     }
 }
 

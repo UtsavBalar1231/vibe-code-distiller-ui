@@ -57,19 +57,17 @@ class ProjectManager extends EventEmitter {
         });
         
         // Terminal session events
-        socket.on('terminal_session_created', (data) => {
+        socket.socket.on('terminal_session_created', (data) => {
             this.handleTerminalSessionCreated(data);
         });
         
-        socket.on('terminal:session-created', (data) => {
-            this.handleProjectSessionCreated(data);
-        });
+        // Remove duplicate listener - let TerminalManager handle terminal:session-created
         
-        socket.on('project_ready', (data) => {
+        socket.socket.on('project_ready', (data) => {
             this.handleProjectReady(data);
         });
         
-        socket.on('project_disconnected', (data) => {
+        socket.socket.on('project_disconnected', (data) => {
             this.handleProjectDisconnected(data);
         });
     }
@@ -788,13 +786,17 @@ class ProjectManager extends EventEmitter {
                 return;
             }
             
-            notifications.info(`Creating new terminal for "${project.name}"...`);
+            // Creating new terminal for project
             
-            // Check socket connection
+            // Check socket connection with enhanced error handling
             if (!socket || !socket.isConnected()) {
                 notifications.error('Connection lost. Please refresh the page.');
+                console.error('❌ Cannot create terminal: Not connected to server');
                 return;
             }
+            
+            // Show creating notification
+            notifications.info(`Creating new terminal for "${project.name}"...`);
             
             // Send socket request to create new session for project
             socket.socket.emit('terminal:create-project-session', {
@@ -804,8 +806,24 @@ class ProjectManager extends EventEmitter {
                 rows: 24
             });
             
+            // Request sent to create project session
+            
+            // Set up timeout to check if session was created
+            setTimeout(() => {
+                // Check if any new sessions were created for this project
+                if (window.terminalManager && window.terminalManager.terminals) {
+                    const projectSessions = Array.from(window.terminalManager.terminals.keys())
+                        .filter(sessionName => sessionName.includes(project.name));
+                    
+                    if (projectSessions.length === 0) {
+                        console.warn('⚠️ No terminal sessions found after creation timeout for project:', project.name);
+                        notifications.warning(`Terminal creation may have failed for "${project.name}". Please try again.`);
+                    }
+                }
+            }, 8000); // 8 second timeout
+            
         } catch (error) {
-            console.error('Failed to create new terminal:', error);
+            console.error('❌ Failed to create new terminal:', error);
             notifications.error('Failed to create new terminal: ' + error.message);
         }
     }
