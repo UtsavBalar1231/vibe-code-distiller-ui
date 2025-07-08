@@ -202,7 +202,7 @@ class SocketManager {
     try {
       // Check if Claude session exists
       const claudeStatus = claudeManager.getSessionStatus(projectId);
-      let terminalStatus = terminalService.getSessionStatus(projectId);
+      let terminalStatus = await terminalService.getSessionStatus(projectId);
 
       // Set up Claude session callbacks if session exists
       if (claudeStatus.exists) {
@@ -241,7 +241,7 @@ class SocketManager {
             cols: 80, // Default terminal size
             rows: 24
           });
-          terminalStatus = terminalService.getSessionStatus(projectId);
+          terminalStatus = await terminalService.getSessionStatus(projectId);
           
           logger.info('Terminal session created automatically for project:', { projectId });
           
@@ -448,7 +448,7 @@ class SocketManager {
       }
 
       // Check if terminal session exists before sending input
-      const currentTerminalStatus = terminalService.getSessionStatus(projectId);
+      const currentTerminalStatus = await terminalService.getSessionStatus(projectId);
       if (!currentTerminalStatus.exists) {
         logger.warn('Terminal session does not exist for project:', { projectId, socketId: socket.id });
         socket.emit('terminal-input-error', {
@@ -521,7 +521,7 @@ class SocketManager {
       }
 
       // Check if terminal session exists, if not, create it first
-      const terminalStatus = terminalService.getSessionStatus(projectId);
+      const terminalStatus = await terminalService.getSessionStatus(projectId);
       if (!terminalStatus.exists) {
         try {
           const project = await projectService.getProject(projectId);
