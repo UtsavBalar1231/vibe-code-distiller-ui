@@ -396,10 +396,7 @@ class ProjectService {
       
       // Create Claude Code hook configuration for notifications  
       const serverConfig = require('config');
-      console.log('DEBUG: process.env.PORT =', process.env.PORT);
-      console.log('DEBUG: serverConfig.get(server.port) =', serverConfig.get('server.port'));
       const serverPort = process.env.PORT || serverConfig.get('server.port') || 3000;
-      console.log('DEBUG: final serverPort =', serverPort);
       const hookConfig = {
         hooks: {
           Notification: [

@@ -55,7 +55,11 @@ const io = socketIo(server, {
   },
   pingTimeout: 60000,
   pingInterval: 25000,
-  maxHttpBufferSize: 1024 * 1024 // 1MB
+  maxHttpBufferSize: 1024 * 1024, // 1MB
+  transports: ['websocket', 'polling'], // Prefer websocket over polling
+  allowEIO3: true, // Support older clients if needed
+  upgradeTimeout: 30000, // 30 seconds for upgrade
+  allowUpgrades: true
 });
 
 // Store io instance for access in routes

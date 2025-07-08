@@ -34,7 +34,8 @@ The application follows a layered service architecture built on Express.js:
 
 **Core Services:**
 - `claude-manager.js` - Manages Claude AI CLI sessions and processes
-- `terminal-service.js` - Handles terminal sessions using node-pty
+- `terminal-service-tmux.js` - Handles persistent terminal sessions using tmux with real-time discovery
+- `terminal-service.js` - Standard terminal service (non-tmux fallback)
 - `project-service.js` - Project file and directory management
 - `file-service.js` - File system operations and file watching
 
@@ -48,6 +49,13 @@ The application follows a layered service architecture built on Express.js:
 - Socket.IO handlers in `socket-handler.js` manage WebSocket connections
 - Event-driven architecture for terminal I/O, project updates, and system monitoring
 - Multi-session support with auto-reconnection handling
+
+**Tmux Session Management:**
+- Sessions follow naming convention: `claude-web-{projectId}-{timestamp}`
+- Real-time discovery using `tmux list-sessions` commands
+- No metadata files - tmux serves as single source of truth
+- Automatic session detection and reconnection across devices
+- Session persistence survives application restarts and network interruptions
 
 ### Client Architecture
 - Pure HTML/CSS/JavaScript frontend (no framework dependencies)
@@ -132,6 +140,13 @@ The application includes specific optimizations for Raspberry Pi deployment:
 - Use Winston for all logging operations
 - Validate inputs using Joi schema validation
 
+### Architecture Design Principles
+- **Single Source of Truth**: Avoid data duplication by using authoritative systems directly (e.g., tmux for session state)
+- **Real-time Discovery**: Query live system state rather than maintaining cached metadata
+- **Naming Conventions**: Use structured naming patterns to eliminate need for separate mapping files
+- **Simplify Dependencies**: Remove redundant file I/O when system commands provide the same information
+- **Async-First Design**: Make methods async when they involve external system calls for better performance
+
 ### Core Dependencies
 - **express**: Web framework
 - **socket.io**: Real-time communication
@@ -151,3 +166,12 @@ The application includes specific optimizations for Raspberry Pi deployment:
   - Cross-device session continuation
   - Session management UI with Ctrl+Shift+S shortcut
   - Optional feature controlled by config/terminal.tmux.enabled
+
+- **Tmux Session Management Optimization (2025-07-08)**: Major refactor to eliminate json file dependency
+  - Removed redundant tmux-sessions.json file and related I/O operations
+  - Implemented real-time session discovery using tmux commands directly
+  - Sessions now use tmux as single source of truth following naming convention: `claude-web-{projectId}-{timestamp}`
+  - Simplified architecture reduces code complexity by ~100 lines
+  - Eliminated data synchronization issues between json file and actual tmux state
+  - Improved reliability and performance by removing file system dependencies
+  - Maintained full API compatibility while making core methods async where needed

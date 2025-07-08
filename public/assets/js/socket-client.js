@@ -24,7 +24,7 @@ class SocketClient extends EventEmitter {
     setupSocket() {
         // Initialize Socket.IO connection
         this.socket = io({
-            transports: ['websocket', 'polling'],
+            transports: ['websocket', 'polling'], // Prefer websocket over polling
             timeout: 20000,
             reconnection: true,
             reconnectionAttempts: this.maxReconnectAttempts,
@@ -32,7 +32,10 @@ class SocketClient extends EventEmitter {
             reconnectionDelayMax: 5000,
             maxHttpBufferSize: 1e6, // 1MB
             pingTimeout: 60000,
-            pingInterval: 25000
+            pingInterval: 25000,
+            upgrade: true, // Allow transport upgrades
+            rememberUpgrade: true, // Remember successful upgrades
+            forceNew: false
         });
         
         this.setupEventHandlers();
@@ -45,6 +48,8 @@ class SocketClient extends EventEmitter {
             this.reconnectAttempts = 0;
             this.updateConnectionStatus();
             this.emit('connected');
+            
+            console.log('🔌 Socket connected successfully, ID:', this.socket.id);
             
             if (notifications.isNotificationEnabled()) {
                 notifications.success('Connected to server', { duration: 2000 });
@@ -431,6 +436,14 @@ class SocketClient extends EventEmitter {
             return false;
         }
         
+        // Support both old project-based and new session-based inputs
+        if (projectId.startsWith('claude-web-')) {
+            // New session-based approach
+            this.socket.emit('terminal-input', { sessionName: projectId, input });
+            return true;
+        }
+        
+        // Legacy project-based approach
         // Ensure we're connected to the project before sending input
         if (this.currentProject !== projectId || !this.isProjectReady(projectId)) {
             this.ensureProjectConnection(projectId, () => {

@@ -74,7 +74,7 @@ router.get('/:projectId/status',
     const { projectId } = req.params;
     
     const claudeStatus = claudeManager.getSessionStatus(projectId);
-    const terminalStatus = terminalService.getSessionStatus(projectId);
+    const terminalStatus = await terminalService.getSessionStatus(projectId);
     
     res.json({
       success: true,

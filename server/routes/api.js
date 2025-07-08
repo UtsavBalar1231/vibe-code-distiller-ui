@@ -3,6 +3,7 @@ const router = express.Router();
 const logger = require('../utils/logger');
 const { SUCCESS_MESSAGES } = require('../utils/constants');
 const path = require('path');
+const TmuxUtils = require('../utils/tmux-utils');
 
 // API status endpoint
 router.get('/status', (req, res) => {
@@ -54,7 +55,9 @@ router.get('/version', (req, res) => {
         'GET /api/claude/:projectId/status',
         'POST /api/notification',
         'GET /api/system/status',
-        'GET /api/system/logs'
+        'GET /api/system/logs',
+        'GET /api/sessions',
+        'DELETE /api/sessions/:sessionName'
       ]
     }
   });
@@ -247,6 +250,84 @@ router.post('/notification', (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to process notification',
+      details: error.message
+    });
+  }
+});
+
+// Get all claude-web sessions
+router.get('/sessions', async (req, res) => {
+  try {
+    const sessions = await TmuxUtils.listSessions();
+    const sessionInfos = [];
+    
+    for (const sessionName of sessions) {
+      const info = await TmuxUtils.getSessionInfo(sessionName);
+      const parsed = TmuxUtils.parseSessionName(sessionName);
+      
+      sessionInfos.push({
+        name: sessionName,
+        projectId: parsed ? parsed.projectId : null,
+        identifier: parsed ? parsed.identifier : null,
+        created: info ? info.created : null,
+        attached: info ? info.attached : false
+      });
+    }
+    
+    res.json({
+      success: true,
+      sessions: sessionInfos
+    });
+  } catch (error) {
+    logger.error('Error getting sessions:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get sessions',
+      details: error.message
+    });
+  }
+});
+
+// Delete a session
+router.delete('/sessions/:sessionName', async (req, res) => {
+  try {
+    const { sessionName } = req.params;
+    
+    // Validate session name format
+    if (!sessionName.startsWith('claude-web-')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid session name format',
+        details: 'Session name must start with claude-web-'
+      });
+    }
+    
+    const result = await TmuxUtils.killSession(sessionName);
+    
+    if (result) {
+      // Broadcast session deletion to all connected clients
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('session-deleted', { sessionName });
+      }
+      
+      res.json({
+        success: true,
+        message: 'Session deleted successfully',
+        sessionName
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to delete session',
+        sessionName
+      });
+    }
+  } catch (error) {
+    logger.error('Error deleting session:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete session',
       details: error.message
     });
   }

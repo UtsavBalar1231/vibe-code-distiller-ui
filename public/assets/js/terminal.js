@@ -17,12 +17,24 @@ class TerminalManager extends EventEmitter {
         socket.onTerminalOutput(this.handleTerminalOutput.bind(this));
         socket.onClaudeResponse(this.handleClaudeResponse.bind(this));
         socket.onProjectStatus(this.handleProjectStatus.bind(this));
-        socket.on('terminal_input_error', this.handleTerminalInputError.bind(this));
+        socket.socket.on('terminal_input_error', this.handleTerminalInputError.bind(this));
         
         // Tmux session events
-        socket.on('terminal:sessions-list', this.handleSessionsList.bind(this));
-        socket.on('terminal:session-attached', this.handleSessionAttached.bind(this));
-        socket.on('terminal:session-detached', this.handleSessionDetached.bind(this));
+        socket.socket.on('terminal:sessions-list', this.handleSessionsList.bind(this));
+        socket.socket.on('terminal:session-attached', this.handleSessionAttached.bind(this));
+        socket.socket.on('terminal:session-detached', this.handleSessionDetached.bind(this));
+        socket.socket.on('terminal:session-created', (data) => {
+            this.handleSessionCreated(data);
+        });
+        socket.socket.on('terminal:session-deleted', this.handleSessionDeleted.bind(this));
+        
+        
+        // Error handling events
+        socket.socket.on('error', this.handleSocketError.bind(this));
+        socket.socket.on('connect_error', this.handleConnectionError.bind(this));
+        socket.socket.on('disconnect', this.handleDisconnection.bind(this));
+        
+        // Note: loadAllSessions will be called after DOM is ready
     }
     
     setupTerminalControls() {
@@ -76,9 +88,12 @@ class TerminalManager extends EventEmitter {
         // Load saved settings
         const savedFontSize = Storage.get('terminal-font-size') || 14;
         
+        // Calculate initial terminal size based on container
+        const { rows, cols } = this.calculateTerminalSize(parseInt(savedFontSize));
+        
         // Create terminal instance with fixed high-contrast theme
         const terminal = new Terminal({
-            fontFamily: 'Fira Code, Monaco, Menlo, Ubuntu Mono, monospace',
+            fontFamily: 'Consolas, "Liberation Mono", Menlo, Courier, monospace',
             fontSize: parseInt(savedFontSize),
             fontWeight: 'normal',
             fontWeightBold: 'bold',
@@ -89,6 +104,8 @@ class TerminalManager extends EventEmitter {
             cursorStyle: 'block',
             scrollback: 1000,
             tabStopWidth: 4,
+            rows: rows,
+            cols: cols,
             theme: this.getThemeConfig(this.getCurrentTheme()),
             allowTransparency: false,
             bellSound: null,
@@ -98,6 +115,8 @@ class TerminalManager extends EventEmitter {
             macOptionIsMeta: true,
             macOptionClickForcesSelection: false,
             rightClickSelectsWord: true,
+            rendererType: 'canvas',
+            windowsMode: false,
             ...options
         });
         
@@ -129,8 +148,18 @@ class TerminalManager extends EventEmitter {
         // Open terminal in wrapper
         terminal.open(terminalWrapper);
         
-        // Fit terminal to container with proper timing
+        // Fit terminal to container with proper timing and force initial resize
         this.fitTerminalSafely(fitAddon, terminalWrapper, terminalId);
+        
+        // Force an additional fit after DOM is fully rendered
+        setTimeout(() => {
+            try {
+                fitAddon.fit();
+                console.log(`Terminal ${terminalId} force-fitted after DOM render`);
+            } catch (error) {
+                console.warn(`Failed to force-fit terminal ${terminalId}:`, error);
+            }
+        }, 200);
         
         // Send initial size to server for tmux sessions (with delay for reconnections)
         if (projectId && socket.isConnected()) {
@@ -141,6 +170,44 @@ class TerminalManager extends EventEmitter {
                     socket.resizeTerminal(projectId, cols, rows);
                 }
             }, 300);
+        }
+        
+        // Prevent character duplication by intercepting keyboard events for session-based terminals
+        const terminalScreen = terminalWrapper.querySelector('.xterm-screen');
+        if (terminalScreen) {
+            terminalScreen.addEventListener('keydown', (e) => {
+                // Get terminal data to check if it's a session-based terminal
+                const terminalData = this.terminals.get(terminalId);
+                if (terminalData && terminalData.sessionName && terminalData.sessionName.startsWith('claude-web-')) {
+                    // For session-based terminals, prevent local echo by handling input manually
+                    if (e.ctrlKey || e.altKey || e.metaKey) {
+                        // Allow special key combinations to pass through
+                        return;
+                    }
+                    
+                    // Prevent default for regular character input to avoid duplication
+                    if (e.key.length === 1 || e.key === 'Enter' || e.key === 'Backspace' || e.key === 'Tab') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        // Convert key event to appropriate terminal input
+                        let data = '';
+                        if (e.key === 'Enter') {
+                            data = '\r';
+                        } else if (e.key === 'Backspace') {
+                            data = '\x7f';
+                        } else if (e.key === 'Tab') {
+                            data = '\t';
+                        } else if (e.key.length === 1) {
+                            data = e.key;
+                        }
+                        
+                        if (data && socket.isConnected()) {
+                            socket.sendTerminalInput(terminalData.sessionName, data);
+                        }
+                    }
+                }
+            });
         }
         
         // Setup terminal event handlers
@@ -185,9 +252,18 @@ class TerminalManager extends EventEmitter {
         // Resize observer for responsive terminal
         if (window.ResizeObserver) {
             const resizeObserver = new ResizeObserver(() => {
-                if (terminalData.isActive) {
-                    fitAddon.fit();
-                    this.updateTerminalSize(terminalId);
+                // Always call fit when terminal container is resized, regardless of active state
+                // This ensures terminal fills the available space properly
+                try {
+                    // Use debouncing to avoid excessive fitting
+                    clearTimeout(terminalData.resizeTimeout);
+                    terminalData.resizeTimeout = setTimeout(() => {
+                        fitAddon.fit();
+                        this.updateTerminalSize(terminalId);
+                        console.log(`Terminal ${terminalId} resized via ResizeObserver`);
+                    }, 100);
+                } catch (error) {
+                    console.warn(`Failed to fit terminal ${terminalId} in ResizeObserver:`, error);
                 }
             });
             resizeObserver.observe(terminalWrapper);
@@ -203,16 +279,28 @@ class TerminalManager extends EventEmitter {
         let inputBuffer = '';
         let lastCommandSent = '';
         
-        // Handle data input
+        // Handle data input with proper echo prevention
         terminal.onData((data) => {
             const terminalData = this.terminals.get(terminalId);
             if (!terminalData) return;
             
             // For interactive applications like Claude Code, send all input directly to server
             // without local processing to ensure interactive prompts work correctly
-            if (projectId && socket.isConnected()) {
-                this.sendTerminalInputSafely(projectId, data, terminalId);
-                return;
+            if (socket.isConnected()) {
+                // Support both session-based and project-based input
+                if (terminalData.sessionName && terminalData.sessionName.startsWith('claude-web-')) {
+                    // New session-based approach - send input to server without local echo
+                    // The server will echo it back, preventing character duplication
+                    
+                    // Prevent local echo by not writing to terminal here
+                    // Only send to server and let server handle echo
+                    socket.sendTerminalInput(terminalData.sessionName, data);
+                    return;
+                } else if (projectId) {
+                    // Legacy project-based approach
+                    this.sendTerminalInputSafely(projectId, data, terminalId);
+                    return;
+                }
             }
             
             // Local terminal fallback when not connected to server
@@ -415,6 +503,37 @@ class TerminalManager extends EventEmitter {
             return 'light';
         }
         return 'dark'; // Default to dark theme
+    }
+    
+    calculateTerminalSize(fontSize = 14) {
+        try {
+            // Get container dimensions
+            const container = this.container;
+            if (!container) {
+                return { rows: 24, cols: 80 }; // Default fallback
+            }
+            
+            // Calculate available space
+            const containerRect = container.getBoundingClientRect();
+            const availableWidth = containerRect.width || window.innerWidth * 0.6; // Fallback to 60% of window width
+            const availableHeight = containerRect.height || window.innerHeight * 0.6; // Fallback to 60% of window height
+            
+            // Character dimensions based on font size
+            const charWidth = fontSize * 0.6; // Approximate character width
+            const charHeight = fontSize * 1.2; // Line height
+            
+            // Calculate rows and columns with padding
+            const padding = 32; // Account for padding
+            const cols = Math.max(80, Math.floor((availableWidth - padding) / charWidth));
+            const rows = Math.max(24, Math.floor((availableHeight - padding) / charHeight));
+            
+            console.log(`Terminal size calculated: ${cols}x${rows} (container: ${availableWidth}x${availableHeight})`);
+            
+            return { rows, cols };
+        } catch (error) {
+            console.warn('Failed to calculate terminal size:', error);
+            return { rows: 24, cols: 80 }; // Safe fallback
+        }
     }
     
     getThemeConfig(themeName) {
@@ -768,8 +887,12 @@ class TerminalManager extends EventEmitter {
             const currentData = this.terminals.get(this.activeTerminal);
             if (currentData) {
                 currentData.isActive = false;
-                DOM.removeClass(currentData.element, 'active');
-                DOM.removeClass(currentData.tab, 'active');
+                if (currentData.element) {
+                    DOM.removeClass(currentData.element, 'active');
+                }
+                if (currentData.tab) {
+                    DOM.removeClass(currentData.tab, 'active');
+                }
             }
         }
         
@@ -778,18 +901,49 @@ class TerminalManager extends EventEmitter {
         if (terminalData) {
             this.activeTerminal = terminalId;
             terminalData.isActive = true;
-            DOM.addClass(terminalData.element, 'active');
-            DOM.addClass(terminalData.tab, 'active');
             
-            // Fit and focus terminal
-            terminalData.fitAddon.fit();
-            terminalData.terminal.focus();
+            // Handle both old-style and session-style terminals
+            if (terminalData.element) {
+                DOM.addClass(terminalData.element, 'active');
+            }
+            
+            // Force fit terminal when activated to ensure proper sizing
+            if (terminalData.fitAddon) {
+                setTimeout(() => {
+                    try {
+                        terminalData.fitAddon.fit();
+                        console.log(`Terminal ${terminalId} fitted on activation`);
+                    } catch (error) {
+                        console.warn(`Failed to fit terminal ${terminalId} on activation:`, error);
+                    }
+                }, 50); // Small delay to ensure DOM is updated
+            }
+            if (terminalData.tab) {
+                DOM.addClass(terminalData.tab, 'active');
+            }
+            
+            // Fit and focus terminal (if created)
+            if (terminalData.fitAddon) {
+                terminalData.fitAddon.fit();
+            }
+            if (terminalData.terminal) {
+                terminalData.terminal.focus();
+            }
+            
+            // For session-style terminals, use selectSessionTab if available
+            if (terminalData.sessionName && this.selectSessionTab) {
+                this.selectSessionTab(terminalData.sessionName);
+                return; // selectSessionTab will handle activation
+            }
             
             // Sync project selection when terminal is activated
             if (terminalData.projectId && window.projectManager) {
                 const currentProject = window.projectManager.getCurrentProject();
                 if (!currentProject || currentProject.id !== terminalData.projectId) {
-                    window.projectManager.selectProject(terminalData.projectId);
+                    // Prevent infinite loop
+                    if (window.projectManager.selectProject !== arguments.callee) {
+                        window.projectManager.selectProject(terminalData.projectId);
+                    }
                 }
             }
             
@@ -804,6 +958,19 @@ class TerminalManager extends EventEmitter {
         // Clean up
         if (terminalData.resizeObserver) {
             terminalData.resizeObserver.disconnect();
+        }
+        
+        // Clear timeout handlers
+        if (terminalData.resizeTimeout) {
+            clearTimeout(terminalData.resizeTimeout);
+        }
+        if (terminalData.windowResizeTimeout) {
+            clearTimeout(terminalData.windowResizeTimeout);
+        }
+        
+        // Remove window resize handler
+        if (terminalData.windowResizeHandler) {
+            window.removeEventListener('resize', terminalData.windowResizeHandler);
         }
         
         terminalData.terminal.dispose();
@@ -1108,6 +1275,18 @@ class TerminalManager extends EventEmitter {
                 DOM.addClass(terminalData.element, 'active');
                 DOM.addClass(terminalData.tab, 'active');
                 
+                // Force fit terminal when set as active to ensure proper sizing
+                if (terminalData.fitAddon) {
+                    setTimeout(() => {
+                        try {
+                            terminalData.fitAddon.fit();
+                            console.log(`Terminal ${terminalId} fitted in setActiveTerminalSafely`);
+                        } catch (error) {
+                            console.warn(`Failed to fit terminal ${terminalId} in setActiveTerminalSafely:`, error);
+                        }
+                    }, 50); // Small delay to ensure DOM is updated
+                }
+                
                 // Verify visibility
                 const isVisible = terminalData.element.offsetWidth > 0 && terminalData.element.offsetHeight > 0;
                 if (!isVisible && retryCount < maxRetries) {
@@ -1202,9 +1381,7 @@ class TerminalManager extends EventEmitter {
     
     showTerminalError(terminalId, message) {
         // Show user-friendly error notification
-        if (window.notifications) {
-            notifications.error(message, { duration: 3000 });
-        }
+        notifications.error(message, { duration: 3000 });
         
         // Optionally write error to terminal
         const terminalData = this.terminals.get(terminalId);
@@ -1282,32 +1459,57 @@ class TerminalManager extends EventEmitter {
     
     // Socket event handlers
     handleTerminalOutput(data) {
-        const { projectId, data: output } = data;
+        const { sessionName, data: output } = data;
         
-        // Find terminal for this project
-        for (const [terminalId, terminalData] of this.terminals.entries()) {
-            if (terminalData.projectId === projectId) {
-                // Write output directly without filtering to preserve interactive application behavior
+        // Route directly by sessionName 
+        if (sessionName) {
+            const terminalData = this.terminals.get(sessionName);
+            if (terminalData && terminalData.terminal) {
+                console.log(`📝 Writing output to ${sessionName}:`, {
+                    outputLength: output.length,
+                    isAttached: terminalData.isAttached,
+                    hasNewlines: output.includes('\n'),
+                    lineCount: output.split('\n').length,
+                    preview: output.substring(0, 100).replace(/\r?\n/g, '\\n')
+                });
+                
+                // Server handles formatting, just write the output directly
+                // The backend already sends properly formatted content with correct line endings
                 terminalData.terminal.write(output);
-                break;
+                
+                // Mark as attached if we receive output (indicates successful connection)
+                if (!terminalData.isAttached) {
+                    console.log(`🔗 Auto-marking session as attached due to output: ${sessionName}`);
+                    terminalData.isAttached = true;
+                }
+            } else {
+                console.warn(`❌ No terminal found for session ${sessionName}`);
             }
+        } else {
+            console.warn('❌ Received output without sessionName:', data);
         }
     }
     
     handleTerminalInputError(data) {
-        const { projectId, message, details } = data;
-        console.error(`Terminal input error for project ${projectId}: ${message}`, details);
+        const { projectId, sessionName, message, details } = data;
+        const identifier = sessionName || projectId;
+        console.error(`Terminal input error for ${identifier}: ${message}`, details);
         
-        // Find terminal for this project
+        // Find terminal for this session or project
         for (const [terminalId, terminalData] of this.terminals.entries()) {
-            if (terminalData.projectId === projectId) {
+            if (terminalData.sessionName === sessionName || terminalData.projectId === projectId) {
                 this.showTerminalError(terminalId, message);
                 
                 // If it's a session not found error, try to reconnect
                 if (details && details.includes('Terminal session needs to be created')) {
-                    console.log(`Attempting to recreate terminal session for ${projectId}`);
-                    // Trigger project rejoin to recreate terminal session
-                    if (projectManager && projectManager.currentProject === projectId) {
+                    console.log(`Attempting to recreate terminal session for ${identifier}`);
+                    // For session-based terminals, try to reconnect to session
+                    if (sessionName) {
+                        setTimeout(() => {
+                            this.attachToSession(sessionName);
+                        }, 1000);
+                    } else if (projectManager && projectManager.currentProject === projectId) {
+                        // Legacy project-based reconnection
                         setTimeout(() => {
                             projectManager.selectProject(projectId);
                         }, 1000);
@@ -1368,9 +1570,7 @@ class TerminalManager extends EventEmitter {
                 terminalData.terminal.clear();
                 
                 // Show non-intrusive notification instead of terminal message
-                if (window.notifications) {
-                    window.notifications.success('Terminal session restarted successfully');
-                }
+                notifications.success('Terminal session restarted successfully');
                 
                 // Enhanced resize with proper timing and validation
                 this.performEnhancedResize(terminalData, terminalId);
@@ -1413,15 +1613,473 @@ class TerminalManager extends EventEmitter {
     
     // Tmux session management
     async listSessions() {
-        socket.emit('terminal:list-sessions', {});
+        socket.socket.emit('terminal:list-sessions', {});
     }
     
     async attachSession(projectId) {
-        socket.emit('terminal:attach-session', { projectId });
+        socket.socket.emit('terminal:attach-session', { projectId });
     }
     
     async detachSession(projectId) {
-        socket.emit('terminal:detach-session', { projectId });
+        socket.socket.emit('terminal:detach-session', { projectId });
+    }
+    
+    async loadAllSessions() {
+        try {
+            const response = await fetch('/api/sessions');
+            const data = await response.json();
+            
+            if (data.success) {
+                // Filter only claude-web sessions
+                const claudeWebSessions = data.sessions.filter(session => 
+                    session.name.startsWith('claude-web-')
+                );
+                this.displayAllSessions(claudeWebSessions);
+                
+                // Select first session by default when no target is specified
+                if (claudeWebSessions.length > 0) {
+                    await this.selectSessionTab(claudeWebSessions[0].name);
+                }
+            } else {
+                console.error('Failed to load sessions:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading sessions:', error);
+        }
+    }
+    
+    async loadAllSessionsAndSelect(targetSessionName) {
+        try {
+            // API call to get session info
+            const response = await fetch('/api/sessions');
+            const data = await response.json();
+            
+            if (data.success) {
+                console.log('✅ Sessions API response:', data.sessions);
+                
+                // Filter only claude-web sessions
+                const claudeWebSessions = data.sessions.filter(session => 
+                    session.name.startsWith('claude-web-')
+                );
+                
+                console.log('🔍 Filtered claude-web sessions:', claudeWebSessions.map(s => s.name));
+                
+                this.displayAllSessions(claudeWebSessions);
+                
+                // Auto-select the target session if it exists
+                if (targetSessionName) {
+                    const targetSession = claudeWebSessions.find(session => 
+                        session.name === targetSessionName
+                    );
+                    if (targetSession) {
+                        console.log('🎯 Found target session, selecting:', targetSessionName);
+                        // Give UI time to render, then select the session
+                        setTimeout(async () => {
+                            await this.selectSessionTab(targetSessionName);
+                        }, 100); // Reduced delay for better responsiveness
+                    } else {
+                        console.warn(`❌ Target session ${targetSessionName} not found in loaded sessions:`, claudeWebSessions.map(s => s.name));
+                        // Fallback to first session if target not found
+                        if (claudeWebSessions.length > 0) {
+                            console.log('🔄 Falling back to first session:', claudeWebSessions[0].name);
+                            setTimeout(async () => {
+                                await this.selectSessionTab(claudeWebSessions[0].name);
+                            }, 100);
+                        }
+                    }
+                } else {
+                    // If no target specified, select first session
+                    if (claudeWebSessions.length > 0) {
+                        setTimeout(async () => {
+                            await this.selectSessionTab(claudeWebSessions[0].name);
+                        }, 100);
+                    }
+                }
+            } else {
+                console.error('Failed to load sessions:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading sessions:', error);
+        }
+    }
+    
+    displayAllSessions(sessions) {
+        // Clear existing tabs
+        this.tabsContainer.innerHTML = '';
+        this.terminals.clear();
+        
+        // Create tabs for all sessions - now based on session name, not project
+        sessions.forEach(session => {
+            this.createSessionTab(session);
+        });
+        
+        // Hide welcome screen if we have sessions
+        if (sessions.length > 0) {
+            this.hideWelcomeScreen();
+            // Don't auto-select first session - let caller decide which session to select
+        } else {
+            this.showWelcomeScreen();
+        }
+    }
+    
+    createSessionTab(session) {
+        const tabId = `tab-${session.name}`;
+        const isActive = this.activeTerminal === null; // First tab is active
+        
+        const tabElement = document.createElement('div');
+        tabElement.className = `terminal-tab ${isActive ? 'active' : ''}`;
+        tabElement.id = tabId;
+        tabElement.innerHTML = `
+            <span class="tab-title">${session.name}</span>
+            <button class="tab-close" onclick="terminalManager.showDeleteConfirmation('${session.name}')">
+                ✕
+            </button>
+        `;
+        
+        // Add click handler for tab selection
+        tabElement.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('tab-close')) {
+                this.selectSessionTab(session.name);
+            }
+        });
+        
+        this.tabsContainer.appendChild(tabElement);
+        
+        // Create terminal instance for this session - now purely session-based
+        const terminalData = {
+            id: session.name,
+            sessionName: session.name,
+            element: null,
+            terminal: null,
+            isActive: isActive,
+            isAttached: false // Track if session is already attached to prevent duplicates
+        };
+        
+        this.terminals.set(session.name, terminalData);
+        
+        if (isActive) {
+            this.activeTerminal = session.name;
+            this.activateSessionTab(session.name);
+        }
+    }
+    
+    async createNewSession() {
+        // Create a new session without project concept
+        socket.socket.emit('terminal:create-new-session', { cols: 80, rows: 24 });
+    }
+    
+    async deleteSession(sessionName) {
+        try {
+            if (!socket || !socket.isConnected()) {
+                notifications.error('Connection lost. Please refresh the page.');
+                return;
+            }
+            
+            if (!sessionName || !sessionName.startsWith('claude-web-')) {
+                notifications.error('Invalid session name format');
+                return;
+            }
+            
+            // Show deleting notification
+            notifications.info(`Deleting session ${sessionName}...`);
+            
+            // Send delete request
+            socket.socket.emit('terminal:delete-session', { sessionName });
+            
+            // Set up timeout for deletion
+            setTimeout(() => {
+                // Check if session still exists after 5 seconds
+                const sessionTab = document.getElementById(`tab-${sessionName}`);
+                if (sessionTab) {
+                    notifications.error(`Failed to delete session ${sessionName}. Please try again.`);
+                }
+            }, 5000);
+            
+        } catch (error) {
+            notifications.error('Failed to delete session: ' + error.message);
+        }
+    }
+    
+    showDeleteConfirmation(sessionName) {
+        const confirmed = confirm(`Are you sure you want to delete session "${sessionName}"?\n\nThis will permanently delete the tmux session and all its data.`);
+        
+        if (confirmed) {
+            this.deleteSession(sessionName);
+        }
+    }
+    
+    async selectSessionTab(sessionName) {
+        // Deactivate current tab
+        const currentTab = this.tabsContainer.querySelector('.terminal-tab.active');
+        if (currentTab) {
+            currentTab.classList.remove('active');
+        }
+        
+        // Activate selected tab
+        const selectedTab = document.getElementById(`tab-${sessionName}`);
+        if (selectedTab) {
+            selectedTab.classList.add('active');
+            this.activeTerminal = sessionName;
+            await this.activateSessionTab(sessionName);
+        }
+    }
+    
+    async activateSessionTab(sessionName) {
+        const terminalData = this.terminals.get(sessionName);
+        if (!terminalData) return;
+        
+        console.log('🎯 Activating session tab:', sessionName);
+        
+        // Set all terminals as inactive
+        this.terminals.forEach((data, id) => {
+            data.isActive = false;
+        });
+        
+        // Set this terminal as active
+        terminalData.isActive = true;
+        
+        // Hide all terminal elements
+        this.container.querySelectorAll('.terminal-wrapper').forEach(wrapper => {
+            wrapper.style.display = 'none';
+        });
+        
+        // Show or create terminal for this session
+        if (!terminalData.element) {
+            this.createTerminalElement(terminalData);
+        } else {
+            terminalData.element.style.display = 'block';
+            // Fit and focus if terminal exists
+            if (terminalData.fitAddon) {
+                setTimeout(() => {
+                    try {
+                        terminalData.fitAddon.fit();
+                        console.log(`Session terminal ${sessionName} fitted on tab activation`);
+                    } catch (error) {
+                        console.warn(`Failed to fit session terminal ${sessionName} on tab activation:`, error);
+                    }
+                }, 100); // Increased delay to ensure layout is complete
+            }
+            if (terminalData.terminal) {
+                terminalData.terminal.focus();
+            }
+        }
+        
+        // Only attach to session if not already attached
+        if (!terminalData.isAttached) {
+            console.log('🔗 Attaching to session:', sessionName);
+            try {
+                await this.attachToSessionWithRetry(sessionName);
+                terminalData.isAttached = true;
+                console.log('✅ Session successfully attached:', sessionName);
+            } catch (error) {
+                console.error('❌ Failed to attach session:', sessionName, error);
+                terminalData.isAttached = false;
+            }
+        } else {
+            console.log('✅ Session already attached:', sessionName);
+        }
+    }
+    
+    createTerminalElement(terminalData) {
+        try {
+            console.log('Creating terminal element for:', terminalData.sessionName);
+            
+            // Check if required classes are available
+            if (typeof Terminal === 'undefined') {
+                console.error('Terminal class not available - xterm.js not loaded');
+                return;
+            }
+            
+            if (typeof FitAddon === 'undefined' || typeof FitAddon.FitAddon === 'undefined') {
+                console.error('FitAddon class not available - xterm-addon-fit.js not loaded');
+                return;
+            }
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'terminal-wrapper';
+            wrapper.id = `terminal-${terminalData.id}`;
+            
+            const terminalElement = document.createElement('div');
+            terminalElement.className = 'terminal';
+            
+            wrapper.appendChild(terminalElement);
+            
+            if (!this.container) {
+                console.error('Terminal container not found');
+                return;
+            }
+            
+            this.container.appendChild(wrapper);
+            
+            // Make sure wrapper is visible
+            wrapper.style.display = 'block';
+            
+            // Calculate initial terminal size for session terminal
+            const { rows, cols } = this.calculateTerminalSize(14);
+            
+            // Create xterm.js terminal
+            const terminal = new Terminal({
+                cursorBlink: true,
+                fontSize: 14,
+                fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                rows: rows,
+                cols: cols,
+                theme: {
+                    background: '#1e1e1e',
+                    foreground: '#d4d4d4',
+                    cursor: '#d4d4d4'
+                }
+            });
+            
+            const fitAddon = new FitAddon.FitAddon();
+            terminal.loadAddon(fitAddon);
+            
+            terminal.open(terminalElement);
+            
+            // Store references first
+            terminalData.element = wrapper;
+            terminalData.terminal = terminal;
+            terminalData.fitAddon = fitAddon;
+            
+            // Fit terminal with proper timing and error handling
+            setTimeout(() => {
+                try {
+                    fitAddon.fit();
+                    console.log(`Session terminal ${terminalData.sessionName} fitted on creation`);
+                } catch (error) {
+                    console.warn(`Failed to fit session terminal ${terminalData.sessionName} on creation:`, error);
+                }
+            }, 100); // Delay to ensure DOM is ready
+            
+            // Force an additional fit after DOM is fully rendered for session terminals
+            setTimeout(() => {
+                try {
+                    fitAddon.fit();
+                    console.log(`Session terminal ${terminalData.sessionName} force-fitted after DOM render`);
+                } catch (error) {
+                    console.warn(`Failed to force-fit session terminal ${terminalData.sessionName}:`, error);
+                }
+            }, 300);
+            
+            // Setup terminal events (this will handle input properly)
+            this.setupTerminalEvents(terminal, terminalData.sessionName, null);
+            
+            // Handle resize with debouncing
+            const handleResize = () => {
+                // Always fit when window is resized, regardless of active state
+                try {
+                    clearTimeout(terminalData.windowResizeTimeout);
+                    terminalData.windowResizeTimeout = setTimeout(() => {
+                        fitAddon.fit();
+                        console.log(`Session terminal ${terminalData.sessionName} fitted on window resize`);
+                    }, 150);
+                } catch (error) {
+                    console.warn(`Failed to fit session terminal ${terminalData.sessionName} on window resize:`, error);
+                }
+            };
+            
+            window.addEventListener('resize', handleResize);
+            terminalData.windowResizeHandler = handleResize;
+            
+            console.log('Terminal element created successfully for:', terminalData.sessionName);
+            this.hideWelcomeScreen();
+            
+            // Start attachment process for newly created terminal
+            setTimeout(async () => {
+                if (!terminalData.isAttached) {
+                    console.log('🔗 Auto-attaching newly created terminal:', terminalData.sessionName);
+                    try {
+                        await this.attachToSessionWithRetry(terminalData.sessionName);
+                        terminalData.isAttached = true;
+                    } catch (error) {
+                        console.error('❌ Failed to auto-attach new terminal:', error);
+                    }
+                }
+            }, 500);
+            
+        } catch (error) {
+            console.error('Error creating terminal element:', error);
+        }
+    }
+    
+    attachToSession(sessionName) {
+        const terminalData = this.terminals.get(sessionName);
+        if (!terminalData) return;
+        
+        // Directly attach to the session using its name
+        socket.socket.emit('terminal:attach-session', {
+            sessionName: sessionName
+        });
+    }
+    
+    async attachToSessionWithRetry(sessionName, maxRetries = 3) {
+        const terminalData = this.terminals.get(sessionName);
+        if (!terminalData) {
+            throw new Error('Terminal data not found');
+        }
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            console.log(`🔄 Attach attempt ${attempt}/${maxRetries} for session:`, sessionName);
+            
+            try {
+                // Send attach request
+                socket.socket.emit('terminal:attach-session', {
+                    sessionName: sessionName
+                });
+                
+                // Wait for confirmation or timeout
+                const attached = await this.waitForAttachment(sessionName, 5000);
+                if (attached) {
+                    console.log('✅ Session attached successfully on attempt', attempt);
+                    return true;
+                }
+                
+                if (attempt < maxRetries) {
+                    console.log(`⏳ Attach attempt ${attempt} failed, retrying...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                }
+            } catch (error) {
+                console.error(`❌ Attach attempt ${attempt} error:`, error);
+                if (attempt === maxRetries) {
+                    throw error;
+                }
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            }
+        }
+        
+        throw new Error(`Failed to attach session after ${maxRetries} attempts`);
+    }
+    
+    waitForAttachment(sessionName, timeout = 5000) {
+        return new Promise((resolve) => {
+            const startTime = Date.now();
+            
+            const checkAttachment = () => {
+                const terminalData = this.terminals.get(sessionName);
+                
+                // Check if we received any output (indicates successful attachment)
+                if (terminalData && terminalData.terminal && terminalData.terminal.buffer) {
+                    const hasContent = terminalData.terminal.buffer.active.length > 0;
+                    if (hasContent) {
+                        resolve(true);
+                        return;
+                    }
+                }
+                
+                // Check timeout
+                if (Date.now() - startTime > timeout) {
+                    console.warn('⏰ Attachment timeout for session:', sessionName);
+                    resolve(false);
+                    return;
+                }
+                
+                // Continue checking
+                setTimeout(checkAttachment, 200);
+            };
+            
+            // Start checking after a brief delay
+            setTimeout(checkAttachment, 500);
+        });
     }
     
     handleSessionsList(data) {
@@ -1440,22 +2098,138 @@ class TerminalManager extends EventEmitter {
                 this.createTerminalForProject(projectId);
             }
             
-            toaster.show({
-                message: `Reconnected to existing session for project ${projectId}`,
-                type: 'success',
-                duration: 3000
-            });
+            notifications.success(`Reconnected to existing session for project ${projectId}`, { duration: 3000 });
         }
     }
     
     handleSessionDetached(data) {
         const { projectId } = data;
         
-        toaster.show({
-            message: `Detached from session. Session remains active in background.`,
-            type: 'info',
-            duration: 3000
-        });
+        notifications.info(`Detached from session. Session remains active in background.`, { duration: 3000 });
+    }
+    
+    handleSessionCreated(data) {
+        const { sessionName, sessionId, tmuxSession, projectName, sequenceNumber } = data;
+        const displayName = sessionName || tmuxSession;
+        
+        // Use a retry mechanism to ensure session is fully ready
+        this.loadSessionsWithRetry(displayName, 0);
+        
+        notifications.success(projectName 
+            ? `New terminal session created for "${projectName}": ${displayName}`
+            : `New terminal session created: ${displayName}`);
+    }
+    
+    async loadSessionsWithRetry(targetSessionName, retryCount = 0) {
+        const maxRetries = 5;
+        const retryDelay = 500;
+        
+        try {
+            const response = await fetch('/api/sessions');
+            const data = await response.json();
+            
+            if (data.success) {
+                const claudeWebSessions = data.sessions.filter(session => 
+                    session.name.startsWith('claude-web-')
+                );
+                
+                // Check if target session exists in the response
+                const targetExists = claudeWebSessions.find(session => 
+                    session.name === targetSessionName
+                );
+                
+                if (targetExists) {
+                    this.displayAllSessions(claudeWebSessions);
+                    
+                    // Select the target session after a short delay
+                    setTimeout(async () => {
+                        await this.selectSessionTab(targetSessionName);
+                    }, 100);
+                    return;
+                } else if (retryCount < maxRetries) {
+                    setTimeout(() => {
+                        this.loadSessionsWithRetry(targetSessionName, retryCount + 1);
+                    }, retryDelay);
+                    return;
+                } else {
+                    // Target session not found after max retries, load all sessions
+                    this.displayAllSessions(claudeWebSessions);
+                    if (claudeWebSessions.length > 0) {
+                        setTimeout(async () => {
+                            await this.selectSessionTab(claudeWebSessions[0].name);
+                        }, 100);
+                    }
+                }
+            } else {
+                throw new Error(data.error || 'Failed to load sessions');
+            }
+        } catch (error) {
+            if (retryCount < maxRetries) {
+                setTimeout(() => {
+                    this.loadSessionsWithRetry(targetSessionName, retryCount + 1);
+                }, retryDelay);
+            } else {
+                notifications.error('Failed to refresh terminal sessions. Please refresh the page.');
+            }
+        }
+    }
+    
+    handleSessionDeleted(data) {
+        const { sessionName, success } = data;
+        
+        if (!sessionName) {
+            return;
+        }
+        
+        try {
+            // Remove the tab
+            const tabElement = document.getElementById(`tab-${sessionName}`);
+            if (tabElement) {
+                tabElement.remove();
+            }
+            
+            // Remove terminal data and clean up
+            const terminalData = this.terminals.get(sessionName);
+            if (terminalData) {
+                if (terminalData.element) {
+                    terminalData.element.remove();
+                }
+                
+                // Clear timeout handlers for session terminals
+                if (terminalData.windowResizeTimeout) {
+                    clearTimeout(terminalData.windowResizeTimeout);
+                }
+                
+                // Remove window resize handler for session terminals
+                if (terminalData.windowResizeHandler) {
+                    window.removeEventListener('resize', terminalData.windowResizeHandler);
+                }
+                
+                // Clean up attachment state
+                terminalData.isAttached = false;
+            }
+            
+            this.terminals.delete(sessionName);
+            
+            // If this was the active terminal, select another one
+            if (this.activeTerminal === sessionName) {
+                this.activeTerminal = null;
+                const remainingTabs = this.tabsContainer.querySelectorAll('.terminal-tab');
+                if (remainingTabs.length > 0) {
+                    const firstTab = remainingTabs[0];
+                    const firstSessionName = firstTab.id.replace('tab-', '');
+                    (async () => await this.selectSessionTab(firstSessionName))();
+                } else {
+                    this.showWelcomeScreen();
+                }
+            }
+            
+            // Show success message
+            notifications.success(`Session "${sessionName}" deleted successfully`);
+            
+        } catch (error) {
+            notifications.error(`Error cleaning up deleted session: ${error.message}`);
+        }
     }
     
     showSessionsDialog(sessions) {
@@ -1545,18 +2319,113 @@ class TerminalManager extends EventEmitter {
             terminalHeader.appendChild(sessionBtn);
         }
     }
+    
+    showWelcomeScreen() {
+        if (this.welcomeScreen) {
+            this.welcomeScreen.style.display = 'block';
+        }
+        
+        // Hide all terminal wrappers
+        this.container.querySelectorAll('.terminal-wrapper').forEach(wrapper => {
+            wrapper.style.display = 'none';
+        });
+    }
+    
+    hideWelcomeScreen() {
+        if (this.welcomeScreen) {
+            this.welcomeScreen.style.display = 'none';
+        }
+    }
+    
+    // Error handling methods
+    handleSocketError(error) {
+        console.error('🔌 Socket error:', error);
+        notifications.error('Connection error: ' + (error.message || 'Unknown error'), { duration: 5000 });
+    }
+    
+    handleConnectionError(error) {
+        console.error('🔌 Connection error:', error);
+        notifications.error('Failed to connect to server. Please check your connection.', { duration: 5000 });
+    }
+    
+    handleDisconnection(reason) {
+        console.warn('🔌 Disconnected from server:', reason);
+        
+        if (reason === 'io server disconnect') {
+            // Server disconnected the client
+            notifications.warning('Disconnected from server. Please refresh the page.', { duration: 8000 });
+        } else {
+            // Client disconnected
+            notifications.info('Connection lost. Attempting to reconnect...', { duration: 3000 });
+        }
+        
+        // Mark all terminals as disconnected
+        this.terminals.forEach((terminalData) => {
+            if (terminalData.isAttached) {
+                terminalData.isAttached = false;
+            }
+        });
+    }
+    
+    // Enhanced error handling for terminal operations
+    handleTerminalOperationError(operation, sessionName, error) {
+        console.error(`❌ Terminal ${operation} failed:`, { sessionName, error });
+        
+        let message = `Failed to ${operation}`;
+        if (sessionName) {
+            message += ` for session "${sessionName}"`;
+        }
+        message += ': ' + (error.message || error);
+        
+        notifications.error(message, { duration: 5000 });
+    }
+    
+    // Utility method to check connection status
+    isConnected() {
+        return socket && socket.isConnected();
+    }
+    
+    // Utility method to ensure connection before operations
+    ensureConnection(operationName = 'operation') {
+        if (!this.isConnected()) {
+            notifications.error(`Cannot perform ${operationName}: Not connected to server`);
+            return false;
+        }
+        return true;
+    }
 }
 
 // Initialize terminal manager
 const terminalManager = new TerminalManager();
 
+// Make terminal manager globally available immediately
+window.terminalManager = terminalManager;
+
 // Add session management UI after DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     terminalManager.addSessionManagementUI();
+    
+    // Add event listener for new terminal button
+    const newTerminalBtn = document.getElementById('welcome-new-terminal');
+    if (newTerminalBtn) {
+        newTerminalBtn.addEventListener('click', () => {
+            terminalManager.createNewSession();
+        });
+    }
+    
+    // Load all sessions after DOM is ready and socket is connected
+    const loadSessionsWhenReady = () => {
+        if (socket && socket.isConnected()) {
+            console.log('🔄 Socket connected, loading sessions...');
+            terminalManager.loadAllSessions();
+        } else {
+            console.log('⏳ Waiting for socket connection...');
+            setTimeout(loadSessionsWhenReady, 500);
+        }
+    };
+    
+    setTimeout(loadSessionsWhenReady, 1000);
 });
-
-// Make terminal manager globally available
-window.terminalManager = terminalManager;
 
 // Export for other modules
 if (typeof module !== 'undefined' && module.exports) {
