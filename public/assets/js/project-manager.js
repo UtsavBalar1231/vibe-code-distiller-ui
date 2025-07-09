@@ -281,6 +281,9 @@ class ProjectManager extends EventEmitter {
             
             this.emit('project_selected', project);
             
+            // Auto-select corresponding terminal tab if exists
+            this.autoSelectTerminalTab(project);
+            
             // Notify file manager about project change
             if (window.fileManager) {
                 document.dispatchEvent(new CustomEvent('projectChanged', {
@@ -919,6 +922,82 @@ class ProjectManager extends EventEmitter {
         if (this.currentProject === projectId) {
             notifications.warning(`Project ${projectId} disconnected`, { duration: 3000 });
         }
+    }
+    
+    /**
+     * Auto-select terminal tab when project is selected
+     */
+    autoSelectTerminalTab(project) {
+        if (!project || !window.terminalManager) {
+            return;
+        }
+        
+        // Get all terminal tabs
+        const terminalTabs = document.querySelectorAll('.terminal-tab');
+        if (!terminalTabs.length) {
+            return;
+        }
+        
+        // Find tabs for this project (command naming rule: claude-web-{projectName}-{number})
+        const projectTerminalTabs = [];
+        terminalTabs.forEach(tab => {
+            const tabTitle = tab.querySelector('.tab-title, .title');
+            if (tabTitle) {
+                const tabName = tabTitle.textContent.trim();
+                const projectName = this.extractProjectNameFromTerminalName(tabName);
+                
+                if (projectName === project.name) {
+                    projectTerminalTabs.push({
+                        tab: tab,
+                        name: tabName,
+                        element: tab
+                    });
+                }
+            }
+        });
+        
+        // Select the first terminal tab for this project (from left to right)
+        if (projectTerminalTabs.length > 0) {
+            const firstTab = projectTerminalTabs[0];
+            
+            // If it's a session-based tab, use terminalManager to select it
+            if (window.terminalManager.selectSessionTab && firstTab.name.startsWith('claude-web-')) {
+                window.terminalManager.selectSessionTab(firstTab.name);
+            } else {
+                // For legacy terminal tabs, trigger click event
+                firstTab.tab.click();
+            }
+        }
+    }
+    
+    /**
+     * Extract project name from terminal tab name
+     * Expected format: claude-web-{projectName}-{number}
+     */
+    extractProjectNameFromTerminalName(terminalName) {
+        if (!terminalName || !this.isValidTerminalName(terminalName)) {
+            return null;
+        }
+        
+        // Parse: claude-web-{projectName}-{number}
+        const match = terminalName.match(/^claude-web-(.+)-\d+$/);
+        if (match) {
+            return match[1];
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Validate terminal name format
+     */
+    isValidTerminalName(terminalName) {
+        if (!terminalName || typeof terminalName !== 'string') {
+            return false;
+        }
+        
+        // Check naming rule: claude-web-{projectName}-{number}
+        return /^claude-web-.+-\d+$/.test(terminalName);
     }
 }
 
