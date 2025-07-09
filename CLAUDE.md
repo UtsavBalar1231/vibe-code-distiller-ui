@@ -36,6 +36,7 @@ The application follows a layered service architecture built on Express.js:
 - `claude-manager.js` - Manages Claude AI CLI sessions and processes
 - `terminal-service-tmux.js` - Handles persistent terminal sessions using tmux with real-time discovery
 - `terminal-service.js` - Standard terminal service (non-tmux fallback)
+- `terminal-service-wrapper.js` - Wrapper service for terminal session management
 - `project-service.js` - Project file and directory management
 - `file-service.js` - File system operations and file watching
 
@@ -44,11 +45,14 @@ The application follows a layered service architecture built on Express.js:
 - `/api/projects` - Project management operations (CRUD)
 - `/api/claude` - Claude AI integration endpoints
 - `/api/system` - System monitoring and information
+- `/api/files` - File management operations (upload/download)
+- `/api/images` - Image management and preview
 
 **Real-time Communication:**
 - Socket.IO handlers in `socket-handler.js` manage WebSocket connections
 - Event-driven architecture for terminal I/O, project updates, and system monitoring
 - Multi-session support with auto-reconnection handling
+- Real-time system monitoring (CPU, temperature, memory usage)
 
 **Tmux Session Management:**
 - Sessions follow naming convention: `claude-web-{projectId}-{timestamp}`
@@ -56,16 +60,22 @@ The application follows a layered service architecture built on Express.js:
 - No metadata files - tmux serves as single source of truth
 - Automatic session detection and reconnection across devices
 - Session persistence survives application restarts and network interruptions
+- Enhanced terminal session management with improved input handling
 
 ### Client Architecture
 - Pure HTML/CSS/JavaScript frontend (no framework dependencies)
-- xterm.js for browser-based terminal interface
+- xterm.js for browser-based terminal interface with web links addon
 - Socket.IO client for real-time communication
-- Simplified responsive design with dark theme
-- Streamlined interface with core components:
-  - Project selection sidebar
-  - Terminal interface
-  - Basic connection status display
+- Responsive design optimized for mobile and desktop
+- Modern interface with comprehensive features:
+  - Project selection sidebar with resize functionality
+  - Terminal interface with multi-session support
+  - File management with drag-and-drop upload
+  - Image manager with preview capabilities
+  - System monitoring dashboard
+  - Notification system with browser integration
+  - Authentication modal (when enabled)
+  - Mobile-optimized navigation
 
 ### Configuration
 - `config/default.json` - Base configuration (development defaults)
@@ -98,20 +108,34 @@ server/
 │   ├── api.js         # General API routes
 │   ├── claude.js      # Claude AI integration
 │   ├── projects.js    # Project management
-│   └── system.js      # System monitoring
+│   ├── system.js      # System monitoring
+│   ├── files.js       # File management operations
+│   └── images.js      # Image management operations
 ├── services/          # Core business logic
-│   ├── claude-manager.js    # Claude AI session management
-│   ├── terminal-service.js  # Terminal session handling
-│   ├── project-service.js   # Project operations
-│   └── file-service.js      # File system operations
+│   ├── claude-manager.js         # Claude AI session management
+│   ├── terminal-service.js       # Standard terminal service
+│   ├── terminal-service-tmux.js  # Tmux-based terminal service
+│   ├── terminal-service-wrapper.js # Terminal service wrapper
+│   ├── project-service.js        # Project operations
+│   └── file-service.js           # File system operations
 └── utils/             # Logging, constants, validation
 
 public/
 ├── index.html         # Main application page
 └── assets/
-    ├── css/          # Stylesheets
-    ├── js/           # Client-side JavaScript
-    └── libs/         # External libraries (xterm.js, socket.io)
+    ├── css/          # Stylesheets (main.css, components.css, terminal.css)
+    ├── js/           # Client-side JavaScript modules
+    │   ├── app.js           # Main application logic
+    │   ├── socket-client.js # Socket.IO client handling
+    │   ├── terminal.js      # Terminal interface
+    │   ├── project-manager.js # Project management UI
+    │   ├── file-manager.js    # File management UI
+    │   ├── image-manager.js   # Image management UI
+    │   ├── vertical-divider.js # Sidebar resizing
+    │   ├── sidebar-divider.js  # Sidebar panel divider
+    │   └── utils.js           # Utility functions
+    ├── libs/         # External libraries (xterm.js, socket.io)
+    └── icons/        # Application icons
 
 config/               # Configuration files
 logs/                # Application logs
@@ -160,14 +184,59 @@ The application includes specific optimizations for Raspberry Pi deployment:
 ## Feature Updates
 
 - 新增功能：将项目的新功能加入到claude.md中，以便跟踪项目演进和特性更新
-- **Tmux Integration (2025-07-02)**: Added persistent terminal sessions using tmux
+
+### Core Features (2025-07-02 - Present)
+- **Tmux Integration**: Added persistent terminal sessions using tmux
   - Sessions persist across browser/device changes
   - Automatic session discovery and reconnection
   - Cross-device session continuation
   - Session management UI with Ctrl+Shift+S shortcut
   - Optional feature controlled by config/terminal.tmux.enabled
 
-- **Tmux Session Management Optimization (2025-07-08)**: Major refactor to eliminate json file dependency
+- **Enhanced Terminal Management**: Comprehensive terminal session handling
+  - Multiple terminal sessions per project
+  - Terminal restart functionality
+  - Independent terminal session management
+  - Improved input handling and state restoration
+  - Enhanced logging for better debugging
+
+- **File Management System**: Complete file operations interface
+  - Drag-and-drop file upload
+  - File preview modal with error handling
+  - Download functionality for individual files and projects
+  - Double-click file path to terminal integration
+  - Comprehensive file browser replacing basic file listing
+
+- **Image Management**: Dedicated image handling capabilities
+  - Image preview and management interface
+  - Support for common image formats
+  - Integration with file management system
+
+- **System Monitoring**: Real-time system resource tracking
+  - CPU usage monitoring
+  - Temperature monitoring for Raspberry Pi
+  - Memory usage tracking
+  - Live system statistics display
+
+- **Notification System**: Browser-integrated notification support
+  - Desktop notifications for important events
+  - Notification toggle functionality
+  - Permission request handling
+
+- **Mobile Optimization**: Enhanced mobile device support
+  - Responsive interface design
+  - Mobile-friendly navigation
+  - Touch-optimized controls
+  - Sidebar resize functionality
+
+- **UI Enhancements**: Improved user interface components
+  - Resizable sidebar with vertical divider
+  - Project options dropdown with new terminal creation
+  - Enhanced breadcrumb navigation
+  - Dark theme optimization
+
+### Architecture Improvements (2025-07-08)
+- **Tmux Session Management Optimization**: Major refactor to eliminate json file dependency
   - Removed redundant tmux-sessions.json file and related I/O operations
   - Implemented real-time session discovery using tmux commands directly
   - Sessions now use tmux as single source of truth following naming convention: `claude-web-{projectId}-{timestamp}`
@@ -175,3 +244,9 @@ The application includes specific optimizations for Raspberry Pi deployment:
   - Eliminated data synchronization issues between json file and actual tmux state
   - Improved reliability and performance by removing file system dependencies
   - Maintained full API compatibility while making core methods async where needed
+
+- **Enhanced Socket Communication**: Improved real-time communication
+  - Better error handling for socket events
+  - Connection state tracking and auto-reconnection
+  - Project room management for multi-user scenarios
+  - Enhanced authentication middleware for Socket.IO

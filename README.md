@@ -5,16 +5,21 @@ A personal web interface for managing Claude Code CLI on your Raspberry Pi. This
 ## Features
 
 - 🌐 **Web Interface**: Access Claude Code CLI through your browser
-- 🖥️ **Terminal Integration**: Real-time terminal interface using xterm.js
+- 🖥️ **Terminal Integration**: Real-time terminal interface using xterm.js with web links
 - 💾 **Persistent Sessions**: Tmux integration for session persistence across devices
-- 📁 **Project Management**: Browse and manage your coding projects
-- 🔄 **Real-time Updates**: Live terminal output and project changes
-- 📊 **System Monitoring**: Keep an eye on your Raspberry Pi's resources
-- 🎨 **Dark Theme**: Easy on the eyes interface
-- 🔔 **Notifications**: Desktop notifications for important events
-- 📱 **Mobile Friendly**: Works on phones and tablets too
-- 🔧 **File Management**: Upload, download, and manage project files
-- 🖼️ **Image Support**: View and manage images in your projects
+- 📁 **Project Management**: Browse, create, and manage your coding projects
+- 🔄 **Real-time Updates**: Live terminal output, project changes, and system stats
+- 📊 **System Monitoring**: CPU, temperature, and memory monitoring for Raspberry Pi
+- 🎨 **Dark Theme**: Optimized dark interface for comfortable coding
+- 🔔 **Notifications**: Desktop notifications with toggle functionality
+- 📱 **Mobile Optimized**: Responsive design for phones and tablets
+- 🔧 **File Management**: Drag-and-drop upload, download, and file operations
+- 🖼️ **Image Management**: Dedicated image preview and management system
+- 🔐 **Authentication**: Optional authentication system for security
+- 📏 **Resizable UI**: Adjustable sidebar and panel layouts
+- 🔄 **Multi-Session**: Multiple terminal sessions per project
+- 📤 **Project Export**: Download entire projects as archives
+- 🔗 **File-to-Terminal**: Double-click files to send paths to terminal
 
 ## Quick Start
 
@@ -100,6 +105,8 @@ The main configuration file is `config/default.json`. Here are the key settings 
 - `Ctrl+,`: Open settings
 - `Ctrl+Shift+S`: Show tmux session manager
 - `Escape`: Close modals/menus
+- `Ctrl+R`: Restart terminal session
+- Mobile menu toggle available for touch devices
 
 ## Features Explained
 
@@ -111,18 +118,28 @@ When enabled, your terminal sessions become persistent:
 - Press `Ctrl+Shift+S` to see all active sessions
 
 ### File Management
-- Upload files by dragging them into the interface
-- Download individual files or entire project folders
-- Basic file operations (create, delete, rename)
-- Syntax highlighting for code files
-- **Double-click files**: Send file path to terminal for easy Claude Code queries
+- **Drag-and-drop upload**: Drop files directly into the interface
+- **Download functionality**: Download individual files or entire project archives
+- **File operations**: Create, delete, rename files and folders
+- **File preview modal**: Preview files with enhanced error handling
+- **Double-click integration**: Send file path to terminal for easy Claude Code queries
+- **Syntax highlighting**: Code files display with proper syntax highlighting
+
+### Image Management
+- **Dedicated image interface**: Separate image management system
+- **Image preview**: View images directly in the browser
+- **Image upload**: Drag-and-drop image files
+- **Format support**: Common image formats (PNG, JPG, GIF, etc.)
+- **Integrated workflow**: Seamless integration with file management
 
 ### System Monitoring
-Keep track of your Raspberry Pi's health:
-- CPU usage and temperature
-- Memory usage
-- Active processes
-- Network activity
+Keep track of your Raspberry Pi's health with real-time monitoring:
+- **CPU usage**: Real-time CPU utilization percentage
+- **Temperature monitoring**: System temperature for thermal management
+- **Memory usage**: RAM utilization and available memory
+- **Live updates**: Automatic refresh of system statistics
+- **Status indicators**: Visual indicators in the header
+- **Performance tracking**: Monitor system performance during development
 
 ## Troubleshooting
 
@@ -211,13 +228,29 @@ This app is designed for personal use on your local network. It doesn't have aut
 
 ## What's New
 
-### Recent Updates
+### Latest Updates (2025-07-09)
+- **Enhanced Terminal Management**: Improved session handling with better logging
+- **Socket Communication**: Better error handling and connection management
+- **Terminal Restart**: Added terminal restart functionality
+- **UI Improvements**: Enhanced terminal display and sizing fixes
+
+### Recent Major Features (2025-07-08)
+- **Tmux Optimization**: Eliminated JSON file dependency for better performance
+- **Real-time Session Discovery**: Direct tmux command integration
+- **Architecture Simplification**: Reduced code complexity by ~100 lines
+- **Enhanced Reliability**: Improved session persistence and state management
+
+### Core Feature Set (2025-07-02 - 2025-07-08)
 - **Tmux Integration**: Persistent terminal sessions across devices
-- **File Management**: Upload and download project files
-- **Image Support**: View and manage images in projects
-- **Notifications**: Desktop notifications for important events
-- **Mobile Optimization**: Better experience on phones and tablets
+- **File Management**: Comprehensive file operations with drag-and-drop
+- **Image Management**: Dedicated image handling and preview system
+- **Notifications**: Desktop notifications with toggle functionality
+- **Mobile Optimization**: Responsive design for all devices
 - **System Monitoring**: Real-time Pi resource monitoring
+- **Resizable UI**: Adjustable sidebar and panel layouts
+- **Multi-Session Support**: Multiple terminal sessions per project
+- **Project Export**: Download entire projects as archives
+- **Authentication**: Optional security layer when needed
 
 ## License
 
