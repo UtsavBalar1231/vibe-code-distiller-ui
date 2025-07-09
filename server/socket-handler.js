@@ -1207,7 +1207,6 @@ class SocketManager {
         logger.warn('Session does not exist:', { sessionName, socketId: socket.id });
         // Still broadcast deletion event since session is effectively gone
         this.io.emit('terminal:session-deleted', { sessionName, success: true });
-        socket.emit('terminal:session-deleted', { sessionName, success: true });
         return;
       }
       
@@ -1233,9 +1232,6 @@ class SocketManager {
         
         // Broadcast to all clients that the session was deleted
         this.io.emit('terminal:session-deleted', { sessionName, success: true });
-        
-        // Send confirmation to requesting client
-        socket.emit('terminal:session-deleted', { sessionName, success: true });
       } else {
         logger.error('Failed to delete session:', { sessionName, socketId: socket.id });
         socket.emit(WEBSOCKET.EVENTS.ERROR, { 
