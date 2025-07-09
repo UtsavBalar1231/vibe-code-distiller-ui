@@ -39,11 +39,23 @@ class TmuxUtils {
       const cmd = `tmux new-session -d -s ${sessionName} ${cdCmd ? `-c ${workingDir}` : ''}`;
       await execAsync(cmd);
       
-      // Disable status bar for web terminal manager use case
-      // This prevents the delayed status bar appearance that confuses users
-      await execAsync(`tmux set-option -t ${sessionName} status off`);
+      // Configure session for persistence and web terminal use
+      await execAsync(`tmux set-option -t ${sessionName} status off`); // Disable status bar
+      await execAsync(`tmux set-option -t ${sessionName} remain-on-exit on`); // Keep windows alive when command exits
+      await execAsync(`tmux set-option -t ${sessionName} destroy-unattached off`); // Don't destroy when no clients attached
       
-      logger.info(`Created tmux session with disabled status bar: ${sessionName}`);
+      // Configure for programmatic use and prevent automatic exit
+      await execAsync(`tmux set-option -t ${sessionName} exit-empty off`); // Don't exit when all windows are closed
+      await execAsync(`tmux set-option -t ${sessionName} detach-on-destroy off`); // Don't detach when session destroyed
+      
+      // Set reasonable limits for web use
+      await execAsync(`tmux set-option -t ${sessionName} history-limit 10000`);
+      
+      // Set environment variables in the session to prevent shell timeout
+      await execAsync(`tmux set-environment -t ${sessionName} TMOUT ""`); // Disable bash timeout
+      await execAsync(`tmux set-environment -t ${sessionName} TERM xterm-256color`);
+      
+      logger.info(`Created persistent tmux session: ${sessionName}`);
       return true;
     } catch (error) {
       logger.error(`Failed to create tmux session: ${error.message}`);
