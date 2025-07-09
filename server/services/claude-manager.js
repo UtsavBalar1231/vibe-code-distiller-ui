@@ -405,10 +405,12 @@ class ClaudeManager {
     this.sessions = new Map();
     this.maxSessions = CLAUDE.MAX_SESSIONS;
     
-    // Clean up inactive sessions periodically
-    setInterval(() => {
-      this.cleanupInactiveSessions();
-    }, 300000); // Every 5 minutes
+    // DISABLED: Auto cleanup is disabled to ensure session persistence
+    // Users should manually manage Claude sessions when needed
+    // 
+    // setInterval(() => {
+    //   this.cleanupInactiveSessions();
+    // }, 300000); // Every 5 minutes
   }
 
   async startSession(projectId, projectPath, options = {}) {

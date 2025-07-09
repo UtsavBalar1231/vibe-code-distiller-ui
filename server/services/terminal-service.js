@@ -368,10 +368,13 @@ class TerminalService {
     this.sessions = new Map();
     this.maxSessions = 10; // Allow more terminal sessions than Claude sessions
     
-    // Clean up inactive sessions periodically
-    setInterval(() => {
-      this.cleanupInactiveSessions();
-    }, 300000); // Every 5 minutes
+    // DISABLED: Auto cleanup is disabled to ensure session persistence
+    // Users should manually delete sessions when needed
+    // The app's main purpose is to provide persistent cross-device terminal access
+    // 
+    // setInterval(() => {
+    //   this.cleanupInactiveSessions();
+    // }, 300000); // Every 5 minutes
   }
 
   async createSession(sessionId, options = {}) {
