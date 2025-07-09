@@ -353,6 +353,13 @@ class SocketManager {
         return;
       }
 
+      // Join terminal room if not already joined
+      const terminalRoomName = `terminal-${sessionName}`;
+      if (!socket.rooms.has(terminalRoomName)) {
+        socket.join(terminalRoomName);
+        logger.debug('Socket joined terminal room:', { socketId: socket.id, sessionName, roomName: terminalRoomName });
+      }
+
       // Check if terminal session exists and is active before sending input
       const currentTerminalStatus = await terminalService.getSessionStatus(sessionName);
       if (!currentTerminalStatus.exists) {
@@ -385,32 +392,8 @@ class SocketManager {
             throw new Error('Session failed to become active after reconnection');
           }
           
-          // Set up terminal session callbacks after reconnection
-          terminalService.setupSessionCallbacks(sessionName, {
-            onData: (data) => {
-              logger.debug('Terminal output from reconnected session:', { sessionName, dataLength: data.length });
-              socket.emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
-                sessionName,
-                data,
-                timestamp: new Date().toISOString()
-              });
-            },
-            onExit: (exitCode, signal) => {
-              socket.emit(WEBSOCKET.EVENTS.NOTIFICATION, {
-                type: 'terminal_session_ended',
-                message: `Terminal session ${sessionName} ended (code: ${exitCode})`,
-                sessionName,
-                timestamp: new Date().toISOString()
-              });
-            },
-            onError: (error) => {
-              socket.emit(WEBSOCKET.EVENTS.ERROR, {
-                message: 'Terminal session error',
-                details: error.message,
-                sessionName
-              });
-            }
-          });
+          // Set up terminal session callbacks after reconnection using room broadcast
+          terminalService.setupSessionCallbacks(sessionName, this.io, terminalRoomName);
           
           logger.info('Successfully reconnected to terminal session:', { sessionName });
         } catch (reconnectError) {
@@ -837,6 +820,16 @@ class SocketManager {
       this.handleLeaveProject(socket, { projectId: socket.metadata.projectId });
     }
     
+    // Leave all terminal rooms
+    const socketRooms = Array.from(socket.rooms);
+    const terminalRooms = socketRooms.filter(room => room.startsWith('terminal-'));
+    if (terminalRooms.length > 0) {
+      logger.debug('Client left terminal rooms on disconnect:', { 
+        socketId: socket.id, 
+        terminalRooms 
+      });
+    }
+    
     // Remove from connections
     this.connections.delete(socket.id);
   }
@@ -926,6 +919,11 @@ class SocketManager {
         return;
       }
 
+      // Join terminal room for this session
+      const terminalRoomName = `terminal-${sessionName}`;
+      socket.join(terminalRoomName);
+      logger.debug('Socket joined terminal room on attach:', { socketId: socket.id, sessionName, roomName: terminalRoomName });
+
       // Check if tmux session exists
       const TmuxUtils = require('./utils/tmux-utils');
       const sessionExists = await TmuxUtils.hasSession(sessionName);
@@ -959,32 +957,8 @@ class SocketManager {
         throw new Error(`Session ${sessionName} failed to become active`);
       }
       
-      // Set up terminal session callbacks for this specific session
-      terminalService.setupSessionCallbacks(sessionName, {
-        onData: (data) => {
-          logger.debug('Terminal output from attached session:', { sessionName, dataLength: data.length });
-          socket.emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
-            sessionName,
-            data,
-            timestamp: new Date().toISOString()
-          });
-        },
-        onExit: (exitCode, signal) => {
-          socket.emit(WEBSOCKET.EVENTS.NOTIFICATION, {
-            type: 'terminal_session_ended',
-            message: `Terminal session ${sessionName} ended (code: ${exitCode})`,
-            sessionName,
-            timestamp: new Date().toISOString()
-          });
-        },
-        onError: (error) => {
-          socket.emit(WEBSOCKET.EVENTS.ERROR, {
-            message: 'Terminal session error',
-            details: error.message,
-            sessionName
-          });
-        }
-      });
+      // Set up terminal session callbacks using room broadcast
+      terminalService.setupSessionCallbacks(sessionName, this.io, terminalRoomName);
       
       // After setting up callbacks, immediately send current terminal content with exact cursor position
       setTimeout(async () => {

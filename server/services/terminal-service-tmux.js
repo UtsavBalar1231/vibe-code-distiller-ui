@@ -864,11 +864,52 @@ class TmuxTerminalService {
     return result;
   }
 
-  // Event handler setup for WebSocket integration
-  setupSessionCallbacks(sessionId, callbacks) {
+  // Event handler setup for WebSocket integration with room broadcasting
+  setupSessionCallbacks(sessionId, io, roomName) {
     const session = this.sessions.get(sessionId);
-    if (session) {
-      session.setCallbacks(callbacks);
+    if (session && io && roomName) {
+      const { WEBSOCKET } = require('../utils/constants');
+      
+      session.setCallbacks({
+        onData: (data) => {
+          logger.debug('Terminal output broadcasting to room:', { 
+            sessionId, 
+            roomName, 
+            dataLength: data.length 
+          });
+          io.to(roomName).emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
+            sessionName: sessionId,
+            data,
+            timestamp: new Date().toISOString()
+          });
+        },
+        onExit: (exitCode, signal) => {
+          logger.debug('Terminal session ended, broadcasting to room:', { 
+            sessionId, 
+            roomName, 
+            exitCode, 
+            signal 
+          });
+          io.to(roomName).emit(WEBSOCKET.EVENTS.NOTIFICATION, {
+            type: 'terminal_session_ended',
+            message: `Terminal session ${sessionId} ended (code: ${exitCode})`,
+            sessionName: sessionId,
+            timestamp: new Date().toISOString()
+          });
+        },
+        onError: (error) => {
+          logger.debug('Terminal session error, broadcasting to room:', { 
+            sessionId, 
+            roomName, 
+            error: error.message 
+          });
+          io.to(roomName).emit(WEBSOCKET.EVENTS.ERROR, {
+            message: 'Terminal session error',
+            details: error.message,
+            sessionName: sessionId
+          });
+        }
+      });
     }
   }
 
