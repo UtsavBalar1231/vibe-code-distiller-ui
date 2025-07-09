@@ -168,12 +168,6 @@ class ProjectManager extends EventEmitter {
         const optionsDropdown = DOM.create('div', {
             className: 'project-options-dropdown',
             html: `
-                <div class="dropdown-item" data-action="create-terminal">
-                    <span class="text">Create New Terminal</span>
-                </div>
-                <div class="dropdown-item" data-action="restart-terminal">
-                    <span class="text">Restart Terminal</span>
-                </div>
                 <div class="dropdown-item" data-action="delete">
                     <span class="text">Delete Project</span>
                 </div>
@@ -197,19 +191,29 @@ class ProjectManager extends EventEmitter {
                 this.deleteProject(project.id);
             } else if (action === 'download') {
                 this.downloadProject(project.id);
-            } else if (action === 'create-terminal') {
-                this.createNewTerminal(project.id);
-            } else if (action === 'restart-terminal') {
-                this.restartTerminal(project.id);
             }
             // Hide dropdown after action
             optionsDropdown.style.display = 'none';
+        });
+        
+        // Create New Terminal button
+        const createTerminalButton = DOM.create('button', {
+            className: 'project-create-terminal-btn btn-icon small',
+            html: '<span class="icon">+</span>',
+            attributes: { 'title': 'Create New Terminal' }
+        });
+        
+        // Handle create terminal button click
+        DOM.on(createTerminalButton, 'click', (e) => {
+            e.stopPropagation();
+            this.createNewTerminal(project.id);
         });
         
         // Options container
         const optionsContainer = DOM.create('div', {
             className: 'project-options-container'
         });
+        optionsContainer.appendChild(createTerminalButton);
         optionsContainer.appendChild(optionsButton);
         optionsContainer.appendChild(optionsDropdown);
         
