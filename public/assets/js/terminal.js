@@ -2322,7 +2322,7 @@ class TerminalManager extends EventEmitter {
     
     showWelcomeScreen() {
         if (this.welcomeScreen) {
-            this.welcomeScreen.style.display = 'block';
+            this.welcomeScreen.style.display = 'flex';
         }
         
         // Hide all terminal wrappers
