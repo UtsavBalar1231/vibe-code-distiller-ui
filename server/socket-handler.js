@@ -63,6 +63,11 @@ class SocketManager {
   }
 
   setupSocketEvents(socket) {
+    // Health check events
+    socket.on('ping', () => {
+      socket.emit('pong');
+    });
+    
     // Project management events
     socket.on(WEBSOCKET.EVENTS.JOIN_PROJECT, (data) => {
       this.handleJoinProject(socket, data);

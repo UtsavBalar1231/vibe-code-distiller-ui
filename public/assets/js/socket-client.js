@@ -763,7 +763,7 @@ class ConnectionMonitor {
         this.client = socketClient;
         this.heartbeatInterval = null;
         this.lastPong = Date.now();
-        this.pingTimeout = 120000; // 120 seconds - increased timeout
+        this.pingTimeout = 120000; // 120 seconds
         
         this.setupMonitoring();
     }
@@ -791,23 +791,15 @@ class ConnectionMonitor {
             const timeSinceLastPong = now - this.lastPong;
             
             if (timeSinceLastPong > this.pingTimeout) {
-                // Store current project before reconnecting
-                const currentProject = this.client.getCurrentProject();
-                this.client.disconnect();
-                setTimeout(() => {
-                    this.client.connect();
-                    // Rejoin project after reconnection
-                    if (currentProject) {
-                        setTimeout(() => {
-                            this.client.joinProject(currentProject);
-                        }, 1000);
-                    }
-                }, 1000);
-            } else {
-                // Send ping
-                this.client.getSocket().emit('ping');
+                // Log connection issue but DO NOT force disconnect for persistent terminal sessions
+                console.warn('⚠️ Connection heartbeat timeout detected, but preserving connection for terminal persistence');
+                // Reset lastPong to prevent repeated warnings
+                this.lastPong = now;
             }
-        }, 60000); // Check every 60 seconds - less frequent checks
+            
+            // Always send ping regardless of timeout status
+            this.client.getSocket().emit('ping');
+        }, 60000); // Check every 60 seconds
     }
     
     stopHeartbeat() {
