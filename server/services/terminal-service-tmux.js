@@ -71,6 +71,9 @@ class TmuxTerminalSession {
         env: {
           ...this.config.env,
           TERM: 'xterm-256color',
+          // Force terminal detection
+          TERM_PROGRAM: 'tmux',
+          TMUX_TMPDIR: '/tmp'
         },
         encoding: this.config.encoding,
         useConpty: false,
@@ -130,10 +133,37 @@ class TmuxTerminalSession {
     this.ptyProcess.onExit(({ exitCode, signal }) => {
       logger.info('Tmux attach process exited:', {
         sessionId: this.sessionId,
+        tmuxSession: this.tmuxSessionName,
         exitCode,
         signal,
         uptime: this.getUptime()
       });
+      
+      // Check if tmux session still exists after exit
+      setTimeout(async () => {
+        try {
+          const sessionExists = await TmuxUtils.hasSession(this.tmuxSessionName);
+          logger.info('Tmux session status after exit:', {
+            sessionId: this.sessionId,
+            tmuxSession: this.tmuxSessionName,
+            exists: sessionExists
+          });
+          
+          if (sessionExists) {
+            logger.info('Tmux session still exists after attach process exit, can reconnect later');
+            this.status = 'detached';
+          } else {
+            logger.warn('Tmux session no longer exists after attach process exit');
+            this.status = 'exited';
+          }
+        } catch (error) {
+          logger.error('Error checking tmux session status after exit:', {
+            sessionId: this.sessionId,
+            error: error.message
+          });
+          this.status = 'detached';
+        }
+      }, 100);
       
       this.status = 'detached';
       this.ptyProcess = null;
@@ -147,9 +177,64 @@ class TmuxTerminalSession {
     this.ptyProcess.on('error', (error) => {
       logger.error('Terminal process error:', {
         sessionId: this.sessionId,
-        error: error.message
+        error: error.message,
+        errorCode: error.code
       });
       
+      // Handle EIO errors (connection issues) by attempting to reconnect
+      if (error.code === 'EIO' || error.message.includes('read EIO')) {
+        logger.info('EIO error detected, attempting to reconnect to tmux session:', {
+          sessionId: this.sessionId,
+          tmuxSession: this.tmuxSessionName
+        });
+        
+        // Check if tmux session still exists and try to reconnect
+        setTimeout(async () => {
+          try {
+            const sessionExists = await TmuxUtils.hasSession(this.tmuxSessionName);
+            if (sessionExists) {
+              logger.info('Tmux session still exists, attempting to reconnect:', {
+                sessionId: this.sessionId,
+                tmuxSession: this.tmuxSessionName
+              });
+              
+              // Reset status and try to reconnect
+              this.status = 'reconnecting';
+              this.ptyProcess = null;
+              
+              // Restart the session connection
+              await this.start(true);
+              
+              logger.info('Successfully reconnected to tmux session:', {
+                sessionId: this.sessionId,
+                tmuxSession: this.tmuxSessionName
+              });
+              
+              return;
+            } else {
+              logger.warn('Tmux session no longer exists, cannot reconnect:', {
+                sessionId: this.sessionId,
+                tmuxSession: this.tmuxSessionName
+              });
+            }
+          } catch (reconnectError) {
+            logger.error('Failed to reconnect to tmux session:', {
+              sessionId: this.sessionId,
+              error: reconnectError.message
+            });
+          }
+          
+          // If we reach here, reconnection failed
+          this.status = 'error';
+          if (this.callbacks.onError) {
+            this.callbacks.onError(error);
+          }
+        }, 1000); // Wait 1 second before attempting reconnection
+        
+        return;
+      }
+      
+      // For other errors, set status to error immediately
       this.status = 'error';
       
       if (this.callbacks.onError) {
@@ -397,10 +482,13 @@ class TmuxTerminalService {
     this.sessions = new Map();
     this.maxSessions = 10;
     
-    // Clean up inactive sessions periodically
-    setInterval(() => {
-      this.cleanupInactiveSessions();
-    }, 300000); // Every 5 minutes
+    // DISABLED: Auto cleanup is disabled to ensure session persistence
+    // Users should manually delete sessions when needed
+    // The app's main purpose is to provide persistent cross-device tmux access
+    // 
+    // setInterval(() => {
+    //   this.cleanupInactiveSessions();
+    // }, 300000); // Every 5 minutes
   }
 
 
@@ -737,26 +825,23 @@ class TmuxTerminalService {
   }
 
   async cleanupInactiveSessions() {
-    const now = Date.now();
-    const inactiveThreshold = 30 * 60 * 1000; // 30 minutes
+    // IMPORTANT: Only clean up memory references, NEVER kill tmux sessions
+    // Tmux sessions should persist until manually deleted by user
+    // The app's purpose is to provide persistent cross-device terminal access
     
-    // Clean up detached sessions from memory
+    logger.info('Cleaning up detached sessions from memory (tmux sessions remain active)');
+    
+    // Only clean up detached sessions from memory, don't touch tmux sessions
     for (const [sessionId, session] of this.sessions.entries()) {
       if (session.status === 'detached' || session.status === 'exited') {
+        logger.info('Removing detached session from memory:', { sessionId });
         this.sessions.delete(sessionId);
       }
     }
     
-    // Clean up old tmux sessions
-    const tmuxSessions = await TmuxUtils.listSessions();
-    
-    for (const sessionName of tmuxSessions) {
-      const parsed = TmuxUtils.parseSessionName(sessionName);
-      if (parsed && (now - parsed.timestamp) > inactiveThreshold) {
-        logger.info('Cleaning up old tmux session:', { sessionName, age: now - parsed.timestamp });
-        await TmuxUtils.killSession(sessionName);
-      }
-    }
+    // DISABLED: Do not automatically kill tmux sessions
+    // Users should manually delete sessions when needed
+    // Tmux sessions are meant to be persistent across device connections
   }
 
   // Integration with Claude Manager
@@ -779,11 +864,97 @@ class TmuxTerminalService {
     return result;
   }
 
-  // Event handler setup for WebSocket integration
-  setupSessionCallbacks(sessionId, callbacks) {
+  // Event handler setup for WebSocket integration with room broadcasting
+  setupSessionCallbacks(sessionId, io, roomName) {
     const session = this.sessions.get(sessionId);
-    if (session) {
-      session.setCallbacks(callbacks);
+    if (session && io && roomName) {
+      const { WEBSOCKET } = require('../utils/constants');
+      
+      session.setCallbacks({
+        onData: (data) => {
+          logger.debug('Terminal output broadcasting to room:', { 
+            sessionId, 
+            roomName, 
+            dataLength: data.length 
+          });
+          io.to(roomName).emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
+            sessionName: sessionId,
+            data,
+            timestamp: new Date().toISOString()
+          });
+        },
+        onExit: (exitCode, signal) => {
+          logger.debug('Terminal session ended, broadcasting to room:', { 
+            sessionId, 
+            roomName, 
+            exitCode, 
+            signal 
+          });
+          io.to(roomName).emit(WEBSOCKET.EVENTS.NOTIFICATION, {
+            type: 'terminal_session_ended',
+            message: `Terminal session ${sessionId} ended (code: ${exitCode})`,
+            sessionName: sessionId,
+            timestamp: new Date().toISOString()
+          });
+        },
+        onError: (error) => {
+          logger.debug('Terminal session error, broadcasting to room:', { 
+            sessionId, 
+            roomName, 
+            error: error.message 
+          });
+          io.to(roomName).emit(WEBSOCKET.EVENTS.ERROR, {
+            message: 'Terminal session error',
+            details: error.message,
+            sessionName: sessionId
+          });
+        }
+      });
+    }
+  }
+
+  // Health check method for monitoring (not cleaning) tmux sessions
+  async checkSessionHealth() {
+    logger.info('Checking tmux session health...');
+    
+    const tmuxSessions = await TmuxUtils.listSessions();
+    const memorySessions = Array.from(this.sessions.keys());
+    
+    logger.info('Session health report:', {
+      tmuxSessions: tmuxSessions.length,
+      memorySessions: memorySessions.length,
+      activeTmuxSessions: tmuxSessions,
+      memorySessionIds: memorySessions
+    });
+    
+    // Check for orphaned memory sessions (exist in memory but not in tmux)
+    for (const sessionId of memorySessions) {
+      const session = this.sessions.get(sessionId);
+      if (session && session.tmuxSessionName) {
+        const exists = await TmuxUtils.hasSession(session.tmuxSessionName);
+        if (!exists) {
+          logger.warn('Orphaned memory session detected:', {
+            sessionId,
+            tmuxSession: session.tmuxSessionName,
+            status: session.status
+          });
+        }
+      }
+    }
+    
+    // Check for tmux sessions without memory references
+    for (const tmuxSessionName of tmuxSessions) {
+      const hasMemoryRef = memorySessions.some(sessionId => {
+        const session = this.sessions.get(sessionId);
+        return session && session.tmuxSessionName === tmuxSessionName;
+      });
+      
+      if (!hasMemoryRef) {
+        logger.info('Tmux session without memory reference:', {
+          tmuxSession: tmuxSessionName,
+          note: 'This is normal for persistent sessions'
+        });
+      }
     }
   }
 

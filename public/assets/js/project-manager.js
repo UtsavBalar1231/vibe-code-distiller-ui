@@ -168,12 +168,6 @@ class ProjectManager extends EventEmitter {
         const optionsDropdown = DOM.create('div', {
             className: 'project-options-dropdown',
             html: `
-                <div class="dropdown-item" data-action="create-terminal">
-                    <span class="text">Create New Terminal</span>
-                </div>
-                <div class="dropdown-item" data-action="restart-terminal">
-                    <span class="text">Restart Terminal</span>
-                </div>
                 <div class="dropdown-item" data-action="delete">
                     <span class="text">Delete Project</span>
                 </div>
@@ -197,19 +191,29 @@ class ProjectManager extends EventEmitter {
                 this.deleteProject(project.id);
             } else if (action === 'download') {
                 this.downloadProject(project.id);
-            } else if (action === 'create-terminal') {
-                this.createNewTerminal(project.id);
-            } else if (action === 'restart-terminal') {
-                this.restartTerminal(project.id);
             }
             // Hide dropdown after action
             optionsDropdown.style.display = 'none';
+        });
+        
+        // Create New Terminal button
+        const createTerminalButton = DOM.create('button', {
+            className: 'project-create-terminal-btn btn-icon small',
+            html: '<span class="icon">+</span>',
+            attributes: { 'title': 'Create New Terminal' }
+        });
+        
+        // Handle create terminal button click
+        DOM.on(createTerminalButton, 'click', (e) => {
+            e.stopPropagation();
+            this.createNewTerminal(project.id);
         });
         
         // Options container
         const optionsContainer = DOM.create('div', {
             className: 'project-options-container'
         });
+        optionsContainer.appendChild(createTerminalButton);
         optionsContainer.appendChild(optionsButton);
         optionsContainer.appendChild(optionsDropdown);
         
@@ -276,6 +280,9 @@ class ProjectManager extends EventEmitter {
             // Projects only affect the file management system
             
             this.emit('project_selected', project);
+            
+            // Auto-select corresponding terminal tab if exists
+            this.autoSelectTerminalTab(project);
             
             // Notify file manager about project change
             if (window.fileManager) {
@@ -915,6 +922,82 @@ class ProjectManager extends EventEmitter {
         if (this.currentProject === projectId) {
             notifications.warning(`Project ${projectId} disconnected`, { duration: 3000 });
         }
+    }
+    
+    /**
+     * Auto-select terminal tab when project is selected
+     */
+    autoSelectTerminalTab(project) {
+        if (!project || !window.terminalManager) {
+            return;
+        }
+        
+        // Get all terminal tabs
+        const terminalTabs = document.querySelectorAll('.terminal-tab');
+        if (!terminalTabs.length) {
+            return;
+        }
+        
+        // Find tabs for this project (command naming rule: claude-web-{projectName}-{number})
+        const projectTerminalTabs = [];
+        terminalTabs.forEach(tab => {
+            const tabTitle = tab.querySelector('.tab-title, .title');
+            if (tabTitle) {
+                const tabName = tabTitle.textContent.trim();
+                const projectName = this.extractProjectNameFromTerminalName(tabName);
+                
+                if (projectName === project.name) {
+                    projectTerminalTabs.push({
+                        tab: tab,
+                        name: tabName,
+                        element: tab
+                    });
+                }
+            }
+        });
+        
+        // Select the first terminal tab for this project (from left to right)
+        if (projectTerminalTabs.length > 0) {
+            const firstTab = projectTerminalTabs[0];
+            
+            // If it's a session-based tab, use terminalManager to select it
+            if (window.terminalManager.selectSessionTab && firstTab.name.startsWith('claude-web-')) {
+                window.terminalManager.selectSessionTab(firstTab.name);
+            } else {
+                // For legacy terminal tabs, trigger click event
+                firstTab.tab.click();
+            }
+        }
+    }
+    
+    /**
+     * Extract project name from terminal tab name
+     * Expected format: claude-web-{projectName}-{number}
+     */
+    extractProjectNameFromTerminalName(terminalName) {
+        if (!terminalName || !this.isValidTerminalName(terminalName)) {
+            return null;
+        }
+        
+        // Parse: claude-web-{projectName}-{number}
+        const match = terminalName.match(/^claude-web-(.+)-\d+$/);
+        if (match) {
+            return match[1];
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Validate terminal name format
+     */
+    isValidTerminalName(terminalName) {
+        if (!terminalName || typeof terminalName !== 'string') {
+            return false;
+        }
+        
+        // Check naming rule: claude-web-{projectName}-{number}
+        return /^claude-web-.+-\d+$/.test(terminalName);
     }
 }
 

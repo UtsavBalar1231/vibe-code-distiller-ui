@@ -9,6 +9,7 @@ class TerminalManager extends EventEmitter {
         this.container = DOM.get('terminal-content');
         this.tabsContainer = DOM.get('terminal-tabs');
         this.welcomeScreen = DOM.get('welcome-screen');
+        this.isRestoringFromReconnect = false;
         
         this.setupTerminalControls();
         this.setupKeyboardShortcuts();
@@ -33,6 +34,9 @@ class TerminalManager extends EventEmitter {
         socket.socket.on('error', this.handleSocketError.bind(this));
         socket.socket.on('connect_error', this.handleConnectionError.bind(this));
         socket.socket.on('disconnect', this.handleDisconnection.bind(this));
+        
+        // Connection recovery events
+        socket.onReconnected(this.handleReconnection.bind(this));
         
         // Note: loadAllSessions will be called after DOM is ready
     }
@@ -1752,7 +1756,8 @@ class TerminalManager extends EventEmitter {
             element: null,
             terminal: null,
             isActive: isActive,
-            isAttached: false // Track if session is already attached to prevent duplicates
+            isAttached: false, // Track if session is already attached to prevent duplicates
+            isConnecting: false // Track if session is currently connecting to prevent race conditions
         };
         
         this.terminals.set(session.name, terminalData);
@@ -1820,6 +1825,10 @@ class TerminalManager extends EventEmitter {
         if (selectedTab) {
             selectedTab.classList.add('active');
             this.activeTerminal = sessionName;
+            
+            // Update file display area based on terminal's corresponding project
+            this.updateFileDisplayForTerminal(sessionName);
+            
             await this.activateSessionTab(sessionName);
         }
     }
@@ -1864,9 +1873,10 @@ class TerminalManager extends EventEmitter {
             }
         }
         
-        // Only attach to session if not already attached
-        if (!terminalData.isAttached) {
+        // Only attach to session if not already attached or connecting
+        if (!terminalData.isAttached && !terminalData.isConnecting) {
             console.log('🔗 Attaching to session:', sessionName);
+            terminalData.isConnecting = true;
             try {
                 await this.attachToSessionWithRetry(sessionName);
                 terminalData.isAttached = true;
@@ -1874,9 +1884,11 @@ class TerminalManager extends EventEmitter {
             } catch (error) {
                 console.error('❌ Failed to attach session:', sessionName, error);
                 terminalData.isAttached = false;
+            } finally {
+                terminalData.isConnecting = false;
             }
         } else {
-            console.log('✅ Session already attached:', sessionName);
+            console.log('✅ Session already attached or connecting:', sessionName);
         }
     }
     
@@ -1986,13 +1998,17 @@ class TerminalManager extends EventEmitter {
             
             // Start attachment process for newly created terminal
             setTimeout(async () => {
-                if (!terminalData.isAttached) {
+                if (!terminalData.isAttached && !terminalData.isConnecting) {
                     console.log('🔗 Auto-attaching newly created terminal:', terminalData.sessionName);
+                    terminalData.isConnecting = true;
                     try {
                         await this.attachToSessionWithRetry(terminalData.sessionName);
                         terminalData.isAttached = true;
                     } catch (error) {
                         console.error('❌ Failed to auto-attach new terminal:', error);
+                        terminalData.isAttached = false;
+                    } finally {
+                        terminalData.isConnecting = false;
                     }
                 }
             }, 500);
@@ -2052,39 +2068,92 @@ class TerminalManager extends EventEmitter {
     
     waitForAttachment(sessionName, timeout = 5000) {
         return new Promise((resolve) => {
-            const startTime = Date.now();
-            
-            const checkAttachment = () => {
-                const terminalData = this.terminals.get(sessionName);
-                
-                // Check if we received any output (indicates successful attachment)
-                if (terminalData && terminalData.terminal && terminalData.terminal.buffer) {
-                    const hasContent = terminalData.terminal.buffer.active.length > 0;
-                    if (hasContent) {
-                        resolve(true);
-                        return;
-                    }
+            // Listen for the session-attached event
+            const attachHandler = (data) => {
+                if (data.sessionName === sessionName) {
+                    socket.socket.off('terminal:session-attached', attachHandler);
+                    resolve(true);
                 }
-                
-                // Check timeout
-                if (Date.now() - startTime > timeout) {
-                    console.warn('⏰ Attachment timeout for session:', sessionName);
-                    resolve(false);
-                    return;
-                }
-                
-                // Continue checking
-                setTimeout(checkAttachment, 200);
             };
             
-            // Start checking after a brief delay
-            setTimeout(checkAttachment, 500);
+            socket.socket.on('terminal:session-attached', attachHandler);
+            
+            // Set timeout
+            setTimeout(() => {
+                socket.socket.off('terminal:session-attached', attachHandler);
+                console.warn('⏰ Attachment timeout for session:', sessionName);
+                resolve(false);
+            }, timeout);
         });
     }
     
     handleSessionsList(data) {
         const { sessions } = data;
-        this.showSessionsDialog(sessions);
+        
+        // If we're restoring from a reconnect, automatically restore sessions
+        if (this.isRestoringFromReconnect) {
+            this.autoRestoreSessions(sessions);
+            this.isRestoringFromReconnect = false;
+        } else {
+            // Normal case: show sessions dialog
+            this.showSessionsDialog(sessions);
+        }
+    }
+    
+    autoRestoreSessions(sessions) {
+        console.log('🔄 Auto-restoring sessions after reconnection:', sessions);
+        
+        let restoredCount = 0;
+        let failedCount = 0;
+        
+        // Find and restore sessions for existing terminals
+        this.terminals.forEach((terminalData, terminalId) => {
+            if (terminalData.sessionName && terminalData.sessionName.startsWith('claude-web-')) {
+                // Find matching session from server
+                const matchingSession = sessions.find(session => 
+                    session.name === terminalData.sessionName || 
+                    session.sessionName === terminalData.sessionName
+                );
+                
+                if (matchingSession) {
+                    console.log(`✅ Restoring session: ${terminalData.sessionName}`);
+                    
+                    // Re-attach to the session
+                    socket.socket.emit('terminal:attach-session', {
+                        sessionName: terminalData.sessionName,
+                        terminalId: terminalId
+                    });
+                    
+                    // Ensure project room membership (important for terminal input routing)
+                    const currentProject = projectManager.getCurrentProject();
+                    if (currentProject && socket.isConnected()) {
+                        socket.joinProject(currentProject.id);
+                    }
+                    
+                    // Mark as attached
+                    terminalData.isAttached = true;
+                    restoredCount++;
+                } else {
+                    console.warn(`❌ Session not found on server: ${terminalData.sessionName}`);
+                    failedCount++;
+                }
+            }
+        });
+        
+        // Show restoration results
+        if (restoredCount > 0) {
+            notifications.success(`Restored ${restoredCount} terminal session(s)`, { duration: 3000 });
+        }
+        
+        if (failedCount > 0) {
+            notifications.warning(`Failed to restore ${failedCount} terminal session(s). They may have been closed.`, { 
+                duration: 5000 
+            });
+        }
+        
+        if (restoredCount === 0 && failedCount === 0) {
+            console.log('No terminal sessions to restore');
+        }
     }
     
     handleSessionAttached(data) {
@@ -2322,7 +2391,7 @@ class TerminalManager extends EventEmitter {
     
     showWelcomeScreen() {
         if (this.welcomeScreen) {
-            this.welcomeScreen.style.display = 'block';
+            this.welcomeScreen.style.display = 'flex';
         }
         
         // Hide all terminal wrappers
@@ -2367,6 +2436,63 @@ class TerminalManager extends EventEmitter {
         });
     }
     
+    handleReconnection(attemptNumber) {
+        console.log('🔌 Reconnected to server, attempt:', attemptNumber);
+        notifications.success('Reconnected to server. Restoring terminal sessions...', { duration: 3000 });
+        
+        // Delay session restoration to ensure server is ready
+        setTimeout(() => {
+            this.restoreTerminalSessions();
+        }, 2000);
+    }
+    
+    async restoreTerminalSessions() {
+        try {
+            console.log('🔄 Restoring terminal sessions after reconnection...');
+            
+            // Get current project if any
+            const currentProject = projectManager.getCurrentProject();
+            if (!currentProject) {
+                console.log('No current project, skipping session restoration');
+                return;
+            }
+            
+            // Set restoration flag
+            this.isRestoringFromReconnect = true;
+            
+            // Set a timeout to reset the flag if restoration takes too long
+            setTimeout(() => {
+                if (this.isRestoringFromReconnect) {
+                    console.warn('⚠️ Terminal session restoration timeout, resetting flag');
+                    this.isRestoringFromReconnect = false;
+                }
+            }, 10000); // 10 second timeout
+            
+            // Request fresh session list from server
+            socket.socket.emit('terminal:list-sessions', { projectId: currentProject.id });
+            
+            // Mark all existing terminals as needing restoration
+            this.terminals.forEach((terminalData, terminalId) => {
+                if (terminalData.sessionName && terminalData.sessionName.startsWith('claude-web-')) {
+                    console.log(`🔄 Preparing to restore session: ${terminalData.sessionName}`);
+                    terminalData.isAttached = false; // Will be restored when session list arrives
+                }
+            });
+            
+            // Show restoration status
+            if (this.terminals.size > 0) {
+                notifications.info('Restoring terminal sessions...', { duration: 2000 });
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to restore terminal sessions:', error);
+            this.isRestoringFromReconnect = false;
+            notifications.error('Failed to restore some terminal sessions. You may need to refresh the page.', { 
+                duration: 8000 
+            });
+        }
+    }
+    
     // Enhanced error handling for terminal operations
     handleTerminalOperationError(operation, sessionName, error) {
         console.error(`❌ Terminal ${operation} failed:`, { sessionName, error });
@@ -2392,6 +2518,81 @@ class TerminalManager extends EventEmitter {
             return false;
         }
         return true;
+    }
+    
+    /**
+     * Update file display area when terminal tab is selected
+     */
+    updateFileDisplayForTerminal(sessionName) {
+        if (!sessionName || !window.projectManager || !window.fileManager) {
+            return;
+        }
+        
+        // Validate terminal name format
+        if (!this.isValidTerminalName(sessionName)) {
+            return;
+        }
+        
+        // Extract project name from terminal name
+        const projectName = this.extractProjectNameFromTerminalName(sessionName);
+        if (!projectName) {
+            return;
+        }
+        
+        // Find the corresponding project in projectManager
+        const project = this.findProjectByName(projectName);
+        if (!project) {
+            return;
+        }
+        
+        // Trigger file display update for the corresponding project
+        if (window.fileManager) {
+            document.dispatchEvent(new CustomEvent('projectChanged', {
+                detail: { projectId: project.id, project: project }
+            }));
+        }
+    }
+    
+    /**
+     * Extract project name from terminal name
+     * Expected format: claude-web-{projectName}-{number}
+     */
+    extractProjectNameFromTerminalName(terminalName) {
+        if (!terminalName || !this.isValidTerminalName(terminalName)) {
+            return null;
+        }
+        
+        // Parse: claude-web-{projectName}-{number}
+        const match = terminalName.match(/^claude-web-(.+)-\d+$/);
+        if (match) {
+            return match[1];
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Validate terminal name format
+     */
+    isValidTerminalName(terminalName) {
+        if (!terminalName || typeof terminalName !== 'string') {
+            return false;
+        }
+        
+        // Check naming rule: claude-web-{projectName}-{number}
+        return /^claude-web-.+-\d+$/.test(terminalName);
+    }
+    
+    /**
+     * Find project by name in projectManager
+     */
+    findProjectByName(projectName) {
+        if (!window.projectManager || !projectName) {
+            return null;
+        }
+        
+        const projects = window.projectManager.getAllProjects();
+        return projects.find(project => project.name === projectName);
     }
 }
 
