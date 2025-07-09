@@ -1090,12 +1090,6 @@ class SocketManager {
         tmuxSession: result.tmuxSessionName
       });
       
-      socket.emit('terminal:session-created', {
-        sessionName: result.tmuxSessionName,
-        sessionId: result.sessionId,
-        tmuxSession: result.tmuxSessionName
-      });
-      
     } catch (error) {
       logger.error('Failed to create new session:', { socketId: socket.id, error: error.message });
       socket.emit(WEBSOCKET.EVENTS.ERROR, {
@@ -1164,9 +1158,6 @@ class SocketManager {
       
       logger.info('📡 Broadcasting terminal:session-created event:', eventData);
       this.io.emit('terminal:session-created', eventData);
-      
-      // Also send to requesting client specifically
-      socket.emit('terminal:session-created', eventData);
       
       logger.info('🎉 Project session created successfully:', { 
         socketId: socket.id, 
