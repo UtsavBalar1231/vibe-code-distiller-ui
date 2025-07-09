@@ -1825,6 +1825,10 @@ class TerminalManager extends EventEmitter {
         if (selectedTab) {
             selectedTab.classList.add('active');
             this.activeTerminal = sessionName;
+            
+            // Update file display area based on terminal's corresponding project
+            this.updateFileDisplayForTerminal(sessionName);
+            
             await this.activateSessionTab(sessionName);
         }
     }
@@ -2514,6 +2518,81 @@ class TerminalManager extends EventEmitter {
             return false;
         }
         return true;
+    }
+    
+    /**
+     * Update file display area when terminal tab is selected
+     */
+    updateFileDisplayForTerminal(sessionName) {
+        if (!sessionName || !window.projectManager || !window.fileManager) {
+            return;
+        }
+        
+        // Validate terminal name format
+        if (!this.isValidTerminalName(sessionName)) {
+            return;
+        }
+        
+        // Extract project name from terminal name
+        const projectName = this.extractProjectNameFromTerminalName(sessionName);
+        if (!projectName) {
+            return;
+        }
+        
+        // Find the corresponding project in projectManager
+        const project = this.findProjectByName(projectName);
+        if (!project) {
+            return;
+        }
+        
+        // Trigger file display update for the corresponding project
+        if (window.fileManager) {
+            document.dispatchEvent(new CustomEvent('projectChanged', {
+                detail: { projectId: project.id, project: project }
+            }));
+        }
+    }
+    
+    /**
+     * Extract project name from terminal name
+     * Expected format: claude-web-{projectName}-{number}
+     */
+    extractProjectNameFromTerminalName(terminalName) {
+        if (!terminalName || !this.isValidTerminalName(terminalName)) {
+            return null;
+        }
+        
+        // Parse: claude-web-{projectName}-{number}
+        const match = terminalName.match(/^claude-web-(.+)-\d+$/);
+        if (match) {
+            return match[1];
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Validate terminal name format
+     */
+    isValidTerminalName(terminalName) {
+        if (!terminalName || typeof terminalName !== 'string') {
+            return false;
+        }
+        
+        // Check naming rule: claude-web-{projectName}-{number}
+        return /^claude-web-.+-\d+$/.test(terminalName);
+    }
+    
+    /**
+     * Find project by name in projectManager
+     */
+    findProjectByName(projectName) {
+        if (!window.projectManager || !projectName) {
+            return null;
+        }
+        
+        const projects = window.projectManager.getAllProjects();
+        return projects.find(project => project.name === projectName);
     }
 }
 
