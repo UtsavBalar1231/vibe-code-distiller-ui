@@ -85,13 +85,24 @@
     width: 100%;
 }
 
+.terminal {
+    height: 100%;
+    width: 100%;
+    display: block;
+}
+
 .xterm .xterm-viewport {
     background-color: var(--terminal-bg) !important;
     overflow-y: auto;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .xterm .xterm-screen {
     background-color: var(--terminal-bg) !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
 }
 
 .xterm .xterm-helper-textarea {
