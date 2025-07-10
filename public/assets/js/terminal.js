@@ -92,8 +92,7 @@ class TerminalManager extends EventEmitter {
         // Load saved settings
         const savedFontSize = Storage.get('terminal-font-size') || 14;
         
-        // Calculate initial terminal size based on container
-        const { rows, cols } = this.calculateTerminalSize(parseInt(savedFontSize));
+        // Don't manually set rows/cols - let FitAddon calculate proper size
         
         // Create terminal instance with fixed high-contrast theme
         const terminal = new Terminal({
@@ -108,8 +107,7 @@ class TerminalManager extends EventEmitter {
             cursorStyle: 'block',
             scrollback: 1000,
             tabStopWidth: 4,
-            rows: rows,
-            cols: cols,
+            // rows and cols will be set by FitAddon
             theme: this.getThemeConfig(this.getCurrentTheme()),
             allowTransparency: false,
             bellSound: null,
@@ -1020,7 +1018,7 @@ class TerminalManager extends EventEmitter {
         }
     }
     
-    fitTerminalSafely(fitAddon, terminalWrapper, terminalId, retryCount = 0) {
+    fitTerminalSafely(fitAddon, terminalWrapper, terminalId, retryCount = 0, isSessionRestore = false) {
         const maxRetries = 3;
         const retryDelay = 100;
         
@@ -1034,7 +1032,18 @@ class TerminalManager extends EventEmitter {
             try {
                 if (hasValidDimensions()) {
                     fitAddon.fit();
-                    console.log(`Terminal ${terminalId} fitted successfully`);
+                    console.log(`Terminal ${terminalId} fitted successfully${isSessionRestore ? ' (session restore)' : ''}`);
+                    
+                    // If this is a session restore, ensure cursor is at bottom after fit
+                    if (isSessionRestore) {
+                        const terminalData = this.terminals.get(terminalId);
+                        if (terminalData && terminalData.terminal) {
+                            setTimeout(() => {
+                                this.scrollToBottom(terminalData.terminal);
+                                console.log(`🔄 Cursor position fixed after session restore fit: ${terminalId}`);
+                            }, 50);
+                        }
+                    }
                 } else {
                     throw new Error('Container dimensions not ready');
                 }
@@ -1043,7 +1052,7 @@ class TerminalManager extends EventEmitter {
                 
                 if (retryCount < maxRetries) {
                     setTimeout(() => {
-                        this.fitTerminalSafely(fitAddon, terminalWrapper, terminalId, retryCount + 1);
+                        this.fitTerminalSafely(fitAddon, terminalWrapper, terminalId, retryCount + 1, isSessionRestore);
                     }, retryDelay);
                 } else {
                     console.error(`Failed to fit terminal ${terminalId} after ${maxRetries} retries`);
@@ -1469,13 +1478,8 @@ class TerminalManager extends EventEmitter {
         if (sessionName) {
             const terminalData = this.terminals.get(sessionName);
             if (terminalData && terminalData.terminal) {
-                console.log(`📝 Writing output to ${sessionName}:`, {
-                    outputLength: output.length,
-                    isAttached: terminalData.isAttached,
-                    hasNewlines: output.includes('\n'),
-                    lineCount: output.split('\n').length,
-                    preview: output.substring(0, 100).replace(/\r?\n/g, '\\n')
-                });
+                // Simplified logging - only log when debug is needed
+                // console.log(`📝 Writing output to ${sessionName}: ${output.length} chars`);
                 
                 // Server handles formatting, just write the output directly
                 // The backend already sends properly formatted content with correct line endings
@@ -1483,7 +1487,6 @@ class TerminalManager extends EventEmitter {
                 
                 // Mark as attached if we receive output (indicates successful connection)
                 if (!terminalData.isAttached) {
-                    console.log(`🔗 Auto-marking session as attached due to output: ${sessionName}`);
                     terminalData.isAttached = true;
                 }
             } else {
@@ -1862,11 +1865,10 @@ class TerminalManager extends EventEmitter {
                 setTimeout(() => {
                     try {
                         terminalData.fitAddon.fit();
-                        console.log(`Session terminal ${sessionName} fitted on tab activation`);
                     } catch (error) {
                         console.warn(`Failed to fit session terminal ${sessionName} on tab activation:`, error);
                     }
-                }, 100); // Increased delay to ensure layout is complete
+                }, 100);
             }
             if (terminalData.terminal) {
                 terminalData.terminal.focus();
@@ -1875,20 +1877,16 @@ class TerminalManager extends EventEmitter {
         
         // Only attach to session if not already attached or connecting
         if (!terminalData.isAttached && !terminalData.isConnecting) {
-            console.log('🔗 Attaching to session:', sessionName);
             terminalData.isConnecting = true;
             try {
                 await this.attachToSessionWithRetry(sessionName);
                 terminalData.isAttached = true;
-                console.log('✅ Session successfully attached:', sessionName);
             } catch (error) {
                 console.error('❌ Failed to attach session:', sessionName, error);
                 terminalData.isAttached = false;
             } finally {
                 terminalData.isConnecting = false;
             }
-        } else {
-            console.log('✅ Session already attached or connecting:', sessionName);
         }
     }
     
@@ -1926,16 +1924,14 @@ class TerminalManager extends EventEmitter {
             // Make sure wrapper is visible
             wrapper.style.display = 'block';
             
-            // Calculate initial terminal size for session terminal
-            const { rows, cols } = this.calculateTerminalSize(14);
+            // Don't manually calculate rows/cols - let FitAddon handle it
             
             // Create xterm.js terminal
             const terminal = new Terminal({
                 cursorBlink: true,
                 fontSize: 14,
                 fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                rows: rows,
-                cols: cols,
+                // rows and cols will be calculated by FitAddon
                 theme: {
                     background: '#1e1e1e',
                     foreground: '#d4d4d4',
@@ -1953,21 +1949,19 @@ class TerminalManager extends EventEmitter {
             terminalData.terminal = terminal;
             terminalData.fitAddon = fitAddon;
             
-            // Fit terminal with proper timing and error handling
+            // Fit terminal with proper timing
             setTimeout(() => {
                 try {
                     fitAddon.fit();
-                    console.log(`Session terminal ${terminalData.sessionName} fitted on creation`);
                 } catch (error) {
                     console.warn(`Failed to fit session terminal ${terminalData.sessionName} on creation:`, error);
                 }
-            }, 100); // Delay to ensure DOM is ready
+            }, 100);
             
-            // Force an additional fit after DOM is fully rendered for session terminals
+            // Additional fit after DOM is rendered
             setTimeout(() => {
                 try {
                     fitAddon.fit();
-                    console.log(`Session terminal ${terminalData.sessionName} force-fitted after DOM render`);
                 } catch (error) {
                     console.warn(`Failed to force-fit session terminal ${terminalData.sessionName}:`, error);
                 }
@@ -1978,12 +1972,10 @@ class TerminalManager extends EventEmitter {
             
             // Handle resize with debouncing
             const handleResize = () => {
-                // Always fit when window is resized, regardless of active state
                 try {
                     clearTimeout(terminalData.windowResizeTimeout);
                     terminalData.windowResizeTimeout = setTimeout(() => {
                         fitAddon.fit();
-                        console.log(`Session terminal ${terminalData.sessionName} fitted on window resize`);
                     }, 150);
                 } catch (error) {
                     console.warn(`Failed to fit session terminal ${terminalData.sessionName} on window resize:`, error);
@@ -2593,6 +2585,48 @@ class TerminalManager extends EventEmitter {
         
         const projects = window.projectManager.getAllProjects();
         return projects.find(project => project.name === projectName);
+    }
+    
+    /**
+     * Gently scroll terminal to bottom if needed
+     * Only uses safe xterm.js APIs without manual cursor manipulation
+     */
+    scrollToBottom(terminal) {
+        if (!terminal) {
+            return;
+        }
+        
+        try {
+            // Only use xterm.js native scrollToBottom method - no manual intervention
+            if (typeof terminal.scrollToBottom === 'function') {
+                terminal.scrollToBottom();
+            }
+        } catch (error) {
+            console.warn('Failed to scroll terminal to bottom:', error);
+        }
+    }
+    
+    /**
+     * Simple method to ensure terminal is properly fitted and scrolled
+     * No aggressive cursor manipulation
+     */
+    ensureCursorAtBottom(terminalId) {
+        const terminalData = this.terminals.get(terminalId);
+        if (!terminalData || !terminalData.terminal) {
+            return;
+        }
+        
+        // Only perform safe operations: fit and gentle scroll
+        if (terminalData.fitAddon) {
+            try {
+                terminalData.fitAddon.fit();
+            } catch (error) {
+                console.warn(`Failed to fit terminal ${terminalId}:`, error);
+            }
+        }
+        
+        // Gentle scroll to bottom - no monitoring, no force
+        this.scrollToBottom(terminalData.terminal);
     }
 }
 
