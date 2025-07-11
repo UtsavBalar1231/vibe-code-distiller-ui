@@ -912,7 +912,7 @@ class SocketManager {
 
   async handleAttachSession(socket, data) {
     try {
-      const { sessionName } = data;
+      const { sessionName, currentCols, currentRows } = data;
       
       if (!sessionName) {
         socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Session name required' });
@@ -936,16 +936,31 @@ class SocketManager {
       // Check if we already have a terminal session connected to this tmux session
       let terminalSessionExists = terminalService.isSessionActive(sessionName);
       
+      // Use provided dimensions or fallback to defaults
+      const cols = currentCols || 80;
+      const rows = currentRows || 24;
+      
       if (!terminalSessionExists) {
         // Create a new terminal session that connects to the existing tmux session
-        logger.info('Creating terminal session for existing tmux session:', { sessionName });
+        logger.info('Creating terminal session for existing tmux session:', { sessionName, cols, rows });
         
-        // Create terminal session that will attach to existing tmux session
+        // Create terminal session that will attach to existing tmux session with current dimensions
         await terminalService.createSession(sessionName, {
           cwd: process.cwd(), // Use current working directory
-          cols: 80,
-          rows: 24
+          cols: cols,
+          rows: rows
         });
+      } else {
+        // Session exists, synchronize dimensions to match frontend
+        logger.info('Synchronizing existing session dimensions:', { sessionName, cols, rows });
+        try {
+          await terminalService.resizeSession(sessionName, cols, rows);
+        } catch (error) {
+          logger.warn('Failed to resize existing session, continuing with current dimensions:', { 
+            sessionName, 
+            error: error.message 
+          });
+        }
       }
 
       // Wait for session to be fully ready before setting callbacks
