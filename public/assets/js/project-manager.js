@@ -805,12 +805,18 @@ class ProjectManager extends EventEmitter {
             // Show creating notification
             notifications.info(`Creating new terminal for "${project.name}"...`);
             
-            // Send socket request to create new session for project
+            // Get calculated terminal dimensions or use defaults
+            let dimensions = { cols: 80, rows: 24 }; // fallback
+            if (window.terminalManager && window.terminalManager.getActualTerminalDimensions) {
+                dimensions = window.terminalManager.getActualTerminalDimensions(null);
+            }
+            
+            // Send socket request to create new session for project with calculated dimensions
             socket.socket.emit('terminal:create-project-session', {
                 projectName: project.name,
                 projectPath: project.path,
-                cols: 80,
-                rows: 24
+                cols: dimensions.cols,
+                rows: dimensions.rows
             });
             
             // Request sent to create project session

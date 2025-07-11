@@ -529,13 +529,124 @@ class TerminalManager extends EventEmitter {
             const cols = Math.max(80, Math.floor((availableWidth - padding) / charWidth));
             const rows = Math.max(24, Math.floor((availableHeight - padding) / charHeight));
             
-            console.log(`Terminal size calculated: ${cols}x${rows} (container: ${availableWidth}x${availableHeight})`);
-            
             return { rows, cols };
         } catch (error) {
             console.warn('Failed to calculate terminal size:', error);
             return { rows: 24, cols: 80 }; // Safe fallback
         }
+    }
+    
+    // Get actual terminal dimensions with DOM stability check
+    getActualTerminalDimensions(terminalData) {
+        // Priority 1: Calculate based on container with stability verification
+        const calculated = this.calculateTerminalSizeStable();
+        if (calculated && calculated.cols && calculated.rows && calculated.rows >= 20) {
+            return calculated;
+        }
+        
+        // Priority 2: Get from terminal object if available and reasonable
+        if (terminalData && terminalData.terminal && terminalData.terminal.cols && terminalData.terminal.rows > 20) {
+            return {
+                cols: terminalData.terminal.cols,
+                rows: terminalData.terminal.rows
+            };
+        }
+        
+        // Priority 3: Use a reasonable estimated size based on viewport
+        const estimated = this.estimateTerminalSize();
+        return estimated;
+    }
+    
+    // Calculate terminal size with DOM stability check
+    calculateTerminalSizeStable() {
+        try {
+            const container = this.container;
+            if (!container) {
+                return null;
+            }
+            
+            const containerRect = container.getBoundingClientRect();
+            
+            // Check if container has reasonable dimensions (DOM is stable)
+            if (containerRect.height < 200 || containerRect.width < 400) {
+                return null;
+            }
+            
+            const availableWidth = containerRect.width;
+            const availableHeight = containerRect.height;
+            
+            // More accurate character dimensions
+            const fontSize = parseFloat(getComputedStyle(container).fontSize) || 14;
+            const charWidth = fontSize * 0.6;
+            const charHeight = fontSize * 1.2;
+            
+            const padding = 32;
+            const cols = Math.max(80, Math.floor((availableWidth - padding) / charWidth));
+            const rows = Math.max(24, Math.floor((availableHeight - padding) / charHeight));
+            
+            return { rows, cols };
+        } catch (error) {
+            console.warn('Failed to calculate stable terminal size:', error);
+            return null;
+        }
+    }
+    
+    // Estimate terminal size based on viewport when container is not ready
+    estimateTerminalSize() {
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Estimate available space (accounting for sidebar, header, etc.)
+        const estimatedWidth = viewportWidth * 0.7;  // ~70% for terminal area
+        const estimatedHeight = viewportHeight * 0.8; // ~80% for terminal area
+        
+        const fontSize = 14; // Default font size
+        const charWidth = fontSize * 0.6;
+        const charHeight = fontSize * 1.2;
+        
+        const padding = 32;
+        const cols = Math.max(80, Math.floor((estimatedWidth - padding) / charWidth));
+        const rows = Math.max(24, Math.floor((estimatedHeight - padding) / charHeight));
+        
+        return { cols, rows };
+    }
+    
+    // Wait for DOM to be completely stable before proceeding
+    async waitForDOMStability(maxRetries = 10) {
+        return new Promise((resolve) => {
+            let retryCount = 0;
+            
+            const checkStability = () => {
+                const container = this.container;
+                if (!container) {
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        setTimeout(() => requestAnimationFrame(checkStability), 200);
+                        return;
+                    } else {
+                        resolve();
+                        return;
+                    }
+                }
+                
+                const rect = container.getBoundingClientRect();
+                
+                // Check if container has reasonable dimensions
+                if (rect.height >= 200 && rect.width >= 400) {
+                    resolve();
+                } else {
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        setTimeout(() => requestAnimationFrame(checkStability), 200);
+                    } else {
+                        resolve();
+                    }
+                }
+            };
+            
+            // Start checking after a small initial delay to allow for layout
+            setTimeout(() => requestAnimationFrame(checkStability), 100);
+        });
     }
     
     getThemeConfig(themeName) {
@@ -1645,6 +1756,8 @@ class TerminalManager extends EventEmitter {
                 
                 // Select first session by default when no target is specified
                 if (claudeWebSessions.length > 0) {
+                    // Wait for DOM to be completely stable before activating first session
+                    await this.waitForDOMStability();
                     await this.selectSessionTab(claudeWebSessions[0].name);
                 }
             } else {
@@ -1680,26 +1793,23 @@ class TerminalManager extends EventEmitter {
                     );
                     if (targetSession) {
                         console.log('🎯 Found target session, selecting:', targetSessionName);
-                        // Give UI time to render, then select the session
-                        setTimeout(async () => {
-                            await this.selectSessionTab(targetSessionName);
-                        }, 100); // Reduced delay for better responsiveness
+                        // Wait for DOM stability before selecting the session
+                        await this.waitForDOMStability();
+                        await this.selectSessionTab(targetSessionName);
                     } else {
                         console.warn(`❌ Target session ${targetSessionName} not found in loaded sessions:`, claudeWebSessions.map(s => s.name));
                         // Fallback to first session if target not found
                         if (claudeWebSessions.length > 0) {
                             console.log('🔄 Falling back to first session:', claudeWebSessions[0].name);
-                            setTimeout(async () => {
-                                await this.selectSessionTab(claudeWebSessions[0].name);
-                            }, 100);
+                            await this.waitForDOMStability();
+                            await this.selectSessionTab(claudeWebSessions[0].name);
                         }
                     }
                 } else {
                     // If no target specified, select first session
                     if (claudeWebSessions.length > 0) {
-                        setTimeout(async () => {
-                            await this.selectSessionTab(claudeWebSessions[0].name);
-                        }, 100);
+                        await this.waitForDOMStability();
+                        await this.selectSessionTab(claudeWebSessions[0].name);
                     }
                 }
             } else {
@@ -1772,8 +1882,12 @@ class TerminalManager extends EventEmitter {
     }
     
     async createNewSession() {
-        // Create a new session without project concept
-        socket.socket.emit('terminal:create-new-session', { cols: 80, rows: 24 });
+        // Create a new session without project concept using calculated dimensions
+        const dimensions = this.getActualTerminalDimensions(null);
+        socket.socket.emit('terminal:create-new-session', { 
+            cols: dimensions.cols, 
+            rows: dimensions.rows 
+        });
     }
     
     async deleteSession(sessionName) {
@@ -1879,6 +1993,9 @@ class TerminalManager extends EventEmitter {
         if (!terminalData.isAttached && !terminalData.isConnecting) {
             terminalData.isConnecting = true;
             try {
+                // Ensure DOM is stable before attaching (critical for size calculation)
+                await this.waitForDOMStability();
+                
                 await this.attachToSessionWithRetry(sessionName);
                 terminalData.isAttached = true;
             } catch (error) {
@@ -2014,9 +2131,14 @@ class TerminalManager extends EventEmitter {
         const terminalData = this.terminals.get(sessionName);
         if (!terminalData) return;
         
-        // Directly attach to the session using its name
+        // Get current terminal dimensions for size synchronization using smart fallback
+        const dimensions = this.getActualTerminalDimensions(terminalData);
+        
+        // Directly attach to the session using its name with current dimensions
         socket.socket.emit('terminal:attach-session', {
-            sessionName: sessionName
+            sessionName: sessionName,
+            currentCols: dimensions.cols,
+            currentRows: dimensions.rows
         });
     }
     
@@ -2030,9 +2152,14 @@ class TerminalManager extends EventEmitter {
             console.log(`🔄 Attach attempt ${attempt}/${maxRetries} for session:`, sessionName);
             
             try {
-                // Send attach request
+                // Get current terminal dimensions for size synchronization using smart fallback
+                const dimensions = this.getActualTerminalDimensions(terminalData);
+                
+                // Send attach request with current dimensions
                 socket.socket.emit('terminal:attach-session', {
-                    sessionName: sessionName
+                    sessionName: sessionName,
+                    currentCols: dimensions.cols,
+                    currentRows: dimensions.rows
                 });
                 
                 // Wait for confirmation or timeout
@@ -2110,10 +2237,15 @@ class TerminalManager extends EventEmitter {
                 if (matchingSession) {
                     console.log(`✅ Restoring session: ${terminalData.sessionName}`);
                     
-                    // Re-attach to the session
+                    // Get current terminal dimensions for size synchronization using smart fallback
+                    const dimensions = this.getActualTerminalDimensions(terminalData);
+                    
+                    // Re-attach to the session with current dimensions
                     socket.socket.emit('terminal:attach-session', {
                         sessionName: terminalData.sessionName,
-                        terminalId: terminalId
+                        terminalId: terminalId,
+                        currentCols: dimensions.cols,
+                        currentRows: dimensions.rows
                     });
                     
                     // Ensure project room membership (important for terminal input routing)
@@ -2216,9 +2348,11 @@ class TerminalManager extends EventEmitter {
                     // Target session not found after max retries, load all sessions
                     this.displayAllSessions(claudeWebSessions);
                     if (claudeWebSessions.length > 0) {
-                        setTimeout(async () => {
+                        // Wait for DOM stability before selecting first session
+                        (async () => {
+                            await this.waitForDOMStability();
                             await this.selectSessionTab(claudeWebSessions[0].name);
-                        }, 100);
+                        })();
                     }
                 }
             } else {
