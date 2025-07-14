@@ -1010,8 +1010,6 @@ kbd {
 /* ===== FILE BROWSER PANEL ===== */
 .file-browser {
     min-height: 200px;
-    max-height: 500px;
-    overflow-y: auto;
 }
 
 .file-actions {
