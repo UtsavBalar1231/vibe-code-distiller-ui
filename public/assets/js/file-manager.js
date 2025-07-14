@@ -429,6 +429,48 @@ class FileManager {
         }
     }
 
+    /**
+     * Adjust menu position to prevent overflow outside viewport
+     * @param {HTMLElement} menu - The menu element
+     * @param {number} x - Initial x position
+     * @param {number} y - Initial y position
+     * @returns {object} Adjusted position {x, y}
+     */
+    adjustMenuPosition(menu, x, y) {
+        // Force reflow to ensure menu dimensions are accurate
+        menu.offsetHeight;
+        
+        const menuRect = menu.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const offset = 10; // Increased offset for better edge clearance
+        
+        let adjustedX = x;
+        let adjustedY = y;
+        
+        // Check right boundary
+        if (x + menuRect.width > viewportWidth) {
+            adjustedX = viewportWidth - menuRect.width - offset;
+        }
+        
+        // Check bottom boundary
+        if (y + menuRect.height > viewportHeight) {
+            adjustedY = viewportHeight - menuRect.height - offset;
+        }
+        
+        // Ensure menu doesn't go off left edge
+        if (adjustedX < offset) {
+            adjustedX = offset;
+        }
+        
+        // Ensure menu doesn't go off top edge
+        if (adjustedY < offset) {
+            adjustedY = offset;
+        }
+        
+        return { x: adjustedX, y: adjustedY };
+    }
+
     showFileMenu(event, filePath, fileType) {
         event.stopPropagation();
         
@@ -500,10 +542,18 @@ class FileManager {
             });
         });
         
-        // Position and show menu
-        menu.style.left = event.pageX + 'px';
-        menu.style.top = event.pageY + 'px';
+        // Position and show menu with boundary checking
+        // First, make menu visible to get its dimensions
         menu.style.display = 'block';
+        menu.style.visibility = 'hidden';
+        
+        // Calculate adjusted position to prevent overflow
+        const adjustedPosition = this.adjustMenuPosition(menu, event.pageX, event.pageY);
+        
+        // Apply the adjusted position
+        menu.style.left = adjustedPosition.x + 'px';
+        menu.style.top = adjustedPosition.y + 'px';
+        menu.style.visibility = 'visible';
         menu.classList.add('active');
         
         // Hide menu when clicking outside
