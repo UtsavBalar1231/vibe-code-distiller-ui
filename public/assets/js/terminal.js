@@ -507,6 +507,21 @@ class TerminalManager extends EventEmitter {
         return 'dark'; // Default to dark theme
     }
     
+    updateTerminalTheme() {
+        const currentTheme = this.getCurrentTheme();
+        const themeConfig = this.getThemeConfig(currentTheme);
+        
+        // Update all active terminals with the new theme
+        this.terminals.forEach((terminalData, terminalId) => {
+            const terminal = terminalData.terminal;
+            if (terminal && terminal.options) {
+                terminal.options.theme = themeConfig;
+                // Force terminal to refresh with new theme
+                terminal.refresh(0, terminal.rows - 1);
+            }
+        });
+    }
+    
     calculateTerminalSize(fontSize = 14) {
         try {
             // Get container dimensions
@@ -676,26 +691,26 @@ class TerminalManager extends EventEmitter {
             },
             light: {
                 background: '#ffffff',
-                foreground: '#000000',
+                foreground: '#333333',
                 cursor: '#000000',
                 cursorAccent: '#ffffff',
                 selection: '#add6ff',
-                black: '#000000',
+                black: '#333333',
                 red: '#cd3131',
                 green: '#00bc00',
                 yellow: '#949800',
                 blue: '#0451a5',
                 magenta: '#bc05bc',
                 cyan: '#0598bc',
-                white: '#000000',
+                white: '#333333',
                 brightBlack: '#666666',
-                brightRed: '#cd3131',
+                brightRed: '#f14c4c',
                 brightGreen: '#14ce14',
                 brightYellow: '#b5ba00',
-                brightBlue: '#0451a5',
-                brightMagenta: '#bc05bc',
-                brightCyan: '#0598bc',
-                brightWhite: '#a5a5a5'
+                brightBlue: '#3b8eea',
+                brightMagenta: '#d670d6',
+                brightCyan: '#29b8db',
+                brightWhite: '#333333'
             },
             'high-contrast': {
                 background: '#000000',

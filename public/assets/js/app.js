@@ -124,6 +124,10 @@ class ClaudeCodeWebManager extends EventEmitter {
         // Theme toggle
         DOM.on('theme-toggle', 'click', () => {
             theme.toggle();
+            // Update terminal themes after theme change
+            if (window.terminalManager) {
+                window.terminalManager.updateTerminalTheme();
+            }
         });
         
         // Settings button
@@ -410,6 +414,10 @@ class ClaudeCodeWebManager extends EventEmitter {
         // Setup settings event handlers
         DOM.on('theme-select', 'change', (e) => {
             theme.applyTheme(e.target.value);
+            // Update terminal themes after theme change
+            if (window.terminalManager) {
+                window.terminalManager.updateTerminalTheme();
+            }
         });
         
         // Terminal settings event handlers
