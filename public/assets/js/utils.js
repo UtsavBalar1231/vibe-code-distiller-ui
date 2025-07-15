@@ -391,6 +391,9 @@ class NotificationManager {
             this.clear();
             this.pendingNotifications = [];
         }
+        
+        // Sync with settings modal checkbox
+        this.syncSettingsCheckbox();
     }
     
     updateVisibility() {
@@ -449,6 +452,14 @@ class NotificationManager {
     
     isNotificationEnabled() {
         return this.isEnabled;
+    }
+    
+    syncSettingsCheckbox() {
+        // Update settings modal checkbox if it exists
+        const settingsCheckbox = DOM.get('notifications-enabled');
+        if (settingsCheckbox) {
+            settingsCheckbox.checked = this.isEnabled;
+        }
     }
     
     show(message, type = 'info', options = {}) {

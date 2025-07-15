@@ -429,6 +429,17 @@ class ClaudeCodeWebManager extends EventEmitter {
             }
         });
         
+        // Notification settings event handler
+        DOM.on('notifications-enabled', 'change', (e) => {
+            const isEnabled = e.target.checked;
+            Storage.set('notifications-enabled', isEnabled);
+            
+            // Update NotificationManager state
+            if (window.notifications && window.notifications.isEnabled !== isEnabled) {
+                window.notifications.toggle();
+            }
+        });
+        
     }
     
     loadSettingsValues() {
@@ -439,6 +450,15 @@ class ClaudeCodeWebManager extends EventEmitter {
         const fontSizeSlider = DOM.get('terminal-font-size');
         if (fontSizeSlider) {
             fontSizeSlider.value = savedFontSize;
+        }
+        
+        // Load notification settings
+        const notificationsEnabled = Storage.get('notifications-enabled', true);
+        
+        // Set notification checkbox value
+        const notificationCheckbox = DOM.get('notifications-enabled');
+        if (notificationCheckbox) {
+            notificationCheckbox.checked = notificationsEnabled;
         }
     }
     
