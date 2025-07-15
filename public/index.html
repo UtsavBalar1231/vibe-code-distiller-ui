@@ -184,7 +184,9 @@
                             <!-- Terminal tabs will be created here -->
                         </div>
                         <div class="terminal-controls">
-                            <!-- Terminal control buttons removed as per UI simplification -->
+                            <button class="btn btn-primary btn-small" id="new-terminal-btn" title="Create New Terminal">
+                                New Terminal
+                            </button>
                         </div>
                     </div>
                     
@@ -206,6 +208,63 @@
                 </div>
 
             </main>
+
+            <!-- Shortcuts Panel -->
+            <div id="shortcuts-panel" class="shortcuts-panel collapsed">
+                <!-- Toggle Button -->
+                <div class="shortcuts-toggle" id="shortcuts-toggle">
+                    <span class="shortcuts-toggle-icon">◀</span>
+                </div>
+                
+                <!-- Panel Header -->
+                <div class="shortcuts-header">
+                    <h3>Keyboard Shortcuts</h3>
+                    <div class="shortcuts-header-actions">
+                        <button class="shortcuts-pin-btn" id="shortcuts-pin-btn" title="Pin panel">📌</button>
+                    </div>
+                </div>
+                
+                <!-- Panel Content -->
+                <div class="shortcuts-content">
+                    <!-- Terminal Commands Section -->
+                    <div class="shortcuts-section">
+                        <div class="shortcuts-section-title">Terminal Commands</div>
+                        <div class="shortcuts-list">
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">cc</span>
+                                <span class="shortcut-description">Quick start Claude Code</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">ccs</span>
+                                <span class="shortcut-description">Start Claude Code in YOLO mode</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Claude Code Commands Section -->
+                    <div class="shortcuts-section">
+                        <div class="shortcuts-section-title">Claude Code Commands</div>
+                        <div class="shortcuts-list">
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">/clear</span>
+                                <span class="shortcut-description">Clear context</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">/exit</span>
+                                <span class="shortcut-description">Exit Claude Code</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">/compact</span>
+                                <span class="shortcut-description">Compact context</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+
+            <!-- Shortcuts Trigger Area -->
+            <div id="shortcuts-trigger-area" class="shortcuts-trigger-area"></div>
         </div>
     </div>
 
@@ -259,7 +318,6 @@
                     <div class="settings-tabs">
                         <button class="settings-tab active" data-tab="general">General</button>
                         <button class="settings-tab" data-tab="terminal">Terminal</button>
-                        <button class="settings-tab" data-tab="claude">Claude</button>
                         <button class="settings-tab" data-tab="system">System</button>
                     </div>
                     <div class="settings-content">
@@ -286,20 +344,24 @@
                         <h4>Keyboard Shortcuts</h4>
                         <div class="shortcuts-list">
                             <div class="shortcut">
-                                <kbd>Ctrl</kbd> + <kbd>N</kbd>
-                                <span>New Project</span>
+                                <kbd>F1</kbd>
+                                <span>Toggle Shortcuts Panel</span>
                             </div>
                             <div class="shortcut">
-                                <kbd>Ctrl</kbd> + <kbd>`</kbd>
-                                <span>Toggle Terminal</span>
+                                <kbd>Ctrl</kbd> + <kbd>,</kbd>
+                                <span>Open Settings</span>
                             </div>
                             <div class="shortcut">
                                 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd>
                                 <span>Clear Terminal</span>
                             </div>
                             <div class="shortcut">
-                                <kbd>F1</kbd>
-                                <span>Help</span>
+                                <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd>
+                                <span>New Terminal Tab</span>
+                            </div>
+                            <div class="shortcut">
+                                <kbd>Escape</kbd>
+                                <span>Close Modals/Menus</span>
                             </div>
                         </div>
                         
@@ -353,6 +415,7 @@
     <script src="/assets/js/file-manager.js"></script>
     <script src="/assets/js/sidebar-divider.js"></script>
     <script src="/assets/js/vertical-divider.js"></script>
+    <script src="/assets/js/shortcuts-panel.js"></script>
     <script src="/assets/js/app.js"></script>
 </body>
 </html>

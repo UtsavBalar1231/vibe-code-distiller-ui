@@ -78,11 +78,6 @@ class TerminalManager extends EventEmitter {
                 this.switchToTerminal(i - 1);
             });
         }
-        
-        // Tmux session management
-        keyboard.register('ctrl+shift+s', () => {
-            this.listSessions();
-        });
     }
     
     createTerminal(projectId = null, options = {}) {
@@ -507,6 +502,21 @@ class TerminalManager extends EventEmitter {
         return 'dark'; // Default to dark theme
     }
     
+    updateTerminalTheme() {
+        const currentTheme = this.getCurrentTheme();
+        const themeConfig = this.getThemeConfig(currentTheme);
+        
+        // Update all active terminals with the new theme
+        this.terminals.forEach((terminalData, terminalId) => {
+            const terminal = terminalData.terminal;
+            if (terminal && terminal.options) {
+                terminal.options.theme = themeConfig;
+                // Force terminal to refresh with new theme
+                terminal.refresh(0, terminal.rows - 1);
+            }
+        });
+    }
+    
     calculateTerminalSize(fontSize = 14) {
         try {
             // Get container dimensions
@@ -676,26 +686,26 @@ class TerminalManager extends EventEmitter {
             },
             light: {
                 background: '#ffffff',
-                foreground: '#000000',
+                foreground: '#333333',
                 cursor: '#000000',
                 cursorAccent: '#ffffff',
                 selection: '#add6ff',
-                black: '#000000',
+                black: '#333333',
                 red: '#cd3131',
                 green: '#00bc00',
                 yellow: '#949800',
                 blue: '#0451a5',
                 magenta: '#bc05bc',
                 cyan: '#0598bc',
-                white: '#000000',
+                white: '#333333',
                 brightBlack: '#666666',
-                brightRed: '#cd3131',
+                brightRed: '#f14c4c',
                 brightGreen: '#14ce14',
                 brightYellow: '#b5ba00',
-                brightBlue: '#0451a5',
-                brightMagenta: '#bc05bc',
-                brightCyan: '#0598bc',
-                brightWhite: '#a5a5a5'
+                brightBlue: '#3b8eea',
+                brightMagenta: '#d670d6',
+                brightCyan: '#29b8db',
+                brightWhite: '#333333'
             },
             'high-contrast': {
                 background: '#000000',
@@ -1729,11 +1739,6 @@ class TerminalManager extends EventEmitter {
         });
     }
     
-    // Tmux session management
-    async listSessions() {
-        socket.socket.emit('terminal:list-sessions', {});
-    }
-    
     async attachSession(projectId) {
         socket.socket.emit('terminal:attach-session', { projectId });
     }
@@ -2213,10 +2218,8 @@ class TerminalManager extends EventEmitter {
         if (this.isRestoringFromReconnect) {
             this.autoRestoreSessions(sessions);
             this.isRestoringFromReconnect = false;
-        } else {
-            // Normal case: show sessions dialog
-            this.showSessionsDialog(sessions);
         }
+        // Note: Manual session management dialog has been removed
     }
     
     autoRestoreSessions(sessions) {
@@ -2424,94 +2427,6 @@ class TerminalManager extends EventEmitter {
             
         } catch (error) {
             notifications.error(`Error cleaning up deleted session: ${error.message}`);
-        }
-    }
-    
-    showSessionsDialog(sessions) {
-        const dialogContent = document.createElement('div');
-        dialogContent.className = 'sessions-list';
-        
-        if (sessions.length === 0) {
-            dialogContent.innerHTML = '<p>No active tmux sessions found.</p>';
-        } else {
-            const sessionsList = document.createElement('ul');
-            sessionsList.className = 'sessions-list-items';
-            
-            sessions.forEach(session => {
-                const item = document.createElement('li');
-                item.className = 'session-item';
-                
-                const info = document.createElement('div');
-                info.className = 'session-info';
-                info.innerHTML = `
-                    <strong>Project: ${session.projectId}</strong><br>
-                    <small>Created: ${new Date(session.created).toLocaleString()}</small><br>
-                    <small>Status: ${session.attached ? 'Attached' : 'Detached'}</small>
-                `;
-                
-                const actions = document.createElement('div');
-                actions.className = 'session-actions';
-                
-                if (!session.active) {
-                    const attachBtn = document.createElement('button');
-                    attachBtn.textContent = 'Attach';
-                    attachBtn.className = 'btn btn-sm btn-primary';
-                    attachBtn.onclick = () => {
-                        this.attachSession(session.projectId);
-                        modals.close('sessions-dialog');
-                    };
-                    actions.appendChild(attachBtn);
-                } else {
-                    const detachBtn = document.createElement('button');
-                    detachBtn.textContent = 'Detach';
-                    detachBtn.className = 'btn btn-sm btn-secondary';
-                    detachBtn.onclick = () => {
-                        this.detachSession(session.projectId);
-                        modals.close('sessions-dialog');
-                    };
-                    actions.appendChild(detachBtn);
-                }
-                
-                item.appendChild(info);
-                item.appendChild(actions);
-                sessionsList.appendChild(item);
-            });
-            
-            dialogContent.appendChild(sessionsList);
-        }
-        
-        // Add refresh button
-        const refreshBtn = document.createElement('button');
-        refreshBtn.textContent = 'Refresh';
-        refreshBtn.className = 'btn btn-primary';
-        refreshBtn.onclick = () => this.listSessions();
-        
-        const footer = document.createElement('div');
-        footer.className = 'dialog-footer';
-        footer.appendChild(refreshBtn);
-        dialogContent.appendChild(footer);
-        
-        modals.custom({
-            id: 'sessions-dialog',
-            title: 'Tmux Sessions',
-            content: dialogContent,
-            width: '500px'
-        });
-    }
-    
-    // Add menu item for session management
-    addSessionManagementUI() {
-        // Add button to terminal header or toolbar
-        const sessionBtn = document.createElement('button');
-        sessionBtn.className = 'btn btn-sm btn-secondary';
-        sessionBtn.innerHTML = '<i class="fas fa-list"></i> Sessions';
-        sessionBtn.title = 'Manage tmux sessions';
-        sessionBtn.onclick = () => this.listSessions();
-        
-        // Find appropriate place to add button
-        const terminalHeader = DOM.get('terminal-header');
-        if (terminalHeader) {
-            terminalHeader.appendChild(sessionBtn);
         }
     }
     
@@ -2770,14 +2685,20 @@ const terminalManager = new TerminalManager();
 // Make terminal manager globally available immediately
 window.terminalManager = terminalManager;
 
-// Add session management UI after DOM is ready
+// Setup terminal UI after DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    terminalManager.addSessionManagementUI();
-    
     // Add event listener for new terminal button
     const newTerminalBtn = document.getElementById('welcome-new-terminal');
     if (newTerminalBtn) {
         newTerminalBtn.addEventListener('click', () => {
+            terminalManager.createNewSession();
+        });
+    }
+    
+    // Add event listener for terminal header new terminal button
+    const headerNewTerminalBtn = document.getElementById('new-terminal-btn');
+    if (headerNewTerminalBtn) {
+        headerNewTerminalBtn.addEventListener('click', () => {
             terminalManager.createNewSession();
         });
     }

@@ -391,6 +391,9 @@ class NotificationManager {
             this.clear();
             this.pendingNotifications = [];
         }
+        
+        // Sync with settings modal checkbox
+        this.syncSettingsCheckbox();
     }
     
     updateVisibility() {
@@ -449,6 +452,16 @@ class NotificationManager {
     
     isNotificationEnabled() {
         return this.isEnabled;
+    }
+    
+    syncSettingsCheckbox() {
+        // Update settings modal toggle switch if it exists
+        const settingsToggle = DOM.get('notifications-toggle');
+        const settingsCheckbox = DOM.get('notifications-enabled');
+        if (settingsToggle && settingsCheckbox) {
+            settingsCheckbox.checked = this.isEnabled;
+            settingsToggle.classList.toggle('active', this.isEnabled);
+        }
     }
     
     show(message, type = 'info', options = {}) {

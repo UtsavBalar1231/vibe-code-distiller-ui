@@ -190,7 +190,7 @@ The application includes specific optimizations for Raspberry Pi deployment:
   - Sessions persist across browser/device changes
   - Automatic session discovery and reconnection
   - Cross-device session continuation
-  - Session management UI with Ctrl+Shift+S shortcut
+  - Automatic session restoration after reconnection
   - Optional feature controlled by config/terminal.tmux.enabled
 
 - **Enhanced Terminal Management**: Comprehensive terminal session handling

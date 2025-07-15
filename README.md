@@ -101,11 +101,11 @@ The main configuration file is `config/default.json`. Here are the key settings 
 - Upload files by dragging and dropping
 
 ### Keyboard Shortcuts
-- `Ctrl+N`: Create new project
 - `Ctrl+,`: Open settings
-- `Ctrl+Shift+S`: Show tmux session manager
 - `Escape`: Close modals/menus
-- `Ctrl+R`: Restart terminal session
+- `F1`: Toggle shortcuts panel
+- `Ctrl+Shift+C`: Clear terminal
+- `Ctrl+Shift+T`: New terminal tab
 - Mobile menu toggle available for touch devices
 
 ## Features Explained
@@ -115,7 +115,7 @@ When enabled, your terminal sessions become persistent:
 - Start coding on your laptop
 - Switch to your phone/tablet and continue
 - Sessions survive browser crashes and network disconnections
-- Press `Ctrl+Shift+S` to see all active sessions
+- Sessions are automatically managed for you
 
 ### File Management
 - **Drag-and-drop upload**: Drop files directly into the interface
