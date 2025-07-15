@@ -861,6 +861,30 @@ body {
     }
     
     .status-indicators {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        overflow: hidden;
+        flex-wrap: nowrap;
+    }
+    
+    .status-indicators .status-item {
+        font-size: var(--font-size-xs);
+        gap: 2px;
+        white-space: nowrap;
+    }
+    
+    .status-indicators .status-item .icon {
+        font-size: 12px;
+    }
+    
+    .status-indicators .status-item .text {
+        font-size: var(--font-size-xs);
+    }
+    
+    /* Hide less important status items on mobile to save space */
+    .status-indicators #system-temp,
+    .status-indicators #notification-toggle {
         display: none;
     }
     
@@ -957,6 +981,24 @@ body {
     
     /* Hide theme toggle on very small screens */
     #theme-toggle {
+        display: none;
+    }
+    
+    /* Further optimize status indicators for very small screens */
+    .status-indicators {
+        gap: 2px;
+    }
+    
+    .status-indicators .status-item {
+        font-size: 10px;
+    }
+    
+    .status-indicators .status-item .icon {
+        font-size: 10px;
+    }
+    
+    /* Hide memory status on very small screens, keep only connection and CPU */
+    .status-indicators #system-memory {
         display: none;
     }
 }
