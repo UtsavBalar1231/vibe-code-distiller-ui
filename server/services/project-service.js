@@ -491,9 +491,44 @@ class ProjectService {
   }
 
   async deleteProject(projectId) {
-    const project = await this.getProject(projectId);
-    
+    if (!projectId) {
+      throw new AppError('Project ID is required', 400, ERROR_CODES.VALIDATION_ERROR);
+    }
+
+    const projectPath = path.join(this.projectsRoot, projectId);
+    let project = null;
+
     try {
+      // Check if project exists in cache
+      if (this.projectCache.has(projectId)) {
+        project = this.projectCache.get(projectId);
+      }
+
+      // Check if project directory exists in filesystem
+      const projectExists = await fs.pathExists(projectPath);
+      
+      if (!projectExists) {
+        // Project was manually deleted, clean up cache and return success
+        if (this.watchers.has(projectId)) {
+          await this.watchers.get(projectId).close();
+          this.watchers.delete(projectId);
+        }
+        
+        this.projectCache.delete(projectId);
+        
+        logger.info('Project already deleted from filesystem, cleaned up cache:', { projectId });
+        return { success: true, message: SUCCESS_MESSAGES.PROJECT_DELETED };
+      }
+
+      // Project exists, proceed with normal deletion
+      if (!project) {
+        // Load project info if not in cache
+        project = await this.loadProject(projectId, projectPath);
+        if (!project) {
+          throw new AppError('Failed to load project for deletion', 500, ERROR_CODES.PROJECT_NOT_FOUND);
+        }
+      }
+
       // Stop any watchers
       if (this.watchers.has(projectId)) {
         await this.watchers.get(projectId).close();
@@ -504,7 +539,7 @@ class ProjectService {
       this.projectCache.delete(projectId);
       
       // Delete directory
-      await fs.remove(project.path);
+      await fs.remove(projectPath);
       
       logger.info('Project deleted:', { projectId });
       
