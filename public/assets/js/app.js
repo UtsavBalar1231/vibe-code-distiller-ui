@@ -356,7 +356,10 @@ class ClaudeCodeWebManager extends EventEmitter {
                             <div class="settings-item-description">Show system and project notifications</div>
                         </div>
                         <div class="settings-item-control">
-                            <input type="checkbox" id="notifications-enabled" checked>
+                            <div class="toggle-switch" id="notifications-toggle">
+                                <input type="checkbox" id="notifications-enabled">
+                                <div class="toggle-slider"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -430,12 +433,20 @@ class ClaudeCodeWebManager extends EventEmitter {
         });
         
         // Notification settings event handler
-        DOM.on('notifications-enabled', 'change', (e) => {
-            const isEnabled = e.target.checked;
-            Storage.set('notifications-enabled', isEnabled);
+        DOM.on('notifications-toggle', 'click', (e) => {
+            const toggleElement = e.currentTarget;
+            const checkbox = toggleElement.querySelector('input[type="checkbox"]');
             
-            // Update NotificationManager state
-            if (window.notifications && window.notifications.isEnabled !== isEnabled) {
+            // Toggle the checkbox state
+            checkbox.checked = !checkbox.checked;
+            
+            // Update visual state
+            toggleElement.classList.toggle('active', checkbox.checked);
+            
+            // Save state and update NotificationManager
+            Storage.set('notifications-enabled', checkbox.checked);
+            
+            if (window.notifications && window.notifications.isEnabled !== checkbox.checked) {
                 window.notifications.toggle();
             }
         });
@@ -455,10 +466,12 @@ class ClaudeCodeWebManager extends EventEmitter {
         // Load notification settings
         const notificationsEnabled = Storage.get('notifications-enabled', true);
         
-        // Set notification checkbox value
+        // Set notification toggle switch state
+        const notificationToggle = DOM.get('notifications-toggle');
         const notificationCheckbox = DOM.get('notifications-enabled');
-        if (notificationCheckbox) {
+        if (notificationToggle && notificationCheckbox) {
             notificationCheckbox.checked = notificationsEnabled;
+            notificationToggle.classList.toggle('active', notificationsEnabled);
         }
     }
     

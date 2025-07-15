@@ -455,10 +455,12 @@ class NotificationManager {
     }
     
     syncSettingsCheckbox() {
-        // Update settings modal checkbox if it exists
+        // Update settings modal toggle switch if it exists
+        const settingsToggle = DOM.get('notifications-toggle');
         const settingsCheckbox = DOM.get('notifications-enabled');
-        if (settingsCheckbox) {
+        if (settingsToggle && settingsCheckbox) {
             settingsCheckbox.checked = this.isEnabled;
+            settingsToggle.classList.toggle('active', this.isEnabled);
         }
     }
     

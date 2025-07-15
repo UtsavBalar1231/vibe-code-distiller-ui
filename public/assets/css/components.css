@@ -806,6 +806,58 @@ select {
     margin-left: var(--spacing-md);
 }
 
+/* ===== TOGGLE SWITCH COMPONENT ===== */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+    background-color: var(--bg-tertiary);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    vertical-align: middle;
+}
+
+.toggle-switch:hover {
+    background-color: var(--bg-secondary);
+}
+
+.toggle-switch.active {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.toggle-switch .toggle-slider {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background-color: white;
+    border-radius: 50%;
+    transition: transform 0.3s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch.active .toggle-slider {
+    transform: translateX(26px);
+}
+
+.toggle-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+/* Override mobile input styling for toggle switches */
+.toggle-switch input {
+    min-height: auto !important;
+    font-size: inherit !important;
+}
+
 /* ===== KEYBOARD SHORTCUTS ===== */
 .shortcuts-list {
     display: flex;
