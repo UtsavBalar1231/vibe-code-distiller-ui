@@ -105,7 +105,6 @@ The main configuration file is `config/default.json`. Here are the key settings 
 - `Escape`: Close modals/menus
 - `F1`: Toggle shortcuts panel
 - `Ctrl+Shift+C`: Clear terminal
-- `Ctrl+Shift+S`: Session management
 - `Ctrl+Shift+T`: New terminal tab
 - Mobile menu toggle available for touch devices
 
