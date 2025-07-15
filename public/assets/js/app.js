@@ -173,11 +173,6 @@ class ClaudeCodeWebManager extends EventEmitter {
     
     setupKeyboardShortcuts() {
         // Global shortcuts
-        keyboard.register('ctrl+n', () => {
-            projectManager.showCreateProjectModal();
-        });
-        
-        
         keyboard.register('ctrl+,', () => {
             this.showSettings();
         });
