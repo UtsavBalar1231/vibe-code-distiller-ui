@@ -380,21 +380,6 @@ class ClaudeCodeWebManager extends EventEmitter {
                 </div>
             </div>
             
-            <div class="settings-panel" data-panel="claude">
-                <div class="settings-group">
-                    <h4>Claude Code Integration</h4>
-                    <div class="settings-item">
-                        <div class="settings-item-info">
-                            <div class="settings-item-title">Auto-start Claude</div>
-                            <div class="settings-item-description">Automatically start Claude when opening projects</div>
-                        </div>
-                        <div class="settings-item-control">
-                            <input type="checkbox" id="auto-start-claude">
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
             <div class="settings-panel" data-panel="system">
                 <div class="settings-group">
                     <h4>System Information</h4>
