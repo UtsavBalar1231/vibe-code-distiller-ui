@@ -6,6 +6,9 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
+const fs = require('fs');
+const { execSync } = require('child_process');
+const os = require('os');
 const compression = require('compression');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -188,9 +191,60 @@ app.use(errorHandler);
 const port = process.env.PORT || SERVER.DEFAULT_PORT;
 const host = process.env.HOST || SERVER.DEFAULT_HOST;
 
+// Setup Claude aliases function
+const setupClaudeAliases = () => {
+  try {
+    const homeDir = os.homedir();
+    const bashrcPath = path.join(homeDir, '.bashrc');
+    
+    // Check if .bashrc exists
+    if (!fs.existsSync(bashrcPath)) {
+      logger.warn('.bashrc file not found, skipping alias setup');
+      return;
+    }
+    
+    // Read current .bashrc content
+    const bashrcContent = fs.readFileSync(bashrcPath, 'utf8');
+    
+    // Check if aliases already exist
+    const ccAliasExists = bashrcContent.includes('alias cc="claude"') || bashrcContent.includes("alias cc='claude'");
+    const ccsAliasExists = bashrcContent.includes('alias ccs="claude --dangerously-skip-permissions"') || bashrcContent.includes("alias ccs='claude --dangerously-skip-permissions'");
+    
+    if (ccAliasExists && ccsAliasExists) {
+      logger.info('Claude aliases already exist in .bashrc');
+    } else {
+      // Add aliases to .bashrc
+      const aliasesToAdd = [];
+      
+      if (!ccAliasExists) {
+        aliasesToAdd.push('alias cc="claude"');
+      }
+      
+      if (!ccsAliasExists) {
+        aliasesToAdd.push('alias ccs="claude --dangerously-skip-permissions"');
+      }
+      
+      if (aliasesToAdd.length > 0) {
+        const aliasSection = `\n# Claude aliases\n${aliasesToAdd.join('\n')}\n`;
+        fs.appendFileSync(bashrcPath, aliasSection);
+        logger.info(`Added Claude aliases to .bashrc: ${aliasesToAdd.join(', ')}`);
+      }
+    }
+    
+    // Note: Aliases will be available in new shell sessions
+    logger.info('Claude aliases are now available in new shell sessions (cc, ccs)');
+    
+  } catch (error) {
+    logger.error('Error setting up Claude aliases:', error.message);
+  }
+};
+
 // Start server
 const startServer = async () => {
   try {
+    // Setup Claude aliases at startup
+    setupClaudeAliases();
+    
     // Check if port is available
     server.listen(port, host, () => {
       logger.system('Server started', {
