@@ -208,6 +208,85 @@
                 </div>
 
             </main>
+
+            <!-- Shortcuts Panel -->
+            <div id="shortcuts-panel" class="shortcuts-panel collapsed">
+                <!-- Toggle Button -->
+                <div class="shortcuts-toggle" id="shortcuts-toggle">
+                    <span class="shortcuts-toggle-icon">◀</span>
+                </div>
+                
+                <!-- Panel Header -->
+                <div class="shortcuts-header">
+                    <h3>Keyboard Shortcuts</h3>
+                    <div class="shortcuts-header-actions">
+                        <button class="shortcuts-pin-btn" id="shortcuts-pin-btn" title="Pin panel">📌</button>
+                    </div>
+                </div>
+                
+                <!-- Panel Content -->
+                <div class="shortcuts-content">
+                    <!-- Terminal Commands Section -->
+                    <div class="shortcuts-section">
+                        <div class="shortcuts-section-title">Terminal Commands</div>
+                        <div class="shortcuts-list">
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">cc</span>
+                                <span class="shortcut-description">Quick start Claude Code</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">ccs</span>
+                                <span class="shortcut-description">Start Claude Code in YOLO mode</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Claude Code Commands Section -->
+                    <div class="shortcuts-section">
+                        <div class="shortcuts-section-title">Claude Code Commands</div>
+                        <div class="shortcuts-list">
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">/clear</span>
+                                <span class="shortcut-description">Clear context</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">/exit</span>
+                                <span class="shortcut-description">Exit Claude Code</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">/compact</span>
+                                <span class="shortcut-description">Compact context</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Application Shortcuts Section -->
+                    <div class="shortcuts-section">
+                        <div class="shortcuts-section-title">Application Shortcuts</div>
+                        <div class="shortcuts-list">
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">F1</span>
+                                <span class="shortcut-description">Toggle shortcuts panel</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">Ctrl + N</span>
+                                <span class="shortcut-description">New project</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">Ctrl + `</span>
+                                <span class="shortcut-description">New terminal</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-command">Ctrl + Shift + S</span>
+                                <span class="shortcut-description">Session management</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shortcuts Trigger Area -->
+            <div id="shortcuts-trigger-area" class="shortcuts-trigger-area"></div>
         </div>
     </div>
 
@@ -287,20 +366,24 @@
                         <h4>Keyboard Shortcuts</h4>
                         <div class="shortcuts-list">
                             <div class="shortcut">
+                                <kbd>F1</kbd>
+                                <span>Toggle Shortcuts Panel</span>
+                            </div>
+                            <div class="shortcut">
                                 <kbd>Ctrl</kbd> + <kbd>N</kbd>
                                 <span>New Project</span>
                             </div>
                             <div class="shortcut">
                                 <kbd>Ctrl</kbd> + <kbd>`</kbd>
-                                <span>Toggle Terminal</span>
+                                <span>New Terminal</span>
                             </div>
                             <div class="shortcut">
                                 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd>
                                 <span>Clear Terminal</span>
                             </div>
                             <div class="shortcut">
-                                <kbd>F1</kbd>
-                                <span>Help</span>
+                                <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd>
+                                <span>Session Management</span>
                             </div>
                         </div>
                         
@@ -354,6 +437,7 @@
     <script src="/assets/js/file-manager.js"></script>
     <script src="/assets/js/sidebar-divider.js"></script>
     <script src="/assets/js/vertical-divider.js"></script>
+    <script src="/assets/js/shortcuts-panel.js"></script>
     <script src="/assets/js/app.js"></script>
 </body>
 </html>

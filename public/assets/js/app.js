@@ -23,6 +23,9 @@ class ClaudeCodeWebManager extends EventEmitter {
             // Setup keyboard shortcuts
             this.setupKeyboardShortcuts();
             
+            // Initialize shortcuts panel if available
+            this.initializeShortcutsPanel();
+            
             // Check authentication
             await this.checkAuthentication();
             
@@ -186,6 +189,21 @@ class ClaudeCodeWebManager extends EventEmitter {
         
         // Terminal shortcuts are handled by TerminalManager
         // Project shortcuts are handled by ProjectManager
+    }
+    
+    initializeShortcutsPanel() {
+        // The shortcuts panel initializes itself via DOMContentLoaded
+        // but we can add any app-specific integration here
+        if (window.shortcutsPanel) {
+            console.log('✅ Shortcuts panel initialized');
+        } else {
+            // Wait for shortcuts panel to be ready
+            setTimeout(() => {
+                if (window.shortcutsPanel) {
+                    console.log('✅ Shortcuts panel ready');
+                }
+            }, 100);
+        }
     }
     
     async checkAuthentication() {
@@ -363,6 +381,31 @@ class ClaudeCodeWebManager extends EventEmitter {
                         </div>
                     </div>
                 </div>
+                
+                <div class="settings-group">
+                    <h4>Shortcuts Panel</h4>
+                    <div class="settings-item">
+                        <div class="settings-item-info">
+                            <div class="settings-item-title">Show Shortcuts Panel</div>
+                            <div class="settings-item-description">Display floating keyboard shortcuts reference panel</div>
+                        </div>
+                        <div class="settings-item-control">
+                            <div class="toggle-switch" id="shortcuts-panel-toggle">
+                                <input type="checkbox" id="shortcuts-panel-enabled" checked>
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <div class="settings-item-info">
+                            <div class="settings-item-title">Reset Panel Position</div>
+                            <div class="settings-item-description">Reset shortcuts panel to default position</div>
+                        </div>
+                        <div class="settings-item-control">
+                            <button class="btn btn-secondary btn-small" id="reset-shortcuts-position">Reset Position</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <div class="settings-panel" data-panel="terminal">
@@ -436,6 +479,36 @@ class ClaudeCodeWebManager extends EventEmitter {
             }
         });
         
+        // Shortcuts panel settings event handlers
+        DOM.on('shortcuts-panel-toggle', 'click', (e) => {
+            const toggleElement = e.currentTarget;
+            const checkbox = toggleElement.querySelector('input[type="checkbox"]');
+            
+            // Toggle the checkbox state
+            checkbox.checked = !checkbox.checked;
+            
+            // Update visual state
+            toggleElement.classList.toggle('active', checkbox.checked);
+            
+            // Save state and update shortcuts panel
+            Storage.set('shortcuts-panel-enabled', checkbox.checked);
+            
+            if (window.shortcutsPanel) {
+                if (checkbox.checked) {
+                    window.shortcutsPanel.enable();
+                } else {
+                    window.shortcutsPanel.disable();
+                }
+            }
+        });
+        
+        DOM.on('reset-shortcuts-position', 'click', () => {
+            if (window.shortcutsPanel && typeof window.shortcutsPanel.resetPosition === 'function') {
+                window.shortcutsPanel.resetPosition();
+                notifications.success('Shortcuts panel position reset to default');
+            }
+        });
+        
     }
     
     loadSettingsValues() {
@@ -457,6 +530,17 @@ class ClaudeCodeWebManager extends EventEmitter {
         if (notificationToggle && notificationCheckbox) {
             notificationCheckbox.checked = notificationsEnabled;
             notificationToggle.classList.toggle('active', notificationsEnabled);
+        }
+        
+        // Load shortcuts panel settings
+        const shortcutsPanelEnabled = Storage.get('shortcuts-panel-enabled', true);
+        
+        // Set shortcuts panel toggle switch state
+        const shortcutsToggle = DOM.get('shortcuts-panel-toggle');
+        const shortcutsCheckbox = DOM.get('shortcuts-panel-enabled');
+        if (shortcutsToggle && shortcutsCheckbox) {
+            shortcutsCheckbox.checked = shortcutsPanelEnabled;
+            shortcutsToggle.classList.toggle('active', shortcutsPanelEnabled);
         }
     }
     
@@ -559,6 +643,11 @@ class ClaudeCodeWebManager extends EventEmitter {
     
     cleanup() {
         console.log('🧹 Cleaning up application...');
+        
+        // Cleanup shortcuts panel
+        if (window.shortcutsPanel && typeof window.shortcutsPanel.destroy === 'function') {
+            window.shortcutsPanel.destroy();
+        }
         
         // Leave current project
         if (projectManager.getCurrentProject()) {

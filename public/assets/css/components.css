@@ -1357,3 +1357,283 @@ kbd {
     border-top: 1px solid var(--border-color);
     text-align: right;
 }
+
+/* ===== SHORTCUTS PANEL ===== */
+.shortcuts-panel {
+    position: fixed;
+    top: 80px;
+    right: 0;
+    width: 320px;
+    max-height: calc(100vh - 100px);
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-right: none;
+    border-radius: var(--border-radius-lg) 0 0 var(--border-radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: var(--z-dropdown);
+    transform: translateX(100%);
+    transition: transform var(--transition-normal);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.shortcuts-panel.collapsed {
+    transform: translateX(calc(100% - 40px));
+}
+
+.shortcuts-panel.expanded {
+    transform: translateX(0);
+}
+
+.shortcuts-panel.pinned {
+    transform: translateX(0);
+}
+
+.shortcuts-toggle {
+    position: absolute;
+    left: -40px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 60px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-right: none;
+    border-radius: var(--border-radius-lg) 0 0 var(--border-radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    z-index: 2;
+}
+
+.shortcuts-toggle:hover {
+    background-color: var(--bg-hover);
+}
+
+.shortcuts-toggle-icon {
+    font-size: var(--font-size-md);
+    color: var(--text-primary);
+    transition: transform var(--transition-fast);
+}
+
+.shortcuts-panel.expanded .shortcuts-toggle-icon {
+    transform: rotate(180deg);
+}
+
+.shortcuts-header {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    background-color: var(--bg-secondary);
+    cursor: grab;
+    user-select: none;
+}
+
+.shortcuts-header.dragging {
+    cursor: grabbing;
+}
+
+.shortcuts-header:hover {
+    background-color: var(--bg-hover);
+}
+
+.shortcuts-header h3 {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.shortcuts-header-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+}
+
+.shortcuts-pin-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: var(--spacing-xs);
+    border-radius: var(--border-radius-sm);
+    transition: all var(--transition-fast);
+    font-size: var(--font-size-sm);
+}
+
+.shortcuts-pin-btn:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-hover);
+}
+
+.shortcuts-pin-btn.pinned {
+    color: var(--text-inverse);
+    background-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.shortcuts-pin-btn.pinned:hover {
+    background-color: var(--accent-secondary);
+    box-shadow: 0 0 0 2px var(--accent-secondary);
+}
+
+
+.shortcuts-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-md);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.shortcuts-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.shortcuts-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.shortcuts-content::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 3px;
+}
+
+.shortcuts-content::-webkit-scrollbar-thumb:hover {
+    background-color: var(--border-hover);
+}
+
+.shortcuts-section {
+    margin-bottom: var(--spacing-lg);
+}
+
+.shortcuts-section:last-child {
+    margin-bottom: 0;
+}
+
+.shortcuts-section-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
+    padding-bottom: var(--spacing-xs);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.shortcuts-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.shortcut-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+    transition: background-color var(--transition-fast);
+}
+
+.shortcut-item:hover {
+    background-color: var(--bg-hover);
+}
+
+.shortcut-command {
+    font-family: var(--terminal-font-family);
+    font-size: var(--font-size-xs);
+    color: var(--text-primary);
+    background-color: var(--bg-tertiary);
+    padding: 2px 6px;
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--border-color);
+    min-width: 0;
+    flex-shrink: 0;
+}
+
+.shortcut-description {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    margin-left: var(--spacing-sm);
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+}
+
+/* Mouse hover area for triggering panel */
+.shortcuts-trigger-area {
+    position: fixed;
+    top: 80px;
+    right: 0;
+    width: 20px;
+    height: calc(100vh - 100px);
+    z-index: var(--z-base);
+    pointer-events: none;
+}
+
+.shortcuts-trigger-area.active {
+    pointer-events: all;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    .shortcuts-panel {
+        width: 280px;
+        max-height: calc(100vh - 80px);
+        top: 60px;
+    }
+    
+    .shortcuts-panel.collapsed {
+        width: 35px;
+        transform: translateX(245px);
+    }
+    
+    .shortcuts-toggle {
+        left: -35px;
+        width: 35px;
+        height: 50px;
+    }
+    
+    .shortcuts-content {
+        padding: var(--spacing-sm);
+    }
+    
+    .shortcuts-header {
+        padding: var(--spacing-sm);
+    }
+    
+    .shortcuts-header h3 {
+        font-size: var(--font-size-sm);
+    }
+    
+    .shortcut-command {
+        font-size: 10px;
+        padding: 1px 4px;
+    }
+    
+    .shortcut-description {
+        font-size: 10px;
+    }
+}
+
+/* Dark/Light theme adjustments */
+.theme-light .shortcuts-panel {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    box-shadow: var(--shadow-lg);
+}
+
+.theme-light .shortcuts-toggle {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+
+.theme-light .shortcuts-command {
+    background-color: var(--bg-tertiary);
+    border-color: var(--border-color);
+}
