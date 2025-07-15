@@ -2797,6 +2797,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
+    // Add event listener for terminal header new terminal button
+    const headerNewTerminalBtn = document.getElementById('new-terminal-btn');
+    if (headerNewTerminalBtn) {
+        headerNewTerminalBtn.addEventListener('click', () => {
+            terminalManager.createNewSession();
+        });
+    }
+    
     // Load all sessions after DOM is ready and socket is connected
     const loadSessionsWhenReady = () => {
         if (socket && socket.isConnected()) {
