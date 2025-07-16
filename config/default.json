@@ -19,7 +19,7 @@
   },
   "terminal": {
     "bufferSize": 10000,
-    "scrollback": 1000,
+    "scrollback": 2000,
     "fontSize": 14,
     "fontFamily": "Monaco, Menlo, 'Ubuntu Mono', monospace",
     "theme": {

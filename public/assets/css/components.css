@@ -439,10 +439,17 @@ select {
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
-    padding: var(--spacing-xs);
+    padding: var(--spacing-sm);
     border-radius: var(--border-radius-sm);
-    transition: color var(--transition-fast);
+    transition: color var(--transition-fast), background-color var(--transition-fast);
     flex-shrink: 0;
+    min-width: 32px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-base);
+    font-weight: 500;
 }
 
 .notification-close:hover {

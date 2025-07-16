@@ -144,17 +144,13 @@ class TmuxUtils {
   
   static async capturePane(sessionName) {
     try {
-      // Use -e to preserve escape sequences (colors) and -J to preserve line breaks
-      // -S -50 captures last 50 lines to avoid too much history
-      // -E - means end at current line
-      // -p means print to stdout
-      const { stdout } = await execAsync(`tmux capture-pane -t ${sessionName} -e -J -S -50 -E - -p`);
+      // Only capture current screen content, not history
+      // This ensures cursor position is relative to the displayed content
+      const { stdout } = await execAsync(`tmux capture-pane -t ${sessionName} -e -p`);
       
       if (!stdout || !stdout.trim()) {
-        logger.debug(`No content captured for ${sessionName}, trying current screen only`);
-        // If no content, try capturing just the current screen
-        const { stdout: currentScreen } = await execAsync(`tmux capture-pane -t ${sessionName} -e -p`);
-        return currentScreen || '';
+        logger.debug(`No content captured for ${sessionName}`);
+        return '';
       }
       
       // Remove excessive trailing newlines but keep the structure

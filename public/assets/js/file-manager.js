@@ -224,9 +224,8 @@ class FileManager {
                 event.stopPropagation();
                 if (file.type === 'directory') {
                     this.navigateToDirectory(file.path);
-                } else {
-                    this.handleFileClick(file);
                 }
+                // Removed file click handler - no action on file click
             });
         }
 
@@ -306,11 +305,6 @@ class FileManager {
     navigateToDirectory(path) {
         this.currentPath = path;
         this.loadFiles();
-    }
-
-    handleFileClick(file) {
-        // For now, just show file info
-        notifications.info(`${file.name} (${this.formatFileSize(file.size)})`);
     }
 
     async uploadFiles(files) {
@@ -413,19 +407,110 @@ class FileManager {
         }
         
         const activeTerminal = terminalManager.getActiveTerminal();
-        if (activeTerminal && activeTerminal.projectId) {
-            const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
-            
-            // Send the file path to the terminal via socket
-            const success = socketClient.sendTerminalInput(activeTerminal.projectId, relativePath);
-            
-            if (success) {
-                notifications.info(`File path sent to terminal: ${relativePath}`);
-            } else {
-                notifications.warning('Failed to send file path to terminal');
-            }
+        console.log('🔍 sendToTerminal debug:', {
+            activeTerminal: activeTerminal,
+            hasProjectId: activeTerminal && activeTerminal.projectId ? true : false,
+            hasSessionName: activeTerminal && activeTerminal.sessionName ? true : false,
+            filePath: filePath
+        });
+        
+        if (!activeTerminal) {
+            notifications.warning('No active terminal session. Please select a terminal tab first.');
+            return;
+        }
+        
+        // Handle both session-based and project-based terminals
+        let terminalIdentifier = null;
+        if (activeTerminal.sessionName && activeTerminal.sessionName.startsWith('claude-web-')) {
+            // Session-based terminal (new approach)
+            terminalIdentifier = activeTerminal.sessionName;
+        } else if (activeTerminal.projectId) {
+            // Project-based terminal (legacy approach)
+            terminalIdentifier = activeTerminal.projectId;
+        }
+        
+        if (!terminalIdentifier) {
+            const errorMsg = activeTerminal.sessionName ? 
+                `Terminal session "${activeTerminal.sessionName}" is not associated with a project.` :
+                'Active terminal is not associated with a project.';
+            notifications.warning(errorMsg);
+            console.warn('🚨 sendToTerminal: No valid terminal identifier found', { activeTerminal });
+            return;
+        }
+        
+        // Construct the absolute path
+        const absolutePath = this.constructAbsolutePath(filePath);
+        
+        if (!absolutePath) {
+            notifications.warning('Failed to construct absolute file path');
+            console.error('❌ Failed to construct absolute path:', { filePath, currentProjectId: this.currentProjectId });
+            return;
+        }
+        
+        // Send the absolute file path to the terminal via socket
+        const success = socketClient.sendTerminalInput(terminalIdentifier, absolutePath);
+        
+        if (success) {
+            notifications.info(`File path sent to terminal: ${absolutePath}`);
+            console.log('✅ File path sent successfully:', { terminalIdentifier, absolutePath });
         } else {
-            notifications.warning('No active terminal session');
+            notifications.warning('Failed to send file path to terminal');
+            console.error('❌ Failed to send file path:', { terminalIdentifier, absolutePath });
+        }
+    }
+
+    /**
+     * Construct absolute file path from relative path
+     * @param {string} relativePath - Relative file path from server
+     * @returns {string|null} - Absolute file path or null if construction fails
+     */
+    constructAbsolutePath(relativePath) {
+        try {
+            if (!this.currentProjectId) {
+                console.warn('No current project ID available for path construction');
+                return null;
+            }
+            
+            // Get project information to construct absolute path
+            const projectManager = window.projectManager;
+            if (!projectManager) {
+                console.warn('ProjectManager not available for path construction');
+                return null;
+            }
+            
+            const project = projectManager.getProject(this.currentProjectId);
+            if (!project) {
+                console.warn('Project not found for path construction:', this.currentProjectId);
+                return null;
+            }
+            
+            // The project.path should contain the absolute path to the project directory
+            // e.g., /home/lanpangzi/projects/my-project
+            const projectPath = project.path;
+            if (!projectPath) {
+                console.warn('Project path not available:', project);
+                return null;
+            }
+            
+            // Construct absolute path: projectPath + relativePath
+            // Handle both cases: relativePath starting with / or not
+            const cleanRelativePath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
+            const absolutePath = projectPath.endsWith('/') ? 
+                projectPath + cleanRelativePath : 
+                projectPath + '/' + cleanRelativePath;
+            
+            console.log('📁 Constructed absolute path:', {
+                projectId: this.currentProjectId,
+                projectPath: projectPath,
+                relativePath: relativePath,
+                absolutePath: absolutePath
+            });
+            
+            return absolutePath;
+            
+        } catch (error) {
+            console.error('Error constructing absolute path:', error);
+            return null;
         }
     }
 

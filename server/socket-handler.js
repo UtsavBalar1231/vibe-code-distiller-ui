@@ -980,9 +980,9 @@ class SocketManager {
         try {
           const TmuxUtils = require('./utils/tmux-utils');
           
-          // First, get the current cursor position BEFORE capturing content
-          const cursorPosition = await TmuxUtils.getCursorPosition(sessionName);
+          // Get current screen content and cursor position
           const currentContent = await TmuxUtils.capturePane(sessionName);
+          const cursorPosition = await TmuxUtils.getCursorPosition(sessionName);
           
           if (currentContent && currentContent.trim()) {
             logger.info('Restoring terminal state for client:', { 
@@ -1011,8 +1011,8 @@ class SocketManager {
                 timestamp: new Date().toISOString()
               });
               
-              // Finally, restore exact cursor position using ANSI escape sequence
-              if (cursorPosition) {
+              // Finally, restore cursor position (now relative to current screen)
+              if (cursorPosition && cursorPosition.cursorX >= 0 && cursorPosition.cursorY >= 0) {
                 setTimeout(() => {
                   // ANSI escape sequence to set cursor position: \033[row;colH
                   // Note: ANSI sequences are 1-based, tmux cursor positions are 0-based
@@ -1020,7 +1020,7 @@ class SocketManager {
                   const col = cursorPosition.cursorX + 1;
                   const setCursorPosition = `\x1b[${row};${col}H`;
                   
-                  logger.info('Restoring cursor position:', { 
+                  logger.info('Restoring cursor position (relative to current screen):', { 
                     sessionName, 
                     tmuxX: cursorPosition.cursorX, 
                     tmuxY: cursorPosition.cursorY,
@@ -1034,6 +1034,8 @@ class SocketManager {
                     timestamp: new Date().toISOString()
                   });
                 }, 100); // Small delay to ensure content is rendered first
+              } else {
+                logger.debug('Invalid cursor position, skipping cursor restoration:', { sessionName, cursorPosition });
               }
             }, 50); // Small delay to ensure clear screen happens first
           } else {
