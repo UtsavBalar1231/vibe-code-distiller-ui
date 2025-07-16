@@ -100,7 +100,7 @@ class TerminalManager extends EventEmitter {
             cursor: 'block',
             cursorBlink: true,
             cursorStyle: 'block',
-            scrollback: 1000,
+            scrollback: 2000,
             tabStopWidth: 4,
             // rows and cols will be set by FitAddon
             theme: this.getThemeConfig(this.getCurrentTheme()),
