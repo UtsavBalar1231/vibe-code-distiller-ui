@@ -1053,11 +1053,8 @@ class TerminalManager extends EventEmitter {
                 terminalData.terminal.focus();
             }
             
-            // For session-style terminals, use selectSessionTab if available
-            if (terminalData.sessionName && this.selectSessionTab) {
-                this.selectSessionTab(terminalData.sessionName);
-                return; // selectSessionTab will handle activation
-            }
+            // Note: Removed circular call to selectSessionTab to fix double activation system
+            // Session-style terminals will be handled by the unified activation mechanism
             
             // Sync project selection when terminal is activated
             if (terminalData.projectId && window.projectManager) {
@@ -1844,6 +1841,53 @@ class TerminalManager extends EventEmitter {
         }
     }
     
+    /**
+     * Extract project information from session name
+     * Expected format: claude-web-{projectName}-{number}
+     */
+    extractProjectInfoFromSessionName(sessionName) {
+        try {
+            // Default return values
+            const defaultReturn = {
+                projectId: null,
+                projectName: null
+            };
+            
+            if (!sessionName || !sessionName.startsWith('claude-web-')) {
+                return defaultReturn;
+            }
+            
+            // Extract project name using regex: claude-web-{projectName}-{number}
+            const match = sessionName.match(/^claude-web-(.+)-\d+$/);
+            if (!match || !match[1]) {
+                return defaultReturn;
+            }
+            
+            const projectName = match[1];
+            
+            // Find project ID by name
+            let projectId = null;
+            if (window.projectManager && window.projectManager.getAllProjects) {
+                const projects = window.projectManager.getAllProjects();
+                const project = projects.find(p => p.name === projectName);
+                if (project) {
+                    projectId = project.id;
+                }
+            }
+            
+            return {
+                projectId: projectId,
+                projectName: projectName
+            };
+        } catch (error) {
+            console.warn('Failed to extract project info from session name:', sessionName, error);
+            return {
+                projectId: null,
+                projectName: null
+            };
+        }
+    }
+    
     createSessionTab(session) {
         const tabId = `tab-${session.name}`;
         const isActive = this.activeTerminal === null; // First tab is active
@@ -1867,10 +1911,15 @@ class TerminalManager extends EventEmitter {
         
         this.tabsContainer.appendChild(tabElement);
         
+        // Extract project information from session name
+        const projectInfo = this.extractProjectInfoFromSessionName(session.name);
+        
         // Create terminal instance for this session - now purely session-based
         const terminalData = {
             id: session.name,
             sessionName: session.name,
+            projectId: projectInfo.projectId, // Add projectId for file sending functionality
+            projectName: projectInfo.projectName, // Add projectName for reference
             element: null,
             terminal: null,
             isActive: isActive,
