@@ -100,13 +100,6 @@ The main configuration file is `config/default.json`. Here are the key settings 
 - Create new projects with the "+" button
 - Upload files by dragging and dropping
 
-### Keyboard Shortcuts
-- `Ctrl+,`: Open settings
-- `Escape`: Close modals/menus
-- `F1`: Toggle shortcuts panel
-- `Ctrl+Shift+C`: Clear terminal
-- `Ctrl+Shift+T`: New terminal tab
-- Mobile menu toggle available for touch devices
 
 ## Features Explained
 
