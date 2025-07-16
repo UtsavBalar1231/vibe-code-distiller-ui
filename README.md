@@ -95,10 +95,11 @@ The main configuration file is `config/default.json`. Here are the key settings 
 - You can reconnect from any device and continue where you left off
 
 ### Project Management
-- Browse your projects in the sidebar
-- Click any project to open it in the terminal
-- Create new projects with the "+" button
-- Upload files by dragging and dropping
+- Browse your projects in the sidebar navigation
+- Click the "New Project" button to create new projects (automatically saved in ~/projects)
+- Click the "+" button next to any project to create a new terminal session for that project
+- Upload files directly to specific projects using drag-and-drop
+- Download entire projects as compressed archives to your local device
 
 
 ## Features Explained
