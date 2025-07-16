@@ -877,9 +877,13 @@ class TmuxTerminalService {
             roomName, 
             dataLength: data.length 
           });
+          
+          // Apply same line ending conversion as used in socket-handler.js for consistency
+          const formattedData = data.replace(/\n/g, '\r\n');
+          
           io.to(roomName).emit(WEBSOCKET.EVENTS.TERMINAL_OUTPUT, {
             sessionName: sessionId,
-            data,
+            data: formattedData,
             timestamp: new Date().toISOString()
           });
         },
