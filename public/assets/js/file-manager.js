@@ -202,12 +202,11 @@ class FileManager {
 
         const icon = this.getFileIcon(file);
         const size = file.type === 'file' ? this.formatFileSize(file.size) : '';
-        const modified = file.modified ? new Date(file.modified).toLocaleDateString() : '';
+        const modified = file.modified ? new Date(file.modified).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) : '';
         const hiddenClass = file.isHidden ? 'hidden-file' : '';
 
         item.innerHTML = `
             <div class="file-info ${hiddenClass}">
-                <span class="file-icon">${icon}</span>
                 <span class="file-name">${file.name}</span>
                 <span class="file-size">${size}</span>
                 <span class="file-date">${modified}</span>

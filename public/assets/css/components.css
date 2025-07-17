@@ -547,24 +547,30 @@ select {
 
 /* File Manager Styles */
 .file-menu-btn {
-    opacity: 0.7;
+    opacity: 0.6;
     color: var(--text-secondary);
-    border: none;
-    background: transparent;
+    border: 1px solid transparent;
+    background-color: var(--bg-tertiary);
     font-weight: bold;
     font-size: 14px;
     line-height: 1;
-    padding: 2px 6px;
-    min-height: 20px;
-    border-radius: 3px;
+    padding: var(--spacing-xs);
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: var(--border-radius-sm);
     transition: all var(--transition-fast);
     cursor: pointer;
+    flex-shrink: 0;
+}
+
+.file-item:hover .file-menu-btn {
+    opacity: 1;
 }
 
 .file-menu-btn:hover {
-    opacity: 1;
-    background-color: var(--bg-hover);
+    background-color: var(--bg-secondary);
     color: var(--text-primary);
+    border-color: var(--border-subtle);
 }
 
 .file-item:hover .file-actions {
@@ -650,11 +656,6 @@ select {
     box-shadow: var(--shadow-md);
 }
 
-.file-icon {
-    min-width: 20px;
-    text-align: center;
-    margin-right: var(--spacing-sm);
-}
 
 /* ===== TOOLTIPS ===== */
 .tooltip {
@@ -1153,11 +1154,6 @@ kbd {
     font-style: italic;
 }
 
-.file-icon {
-    font-size: var(--font-size-lg);
-    width: 20px;
-    text-align: center;
-}
 
 .file-name {
     font-weight: 500;
@@ -1179,12 +1175,13 @@ kbd {
     color: var(--text-secondary);
     min-width: 70px;
     text-align: right;
+    margin-right: var(--spacing-md);
 }
 
 .file-actions {
     display: flex;
     gap: var(--spacing-xs);
-    opacity: 0;
+    opacity: 0.8;
     transition: opacity var(--transition-fast);
 }
 

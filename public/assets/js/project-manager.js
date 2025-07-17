@@ -384,13 +384,13 @@ class ProjectManager extends EventEmitter {
                         <h4>Actions</h4>
                         <div class="project-actions">
                             <button class="btn btn-primary btn-small" onclick="projectManager.startClaude('${project.id}')">
-                                🤖 Start Claude
+                                Start Claude
                             </button>
                             <button class="btn btn-secondary btn-small" onclick="projectManager.openInTerminal('${project.id}')">
-                                💻 Open Terminal
+                                Open Terminal
                             </button>
                             <button class="btn btn-secondary btn-small" onclick="projectManager.showProjectSettings('${project.id}')">
-                                ⚙️ Settings
+                                Settings
                             </button>
                         </div>
                     </div>
