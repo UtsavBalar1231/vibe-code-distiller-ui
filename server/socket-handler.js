@@ -980,8 +980,8 @@ class SocketManager {
         try {
           const TmuxUtils = require('./utils/tmux-utils');
           
-          // Get current screen content and cursor position
-          const currentContent = await TmuxUtils.capturePane(sessionName);
+          // Get current screen content and cursor position (exclude history buffer for consistent display)
+          const currentContent = await TmuxUtils.capturePane(sessionName, false);
           const cursorPosition = await TmuxUtils.getCursorPosition(sessionName);
           
           if (currentContent && currentContent.trim()) {
