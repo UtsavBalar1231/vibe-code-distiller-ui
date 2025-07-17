@@ -142,11 +142,17 @@ class TmuxUtils {
     }
   }
   
-  static async capturePane(sessionName) {
+  static async capturePane(sessionName, includeHistory = true) {
     try {
-      // Only capture current screen content, not history
-      // This ensures cursor position is relative to the displayed content
-      const { stdout } = await execAsync(`tmux capture-pane -t ${sessionName} -e -p`);
+      // Capture with history buffer for full terminal content
+      // -S - : Start from beginning of history buffer
+      // -e : Include escape sequences for proper formatting
+      // -p : Print to stdout
+      const captureCmd = includeHistory 
+        ? `tmux capture-pane -t ${sessionName} -e -p -S -`
+        : `tmux capture-pane -t ${sessionName} -e -p`;
+      
+      const { stdout } = await execAsync(captureCmd);
       
       if (!stdout || !stdout.trim()) {
         logger.debug(`No content captured for ${sessionName}`);
@@ -159,6 +165,7 @@ class TmuxUtils {
       logger.debug(`Captured pane content for ${sessionName}:`, {
         originalLength: stdout.length,
         trimmedLength: trimmed.length,
+        includeHistory,
         hasEscapeSequences: /\x1b\[/.test(trimmed),
         preview: trimmed.substring(0, 200).replace(/\x1b\[[0-9;]*[mGKHFJST]/g, '<ESC>').replace(/\r?\n/g, '\\n')
       });
