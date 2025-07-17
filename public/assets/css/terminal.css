@@ -105,6 +105,45 @@
     display: block !important;
 }
 
+/* ===== TERMINAL LINE NUMBERS ===== */
+.xterm .xterm-rows {
+    /* Add padding-left to make room for line numbers */
+    padding-left: 50px !important;
+    position: relative !important;
+    /* Initialize counter for fixed line numbers 1-45 */
+    counter-reset: terminal-line 0 !important;
+}
+
+.xterm .xterm-rows > div {
+    position: relative !important;
+    /* Increment counter for each row */
+    counter-increment: terminal-line !important;
+    /* Allow line numbers to be visible outside the row bounds */
+    overflow: visible !important;
+}
+
+.xterm .xterm-rows > div::before {
+    /* Display fixed line number using CSS counter */
+    content: counter(terminal-line) !important;
+    position: absolute !important;
+    left: -50px !important;
+    top: 0 !important;
+    width: 45px !important;
+    text-align: right !important;
+    padding-right: 5px !important;
+    color: #d4d4d4 !important;
+    opacity: 0.5 !important;
+    font-family: 'Consolas', 'Liberation Mono', 'Menlo', 'Courier', monospace !important;
+    font-size: inherit !important;
+    line-height: inherit !important;
+    background-color: #1e1e1e !important;
+    border-right: 1px solid rgba(212, 212, 212, 0.2) !important;
+    user-select: none !important;
+    pointer-events: none !important;
+    z-index: 1000 !important;
+    display: block !important;
+}
+
 .xterm .xterm-helper-textarea {
     position: absolute;
     opacity: 0;
@@ -605,6 +644,15 @@
         padding: var(--spacing-sm);
         font-size: var(--font-size-sm);
     }
+    
+    /* Hide line numbers on very small screens to save space */
+    .xterm .xterm-rows {
+        padding-left: 0;
+    }
+    
+    .xterm .xterm-rows > div::before {
+        display: none;
+    }
 }
 
 /* ===== TERMINAL ACCESSIBILITY ===== */
@@ -690,6 +738,17 @@
     .terminal-command-item {
         padding: var(--spacing-md);
         min-height: 44px;
+    }
+    
+    /* Reduce line number width on mobile */
+    .xterm .xterm-rows {
+        padding-left: 35px;
+    }
+    
+    .xterm .xterm-rows > div::before {
+        left: -35px;
+        width: 30px;
+        font-size: 10px;
     }
 }
 
