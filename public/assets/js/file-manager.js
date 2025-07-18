@@ -405,35 +405,35 @@ class FileManager {
             return;
         }
         
-        const activeTerminal = terminalManager.getActiveTerminal();
+        const activeSession = terminalManager.getActiveSession();
         console.log('🔍 sendToTerminal debug:', {
-            activeTerminal: activeTerminal,
-            hasProjectId: activeTerminal && activeTerminal.projectId ? true : false,
-            hasSessionName: activeTerminal && activeTerminal.sessionName ? true : false,
+            activeSession: activeSession,
+            hasProjectId: activeSession && activeSession.projectId ? true : false,
+            hasSessionName: activeSession && activeSession.name ? true : false,
             filePath: filePath
         });
         
-        if (!activeTerminal) {
+        if (!activeSession) {
             notifications.warning('No active terminal session. Please select a terminal tab first.');
             return;
         }
         
         // Handle both session-based and project-based terminals
         let terminalIdentifier = null;
-        if (activeTerminal.sessionName && activeTerminal.sessionName.startsWith('claude-web-')) {
+        if (activeSession.name && activeSession.name.startsWith('claude-web-')) {
             // Session-based terminal (new approach)
-            terminalIdentifier = activeTerminal.sessionName;
-        } else if (activeTerminal.projectId) {
+            terminalIdentifier = activeSession.name;
+        } else if (activeSession.projectId) {
             // Project-based terminal (legacy approach)
-            terminalIdentifier = activeTerminal.projectId;
+            terminalIdentifier = activeSession.projectId;
         }
         
         if (!terminalIdentifier) {
-            const errorMsg = activeTerminal.sessionName ? 
-                `Terminal session "${activeTerminal.sessionName}" is not associated with a project.` :
+            const errorMsg = activeSession.name ? 
+                `Terminal session "${activeSession.name}" is not associated with a project.` :
                 'Active terminal is not associated with a project.';
             notifications.warning(errorMsg);
-            console.warn('🚨 sendToTerminal: No valid terminal identifier found', { activeTerminal });
+            console.warn('🚨 sendToTerminal: No valid terminal identifier found', { activeSession });
             return;
         }
         

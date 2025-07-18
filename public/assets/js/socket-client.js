@@ -186,6 +186,22 @@ class SocketClient extends EventEmitter {
             this.emit('claude_response', data);
         });
         
+        // Terminal session events
+        this.socket.on('terminal:session-created', (data) => {
+            console.log('Terminal session created:', data);
+            this.emit('terminal:session-created', data);
+        });
+        
+        this.socket.on('terminal:session-deleted', (data) => {
+            console.log('Terminal session deleted:', data);
+            this.emit('terminal:session-deleted', data);
+        });
+        
+        this.socket.on('terminal:session-switched', (data) => {
+            console.log('Terminal session switched:', data);
+            this.emit('terminal:session-switched', data);
+        });
+        
         // System events
         this.socket.on('system-status', (data) => {
             this.emit('system_status', data);
@@ -442,6 +458,64 @@ class SocketClient extends EventEmitter {
         return this.sendProjectAction(projectId, 'stop_claude', { force });
     }
     
+    createTerminalSession(projectName, projectPath, options = {}) {
+        if (!this.isConnected()) {
+            console.warn('Cannot create terminal session: not connected to server');
+            return false;
+        }
+        
+        const sessionData = {
+            projectName,
+            projectPath,
+            cols: options.cols || 80,
+            rows: options.rows || 24,
+            sessionName: options.sessionName || null
+        };
+        
+        this.socket.emit('terminal:create-project-session', sessionData);
+        return true;
+    }
+    
+    deleteTerminalSession(sessionName) {
+        if (!this.isConnected()) {
+            console.warn('Cannot delete terminal session: not connected to server');
+            return false;
+        }
+        
+        this.socket.emit('terminal:delete-session', { sessionName });
+        return true;
+    }
+    
+    switchTerminalSession(sessionName, currentSessionName = null) {
+        if (!this.isConnected()) {
+            console.warn('Cannot switch terminal session: not connected to server');
+            return false;
+        }
+        
+        this.socket.emit('terminal:switch-session', { 
+            sessionName, 
+            currentSessionName 
+        });
+        return true;
+    }
+    
+    async getTerminalSessions() {
+        try {
+            const response = await fetch('/api/sessions');
+            const data = await response.json();
+            
+            if (data.success) {
+                return data.sessions;
+            } else {
+                console.error('Failed to get terminal sessions:', data.error);
+                return [];
+            }
+        } catch (error) {
+            console.error('Error fetching terminal sessions:', error);
+            return [];
+        }
+    }
+    
     // Utility methods
     getSocket() {
         return this.socket;
@@ -479,6 +553,18 @@ class SocketClient extends EventEmitter {
     
     onConnectionError(callback) {
         return this.on('connection_error', callback);
+    }
+    
+    onTerminalSessionCreated(callback) {
+        return this.on('terminal:session-created', callback);
+    }
+    
+    onTerminalSessionDeleted(callback) {
+        return this.on('terminal:session-deleted', callback);
+    }
+    
+    onTerminalSessionSwitched(callback) {
+        return this.on('terminal:session-switched', callback);
     }
     
     // Authentication methods (if needed)

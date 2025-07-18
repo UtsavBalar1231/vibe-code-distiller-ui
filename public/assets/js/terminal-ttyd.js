@@ -1,11 +1,11 @@
 // 简化的终端管理器 - 使用ttyd iframe替代xterm.js
 class TTYdTerminalManager {
     constructor() {
-        this.terminals = new Map(); // 存储标签页信息
-        this.activeTerminalId = null;
-        this.terminalCounter = 0;
+        this.sessions = new Map(); // 存储真实的tmux session信息
+        this.activeSessionName = null;
         this.iframe = null;
         this.isInitialized = false;
+        this.refreshInterval = null;
         
         // 绑定事件处理程序
         this.bindEvents();
@@ -49,10 +49,8 @@ class TTYdTerminalManager {
             console.log('✅ TTYd terminal iframe loaded');
             this.isInitialized = true;
             
-            // 如果没有激活的终端，创建第一个
-            if (this.terminals.size === 0) {
-                this.createNewTerminal();
-            }
+            // 页面刷新时触发：初始化加载session列表
+            this.refreshSessionList();
         };
 
         // 监听iframe错误
@@ -60,6 +58,9 @@ class TTYdTerminalManager {
             console.error('❌ TTYd terminal iframe error:', error);
             this.showError('Failed to load terminal');
         };
+
+        // 监听session事件
+        this.setupSessionEventListeners();
 
         console.log('✅ TTYd Terminal Manager initialized');
     }
@@ -78,99 +79,257 @@ class TTYdTerminalManager {
         this.iframe.src = ttydURL;
     }
 
-    async createNewTerminal(projectName = null) {
-        console.log('🔧 Creating new terminal session...');
+    setupSessionEventListeners() {
+        if (!window.socket) {
+            console.warn('⚠️ Socket.IO not available, session events will not work');
+            return;
+        }
 
-        // 隐藏欢迎屏幕并显示iframe
-        this.hideWelcomeScreen();
-        this.showIframe();
+        // 监听session创建事件
+        window.socket.onTerminalSessionCreated((data) => {
+            console.log('🎉 Session created event received:', data);
+            this.showNotification(`Terminal session created: ${data.sessionName}`);
+            
+            // 创建新的终端后触发：更新session列表
+            this.refreshSessionList();
+        });
 
-        // 创建简单的终端标识
-        this.terminalCounter++;
-        const terminalId = `terminal-${this.terminalCounter}`;
-        
-        // 创建终端对象（简化版）
-        const terminal = {
-            id: terminalId,
-            name: projectName || `Terminal ${this.terminalCounter}`,
-            isActive: true,
-            createdAt: Date.now()
-        };
+        // 监听session删除事件
+        window.socket.onTerminalSessionDeleted((data) => {
+            console.log('🗑️ Session deleted event received:', data);
+            this.showNotification(`Terminal session deleted: ${data.sessionName}`);
+            
+            // 删除某个终端时触发：更新session列表
+            this.refreshSessionList();
+        });
 
-        // 添加到终端列表
-        this.terminals.set(terminalId, terminal);
-
-        // 创建标签页
-        this.createTerminalTab(terminal);
-
-        // 切换到新终端
-        this.switchToTerminal(terminalId);
-
-        return terminalId;
+        // 监听session切换事件
+        window.socket.onTerminalSessionSwitched((data) => {
+            console.log('🔄 Session switched event received:', data);
+            this.showNotification(`Switched to session: ${data.sessionName}`);
+            
+            // 更新活跃session
+            this.activeSessionName = data.sessionName;
+            this.updateTabStyles();
+            
+            // 使用tmux命令切换，无需刷新iframe
+            console.log('✅ Session switched using tmux command, no iframe refresh needed');
+        });
     }
 
-    createTerminalTab(terminal) {
+    async refreshSessionList() {
+        if (!window.socket) {
+            console.warn('⚠️ Socket.IO not available, cannot refresh session list');
+            return;
+        }
+
+        try {
+            console.log('🔄 Refreshing session list...');
+            
+            // 获取当前所有的claude-web session
+            const sessions = await window.socket.getTerminalSessions();
+            
+            // 清空现有的session信息
+            this.sessions.clear();
+            
+            // 更新session信息
+            sessions.forEach(session => {
+                this.sessions.set(session.name, {
+                    name: session.name,
+                    projectId: session.projectId,
+                    identifier: session.identifier,
+                    created: session.created,
+                    attached: session.attached
+                });
+            });
+            
+            console.log('✅ Session list refreshed, found sessions:', Array.from(this.sessions.keys()));
+            
+            // 重新构建标签页
+            this.rebuildTabs();
+            
+            // 如果没有活跃session但有sessions存在，激活第一个
+            if (!this.activeSessionName && this.sessions.size > 0) {
+                const firstSession = Array.from(this.sessions.keys())[0];
+                this.switchToSession(firstSession);
+            }
+            
+            // 如果没有任何session，显示欢迎屏幕
+            if (this.sessions.size === 0) {
+                this.showWelcomeScreen();
+            } else {
+                this.hideWelcomeScreen();
+                this.showIframe();
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to refresh session list:', error);
+            this.showError('Failed to refresh session list');
+        }
+    }
+
+    rebuildTabs() {
         const tabsContainer = document.getElementById('terminal-tabs');
+        if (!tabsContainer) return;
+        
+        // 清空现有标签页
+        tabsContainer.innerHTML = '';
+        
+        // 为每个session创建标签页
+        this.sessions.forEach((session, sessionName) => {
+            this.createSessionTab(session);
+        });
+        
+        // 更新标签页样式
+        this.updateTabStyles();
+    }
+
+    createSessionTab(session) {
+        const tabsContainer = document.getElementById('terminal-tabs');
+        if (!tabsContainer) return;
         
         // 创建标签页元素
         const tab = document.createElement('div');
         tab.className = 'terminal-tab';
-        tab.dataset.terminalId = terminal.id;
+        tab.dataset.sessionName = session.name;
+        
+        // 简化session名称显示
+        const displayName = this.getDisplayName(session.name);
+        
         tab.innerHTML = `
-            <span class="tab-title">${terminal.name}</span>
+            <span class="tab-title">${displayName}</span>
             <button class="tab-close" title="Close Terminal">×</button>
         `;
 
-        // 添加点击事件
+        // 添加点击事件 - 切换session
         tab.addEventListener('click', (e) => {
             if (!e.target.matches('.tab-close')) {
-                this.switchToTerminal(terminal.id);
+                this.switchToSession(session.name);
             }
         });
 
         // 添加关闭事件
         tab.querySelector('.tab-close').addEventListener('click', (e) => {
             e.stopPropagation();
-            this.closeTerminal(terminal.id);
+            this.closeSession(session.name);
         });
 
         tabsContainer.appendChild(tab);
     }
 
+    getDisplayName(sessionName) {
+        // 将 claude-web-session-1234567890 简化为 session-1234567890
+        if (sessionName.startsWith('claude-web-session-')) {
+            return sessionName.replace('claude-web-', '');
+        }
+        // 将 claude-web-project-123 简化为 project-123
+        if (sessionName.startsWith('claude-web-')) {
+            return sessionName.replace('claude-web-', '');
+        }
+        return sessionName;
+    }
 
-    async switchToTerminal(terminalId) {
-        const terminal = this.terminals.get(terminalId);
-        if (!terminal) {
-            console.error('❌ Terminal not found:', terminalId);
+    switchToSession(sessionName) {
+        if (!this.sessions.has(sessionName)) {
+            console.error('❌ Session not found:', sessionName);
             return;
         }
 
-        console.log('🔄 Switching to terminal:', terminalId);
+        console.log('🔄 Switching to session:', sessionName);
 
-        // 更新活动终端
-        this.activeTerminalId = terminalId;
+        // 获取当前活动的session名称
+        const currentSessionName = this.activeSessionName;
+
+        // 更新活动session
+        this.activeSessionName = sessionName;
 
         // 更新标签页样式
-        this.updateTabStyles(terminalId);
+        this.updateTabStyles();
 
         // 隐藏欢迎屏幕
         this.hideWelcomeScreen();
 
         // 显示iframe
         this.showIframe();
+
+        // 通过Socket.IO请求切换session，现在后端会正确处理TTYd client
+        if (window.socket && window.socket.isConnected()) {
+            window.socket.switchTerminalSession(sessionName, currentSessionName);
+        } else {
+            console.warn('⚠️ Socket.IO not connected, session switch may not work properly');
+        }
     }
 
 
-    updateTabStyles(activeTerminalId) {
+    closeSession(sessionName) {
+        if (!this.sessions.has(sessionName)) {
+            console.error('❌ Session not found:', sessionName);
+            return;
+        }
+
+        console.log('🗑️ Closing session:', sessionName);
+
+        // 通过Socket.IO请求删除session
+        if (window.socket && window.socket.isConnected()) {
+            window.socket.deleteTerminalSession(sessionName);
+        } else {
+            console.warn('⚠️ Socket.IO not connected, session deletion may not work properly');
+        }
+    }
+
+    updateTabStyles() {
         const tabs = document.querySelectorAll('.terminal-tab');
         tabs.forEach(tab => {
-            if (tab.dataset.terminalId === activeTerminalId) {
+            if (tab.dataset.sessionName === this.activeSessionName) {
                 tab.classList.add('active');
             } else {
                 tab.classList.remove('active');
             }
         });
     }
+
+    async createNewTerminal(projectName = null) {
+        console.log('🔧 Creating new terminal session...');
+
+        // 检查Socket.IO连接状态
+        if (!window.socket || !window.socket.isConnected()) {
+            console.error('❌ Socket.IO not connected, cannot create terminal session');
+            this.showError('Not connected to server. Please check your connection.');
+            return false;
+        }
+
+        // 生成session名称，使用用户要求的格式
+        const timestamp = Date.now();
+        const sessionName = `claude-web-session-${timestamp}`;
+        
+        // 创建tmux session
+        const projectPath = this.getCurrentProjectPath();
+        const success = window.socket.createTerminalSession(
+            null, // projectName is not needed when sessionName is provided
+            projectPath,
+            {
+                sessionName: sessionName,
+                cols: 80,
+                rows: 24
+            }
+        );
+        
+        if (success) {
+            console.log('🎯 Terminal session creation request sent:', sessionName);
+            this.showNotification(`Creating terminal session: ${sessionName}`);
+            
+            // 隐藏欢迎屏幕并显示iframe
+            this.hideWelcomeScreen();
+            this.showIframe();
+            
+            return sessionName;
+        } else {
+            console.error('❌ Failed to send terminal session creation request');
+            this.showError('Failed to create terminal session');
+            return false;
+        }
+    }
+    
 
     hideWelcomeScreen() {
         const welcomeScreen = document.getElementById('welcome-screen');
@@ -185,33 +344,6 @@ class TTYdTerminalManager {
         }
     }
 
-    async closeTerminal(terminalId) {
-        const terminal = this.terminals.get(terminalId);
-        if (!terminal) return;
-
-        console.log('🗑️ Closing terminal:', terminalId);
-
-        // 删除标签页
-        const tab = document.querySelector(`[data-terminal-id="${terminalId}"]`);
-        if (tab) {
-            tab.remove();
-        }
-
-        // 从列表中删除
-        this.terminals.delete(terminalId);
-
-        // 如果这是活动终端，切换到其他终端
-        if (this.activeTerminalId === terminalId) {
-            const remainingTerminals = Array.from(this.terminals.keys());
-            if (remainingTerminals.length > 0) {
-                this.switchToTerminal(remainingTerminals[0]);
-            } else {
-                // 没有终端了，显示欢迎屏幕
-                this.showWelcomeScreen();
-            }
-        }
-    }
-
     showWelcomeScreen() {
         const welcomeScreen = document.getElementById('welcome-screen');
         if (welcomeScreen) {
@@ -222,7 +354,7 @@ class TTYdTerminalManager {
             this.iframe.style.display = 'none';
         }
         
-        this.activeTerminalId = null;
+        this.activeSessionName = null;
     }
 
     handleResize() {
@@ -246,19 +378,38 @@ class TTYdTerminalManager {
         }
     }
 
-    // 获取活动终端
-    getActiveTerminal() {
-        return this.terminals.get(this.activeTerminalId);
+    // 获取当前项目路径
+    getCurrentProjectPath() {
+        // 尝试从全局变量或项目管理器获取当前项目路径
+        if (window.projectManager && window.projectManager.getCurrentProject) {
+            const project = window.projectManager.getCurrentProject();
+            return project?.path || null;
+        }
+        
+        // 如果没有项目管理器，返回null，服务器会使用默认路径
+        return null;
+    }
+    
+
+    // 获取活动session
+    getActiveSession() {
+        return this.sessions.get(this.activeSessionName);
     }
 
-    // 获取所有终端
-    getAllTerminals() {
-        return Array.from(this.terminals.values());
+    // 获取所有sessions
+    getAllSessions() {
+        return Array.from(this.sessions.values());
     }
 
     // 清理资源
     destroy() {
         console.log('🧹 Destroying TTYd Terminal Manager...');
+        
+        // 清理定时器
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
         
         // 清理DOM
         const tabsContainer = document.getElementById('terminal-tabs');
@@ -267,8 +418,8 @@ class TTYdTerminalManager {
         }
 
         // 清理数据
-        this.terminals.clear();
-        this.activeTerminalId = null;
+        this.sessions.clear();
+        this.activeSessionName = null;
         this.isInitialized = false;
     }
 }

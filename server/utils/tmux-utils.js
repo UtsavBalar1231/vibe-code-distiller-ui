@@ -132,12 +132,155 @@ class TmuxUtils {
     }
   }
   
-  static async sendKeys(sessionName, keys) {
+  static async sendTmuxCommand(sessionName, command) {
     try {
-      await execAsync(`tmux send-keys -t ${sessionName} "${keys}" Enter`);
+      logger.info(`Sending tmux command sequence to ${sessionName}: ${command}`);
+      
+      // Method 1: Try sending all keys in one command (most reliable)
+      try {
+        await execAsync(`tmux send-keys -t ${sessionName} 'C-b' ':' '${command}' 'Enter'`);
+        logger.info(`Successfully sent tmux command sequence to ${sessionName}`);
+        return true;
+      } catch (error) {
+        logger.warn(`Single command failed, trying step-by-step approach: ${error.message}`);
+      }
+      
+      // Method 2: Step-by-step with delays (fallback)
+      // Send Ctrl+B (tmux prefix key)
+      await execAsync(`tmux send-keys -t ${sessionName} 'C-b'`);
+      
+      // Small delay to ensure tmux processes the prefix key
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Send ':' to enter command mode
+      await execAsync(`tmux send-keys -t ${sessionName} ':'`);
+      
+      // Small delay to ensure command mode is activated
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Send the actual command
+      await execAsync(`tmux send-keys -t ${sessionName} '${command}'`);
+      
+      // Small delay before sending Enter
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Send Enter to execute
+      await execAsync(`tmux send-keys -t ${sessionName} 'Enter'`);
+      
+      logger.info(`Successfully sent tmux command with delays to ${sessionName}: ${command}`);
       return true;
     } catch (error) {
-      logger.error(`Failed to send keys to tmux session: ${error.message}`);
+      logger.error(`Failed to send tmux command to session: ${error.message}`);
+      return false;
+    }
+  }
+  
+  static async getTTYdClients() {
+    try {
+      // Find TTYd process
+      const { stdout: ttydProcess } = await execAsync('pgrep -f "ttyd.aarch64"');
+      const ttydPid = ttydProcess.trim();
+      
+      if (!ttydPid) {
+        logger.warn('TTYd process not found');
+        return [];
+      }
+      
+      // Find tmux client processes under TTYd
+      const { stdout: clientPids } = await execAsync(`pgrep -P ${ttydPid} | xargs -I {} sh -c 'ps -p {} -o comm= | grep -q "tmux:" && echo {}'`);
+      
+      if (!clientPids.trim()) {
+        logger.warn('No tmux client found under TTYd');
+        return [];
+      }
+      
+      const clients = [];
+      const pids = clientPids.trim().split('\n');
+      
+      for (const clientPid of pids) {
+        try {
+          // Get the pts connected to this client
+          const { stdout: lsofOutput } = await execAsync(`lsof -p ${clientPid} | grep pts`);
+          const ptsMatch = lsofOutput.match(/\/dev\/pts\/(\d+)/);
+          
+          if (ptsMatch) {
+            const ptsPath = `/dev/pts/${ptsMatch[1]}`;
+            clients.push(ptsPath);
+          }
+        } catch (error) {
+          logger.warn(`Failed to get pts for client ${clientPid}: ${error.message}`);
+        }
+      }
+      
+      logger.info(`Found TTYd clients: ${clients.join(', ')}`);
+      return clients;
+    } catch (error) {
+      logger.error(`Failed to get TTYd clients: ${error.message}`);
+      return [];
+    }
+  }
+
+  static async switchToSession(sessionName, currentSessionName = null) {
+    try {
+      // First check if target session exists
+      const exists = await this.hasSession(sessionName);
+      if (!exists) {
+        logger.warn(`Target session ${sessionName} does not exist`);
+        return false;
+      }
+      
+      // Get all TTYd client paths
+      const ttydClients = await this.getTTYdClients();
+      if (ttydClients.length === 0) {
+        logger.warn('Cannot find any TTYd clients');
+        return false;
+      }
+      
+      logger.info(`Attempting to switch TTYd clients ${ttydClients.join(', ')} to ${sessionName}`);
+      
+      let success = false;
+      
+      // Try to switch all clients
+      for (const ttydClient of ttydClients) {
+        try {
+          // Method 1: Direct tmux command with specific client
+          await execAsync(`tmux switch-client -c ${ttydClient} -t ${sessionName}`);
+          logger.info(`Successfully switched TTYd client ${ttydClient} to ${sessionName}`);
+          success = true;
+        } catch (error) {
+          logger.warn(`Direct client switch failed for ${ttydClient}: ${error.message}, trying send-keys method`);
+          
+          // Method 2: Send keys to the specific client
+          try {
+            const switchCommand = `switch-client -t ${sessionName}`;
+            logger.info(`Sending keys to TTYd client ${ttydClient}: Ctrl+B : ${switchCommand}`);
+            
+            // Send Ctrl+B prefix
+            await execAsync(`tmux send-keys -t ${ttydClient} 'C-b'`);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Send : for command mode
+            await execAsync(`tmux send-keys -t ${ttydClient} ':'`);
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+            // Send the switch command
+            await execAsync(`tmux send-keys -t ${ttydClient} '${switchCommand}'`);
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+            // Send Enter to execute
+            await execAsync(`tmux send-keys -t ${ttydClient} 'Enter'`);
+            
+            logger.info(`Successfully sent switch command to TTYd client ${ttydClient}`);
+            success = true;
+          } catch (sendKeysError) {
+            logger.error(`Send-keys method failed for ${ttydClient}: ${sendKeysError.message}`);
+          }
+        }
+      }
+      
+      return success;
+    } catch (error) {
+      logger.error(`Failed to switch to session: ${error.message}`);
       return false;
     }
   }

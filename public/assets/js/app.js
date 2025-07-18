@@ -629,10 +629,11 @@ class ClaudeCodeWebManager extends EventEmitter {
             this.closeMobileMenu();
         }
         
-        // Fit active terminal
-        const activeTerminal = terminalManager.getActiveTerminal();
-        if (activeTerminal && activeTerminal.fitAddon) {
-            activeTerminal.fitAddon.fit();
+        // TTYd iframe handles resizing automatically
+        // No need to manually fit terminals in TTYd architecture
+        const activeSession = terminalManager.getActiveSession();
+        if (activeSession) {
+            console.log('Active session:', activeSession.name);
         }
     }
     

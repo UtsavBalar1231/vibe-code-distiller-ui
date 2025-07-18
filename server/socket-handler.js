@@ -83,6 +83,10 @@ class SocketManager {
     socket.on('terminal:delete-session', (data) => {
       this.handleDeleteSession(socket, data);
     });
+    
+    socket.on('terminal:switch-session', (data) => {
+      this.handleSwitchSession(socket, data);
+    });
 
     // Claude Code events
     socket.on(WEBSOCKET.EVENTS.CLAUDE_COMMAND, (data) => {
@@ -496,67 +500,86 @@ class SocketManager {
 
   async handleCreateProjectSession(socket, data) {
     try {
-      const { projectName, projectPath, cols = 80, rows = 24 } = data;
+      const { projectName, projectPath, cols = 80, rows = 24, sessionName: providedSessionName } = data;
       
       logger.info('🔧 Received create project session request:', { 
         socketId: socket.id, 
         projectName, 
         projectPath, 
+        providedSessionName,
         cols, 
         rows 
       });
       
-      if (!projectName) {
-        logger.warn('❌ Project name missing in create session request');
-        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Project name required' });
-        return;
+      // If sessionName is provided directly, use it; otherwise use projectName
+      let sessionName;
+      let sequenceNumber = null;
+      
+      if (providedSessionName) {
+        sessionName = providedSessionName;
+        logger.info('🎯 Using provided session name:', { sessionName });
+      } else {
+        if (!projectName) {
+          logger.warn('❌ Project name missing in create session request');
+          socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Project name or session name required' });
+          return;
+        }
+        
+        // Get next sequence number for this project
+        const TmuxUtils = require('./utils/tmux-utils');
+        sequenceNumber = await TmuxUtils.getNextSequenceNumber(projectName);
+        
+        // Generate session name using project name and sequence number
+        sessionName = `claude-web-${projectName}-${sequenceNumber}`;
+        logger.info('🎯 Generated session name:', { sessionName, projectName, sequenceNumber });
       }
       
-      logger.info('Creating new project session:', { 
+      logger.info('Creating new tmux session:', { 
         socketId: socket.id, 
-        projectName, 
+        sessionName,
         projectPath, 
         cols, 
         rows 
       });
       
-      // Get next sequence number for this project
+      // Actually create the tmux session
       const TmuxUtils = require('./utils/tmux-utils');
-      const sequenceNumber = await TmuxUtils.getNextSequenceNumber(projectName);
       
-      // Generate session name using project name and sequence number
-      const sessionName = `claude-web-${projectName}-${sequenceNumber}`;
+      // Check if session already exists
+      const sessionExists = await TmuxUtils.hasSession(sessionName);
+      if (sessionExists) {
+        logger.warn('⚠️ Session already exists:', { sessionName });
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: `Session ${sessionName} already exists` });
+        return;
+      }
       
-      logger.info('🎯 Generated session name:', { sessionName, projectName, sequenceNumber });
+      // Create the tmux session
+      const createResult = await TmuxUtils.createSession(sessionName, projectPath);
       
-      // Terminal session creation is now handled by ttyd/iframe architecture
-      // Tmux session creation is handled by ttyd directly
-      const result = { sessionName, message: 'Session creation handled by ttyd' };
-      
-      logger.info('✅ Terminal session created, broadcasting event:', { 
-        sessionName,
-        projectName,
-        sequenceNumber,
-        result: result 
-      });
-      
-      // Broadcast session creation event to all clients
-      const eventData = {
-        sessionName,
-        projectName,
-        sequenceNumber,
-        timestamp: Date.now()
-      };
-      
-      logger.info('📡 Broadcasting terminal:session-created event:', eventData);
-      this.io.emit('terminal:session-created', eventData);
-      
-      logger.info('🎉 Project session created successfully:', { 
-        socketId: socket.id, 
-        sessionName,
-        projectName,
-        sequenceNumber
-      });
+      if (createResult) {
+        logger.info('✅ Tmux session created successfully:', { sessionName, projectPath });
+        
+        // Broadcast session creation event to all clients
+        const eventData = {
+          sessionName,
+          projectName: projectName || 'direct',
+          sequenceNumber,
+          timestamp: Date.now()
+        };
+        
+        logger.info('📡 Broadcasting terminal:session-created event:', eventData);
+        this.io.emit('terminal:session-created', eventData);
+        
+        logger.info('🎉 Project session created successfully:', { 
+          socketId: socket.id, 
+          sessionName,
+          projectName: projectName || 'direct',
+          sequenceNumber
+        });
+      } else {
+        logger.error('❌ Failed to create tmux session:', { sessionName });
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Failed to create tmux session' });
+      }
       
     } catch (error) {
       logger.error('❌ Failed to create project session:', { 
@@ -631,6 +654,76 @@ class SocketManager {
       });
       socket.emit(WEBSOCKET.EVENTS.ERROR, {
         message: 'Failed to delete session',
+        details: error.message
+      });
+    }
+  }
+  
+  async handleSwitchSession(socket, data) {
+    try {
+      const { sessionName, currentSessionName } = data;
+      
+      logger.info('Switch session request received:', { 
+        sessionName, 
+        currentSessionName, 
+        socketId: socket.id 
+      });
+      
+      if (!sessionName) {
+        logger.warn('Switch session request missing sessionName:', { socketId: socket.id });
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Session name required' });
+        return;
+      }
+      
+      // Validate session name format
+      if (!sessionName.startsWith('claude-web-')) {
+        logger.warn('Invalid session name format:', { sessionName, socketId: socket.id });
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Invalid session name format' });
+        return;
+      }
+      
+      // Check if session exists
+      const TmuxUtils = require('./utils/tmux-utils');
+      const sessionExists = await TmuxUtils.hasSession(sessionName);
+      
+      if (!sessionExists) {
+        logger.warn('Session does not exist:', { sessionName, socketId: socket.id });
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Session does not exist' });
+        return;
+      }
+      
+      // Switch to the session with current session context
+      logger.info('Switching to tmux session:', { sessionName, currentSessionName, socketId: socket.id });
+      const result = await TmuxUtils.switchToSession(sessionName, currentSessionName);
+      
+      if (result) {
+        logger.info('Session switched successfully:', { sessionName, socketId: socket.id });
+        
+        // Broadcast to all clients that a session was switched
+        this.io.emit('terminal:session-switched', { 
+          sessionName, 
+          currentSessionName,
+          success: true
+        });
+        
+        // No need to send separately to the requesting client as they will receive the broadcast
+      } else {
+        logger.error('Failed to switch session:', { sessionName, socketId: socket.id });
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { 
+          message: 'Failed to switch session',
+          details: 'Session exists but switch failed'
+        });
+      }
+      
+    } catch (error) {
+      logger.error('Error switching session:', { 
+        sessionName: data.sessionName,
+        socketId: socket.id, 
+        error: error.message,
+        stack: error.stack
+      });
+      socket.emit(WEBSOCKET.EVENTS.ERROR, {
+        message: 'Failed to switch session',
         details: error.message
       });
     }
