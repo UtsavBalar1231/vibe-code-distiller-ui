@@ -12,7 +12,6 @@ class SocketClient extends EventEmitter {
         
         // Project connection state tracking
         this.projectStates = new Map(); // projectId -> {status, readyCallbacks, lastActivity}
-        this.pendingInputs = new Map(); // projectId -> input queue
         
         // Browser notifications
         this.notificationPermission = 'default';
@@ -168,11 +167,6 @@ class SocketClient extends EventEmitter {
             this.emit('project_status', data);
         });
         
-        // Terminal events
-        this.socket.on('terminal-output', (data) => {
-            this.emit('terminal_output', data);
-        });
-        
         // Project connection events
         this.socket.on('project-ready', (data) => {
             const { projectId } = data;
@@ -186,18 +180,6 @@ class SocketClient extends EventEmitter {
             this.emit('project_disconnected', data);
         });
         
-        this.socket.on('terminal-session-created', (data) => {
-            const { projectId } = data;
-            // Mark project as ready when terminal session is created
-            setTimeout(() => this.markProjectReady(projectId), 100);
-            this.emit('terminal_session_created', data);
-        });
-        
-        this.socket.on('terminal-input-error', (data) => {
-            const { projectId, message, details } = data;
-            console.error(`Terminal input error for ${projectId}: ${message}`, details);
-            this.emit('terminal_input_error', data);
-        });
         
         // Claude Code events
         this.socket.on('claude-response', (data) => {
@@ -429,52 +411,6 @@ class SocketClient extends EventEmitter {
         return this.currentProject;
     }
     
-    // Terminal methods
-    sendTerminalInput(projectId, input) {
-        if (!this.isConnected()) {
-            console.warn('Cannot send terminal input: not connected to server');
-            return false;
-        }
-        
-        // Support both old project-based and new session-based inputs
-        if (projectId.startsWith('claude-web-')) {
-            // New session-based approach
-            this.socket.emit('terminal-input', { sessionName: projectId, input });
-            return true;
-        }
-        
-        // Legacy project-based approach
-        // Ensure we're connected to the project before sending input
-        if (this.currentProject !== projectId || !this.isProjectReady(projectId)) {
-            this.ensureProjectConnection(projectId, () => {
-                this.socket.emit('terminal-input', { projectId, input });
-            });
-            return true;
-        }
-        
-        this.socket.emit('terminal-input', { projectId, input });
-        return true;
-    }
-    
-    resizeTerminal(projectId, cols, rows) {
-        if (!this.isConnected()) {
-            console.warn('Cannot resize terminal: not connected to server');
-            return false;
-        }
-        
-        this.socket.emit('terminal-resize', { projectId, cols, rows });
-        return true;
-    }
-    
-    restartTerminal(projectId) {
-        if (!this.isConnected()) {
-            console.warn('Cannot restart terminal: not connected to server');
-            return false;
-        }
-        
-        this.socket.emit('terminal-restart', { projectId });
-        return true;
-    }
     
     // Claude Code methods
     sendClaudeCommand(projectId, command, context = {}) {
@@ -506,23 +442,12 @@ class SocketClient extends EventEmitter {
         return this.sendProjectAction(projectId, 'stop_claude', { force });
     }
     
-    createTerminal(projectId, options = {}) {
-        return this.sendProjectAction(projectId, 'create_terminal', options);
-    }
-    
-    destroyTerminal(projectId) {
-        return this.sendProjectAction(projectId, 'destroy_terminal');
-    }
-    
     // Utility methods
     getSocket() {
         return this.socket;
     }
     
     // Event handler shortcuts
-    onTerminalOutput(callback) {
-        return this.on('terminal_output', callback);
-    }
     
     onClaudeResponse(callback) {
         return this.on('claude_response', callback);
@@ -654,14 +579,6 @@ class SocketClient extends EventEmitter {
             }
         }
         
-        // Process any pending inputs
-        const pendingInputs = this.pendingInputs.get(projectId);
-        if (pendingInputs && pendingInputs.length > 0) {
-            while (pendingInputs.length > 0) {
-                const input = pendingInputs.shift();
-                this.socket.emit('terminal-input', { projectId, input });
-            }
-        }
     }
     
     markProjectDisconnected(projectId) {

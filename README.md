@@ -5,7 +5,7 @@ A personal web interface for managing Claude Code CLI on your Raspberry Pi. This
 ## Features
 
 - 🌐 **Web Interface**: Access Claude Code CLI through your browser
-- 🖥️ **Terminal Integration**: Real-time terminal interface using xterm.js with web links
+- 🖥️ **Terminal Integration**: Native terminal interface using TTYd with iframe integration
 - 💾 **Persistent Sessions**: Tmux integration for session persistence across devices
 - 📁 **Project Management**: Browse, create, and manage your coding projects
 - 🔄 **Real-time Updates**: Live terminal output, project changes, and system stats
@@ -20,29 +20,42 @@ A personal web interface for managing Claude Code CLI on your Raspberry Pi. This
 - 🔄 **Multi-Session**: Multiple terminal sessions per project
 - 📤 **Project Export**: Download entire projects as archives
 - 🔗 **File-to-Terminal**: Double-click files to send paths to terminal
+- ⚡ **Simplified Architecture**: TTYd-based terminal with minimal overhead
 
 ## Quick Start
 
 ### Prerequisites
 - Raspberry Pi with Node.js 18+ installed
 - Claude Code CLI installed and configured
+- TTYd installed for terminal interface
 - Basic familiarity with terminal/command line
 
 ### Installation
 
-1. **Clone and install**:
+1. **Install TTYd**:
+```bash
+# On Raspberry Pi OS / Ubuntu
+sudo apt update
+sudo apt install ttyd
+
+# Or build from source if not available
+git clone https://github.com/tsl0922/ttyd.git
+cd ttyd && make && sudo make install
+```
+
+2. **Clone and install**:
 ```bash
 git clone <your-repo-url>
 cd claude-code-web-manager
 npm install
 ```
 
-2. **Start the application**:
+3. **Start the application**:
 ```bash
 npm start
 ```
 
-3. **Access from any device**:
+4. **Access from any device**:
 Open your browser and go to `http://your-pi-ip:8080`
 
 That's it! You can now manage your Claude Code projects from any device on your network.
@@ -74,25 +87,34 @@ The main configuration file is `config/default.json`. Here are the key settings 
 
 ```
 ├── server/                    # Backend Node.js application
-│   ├── app.js                # Main server file
+│   ├── app.js                # Main server file with TTYd proxy
 │   ├── services/             # Core services
 │   │   ├── claude-manager.js # Claude Code session management
-│   │   ├── terminal-service.js # Terminal handling
-│   │   └── project-service.js # Project operations
+│   │   ├── project-service.js # Project operations
+│   │   └── file-service.js   # File system operations
 │   └── routes/               # API endpoints
 ├── public/                   # Frontend files
 │   ├── index.html           # Main page
 │   └── assets/              # CSS, JS, and libraries
+│       └── js/
+│           └── terminal-ttyd.js # TTYd terminal interface
 ├── config/                  # Configuration files
 └── logs/                   # Application logs
 ```
 
 ## How It Works
 
+### Terminal Architecture
+- **TTYd Integration**: Uses TTYd service for native terminal experience
+- **iframe Embedding**: Terminal embedded seamlessly via iframe
+- **WebSocket Separation**: Isolated WebSocket handling for stability
+- **Proxy Configuration**: HTTP proxy routes `/terminal` to TTYd service
+
 ### Terminal Sessions
 - Each project gets its own terminal session
 - Sessions persist even when you close your browser (thanks to tmux)
 - You can reconnect from any device and continue where you left off
+- Native terminal experience with full keyboard support
 
 ### Project Management
 - Browse your projects in the sidebar navigation
@@ -101,8 +123,15 @@ The main configuration file is `config/default.json`. Here are the key settings 
 - Upload files directly to specific projects using drag-and-drop
 - Download entire projects as compressed archives to your local device
 
-
 ## Features Explained
+
+### TTYd Terminal Integration
+Modern terminal interface with native experience:
+- **Native Performance**: Full-featured terminal without frontend overhead
+- **Stable Connections**: Eliminated complex WebSocket management
+- **Cross-Device Compatibility**: Works seamlessly across all devices
+- **Keyboard Support**: Full keyboard support including special keys
+- **Copy/Paste**: Native copy/paste functionality
 
 ### Tmux Integration
 When enabled, your terminal sessions become persistent:
@@ -150,6 +179,14 @@ sudo lsof -ti:8080 | xargs kill -9
 - Make sure `claude` command works in your terminal
 - Update the path in `config/default.json` if needed
 
+**Can't find TTYd**:
+- Install TTYd: `sudo apt install ttyd`
+- Verify installation: `ttyd --version`
+
+**Terminal not loading**:
+- Check if TTYd is running: `ps aux | grep ttyd`
+- Verify port 7681 is accessible: `netstat -tlnp | grep 7681`
+
 **Can't connect from other devices**:
 - Make sure your Pi's firewall allows port 8080
 - Check that you're using the correct IP address
@@ -184,10 +221,10 @@ Add your own shortcuts by modifying the terminal service or creating custom scri
 ## Development
 
 ### File Structure
-- `server/app.js` - Main Express application
+- `server/app.js` - Main Express application with TTYd proxy
 - `server/services/` - Core business logic
 - `server/routes/` - API endpoints
-- `public/assets/js/` - Frontend JavaScript
+- `public/assets/js/terminal-ttyd.js` - TTYd frontend integration
 - `public/assets/css/` - Styling
 
 ### Adding Features
@@ -209,6 +246,7 @@ npx playwright test
 
 ### Performance on Raspberry Pi
 - The app is optimized for Pi's limited resources
+- TTYd provides native terminal performance
 - Close unused terminal sessions to save memory
 - Use tmux to keep sessions alive without browser overhead
 
@@ -221,6 +259,14 @@ npx playwright test
 This app is designed for personal use on your local network. It doesn't have authentication enabled by default since it's meant to be used only by you on your own Pi.
 
 ## What's New
+
+### Architecture Revolution (2025-07-18)
+- **TTYd Migration**: Complete migration from xterm.js to TTYd + iframe architecture
+- **Massive Simplification**: Removed ~500 lines of complex terminal code
+- **WebSocket Conflict Resolution**: Solved WebSocket upgrade conflicts between Socket.IO and TTYd
+- **Native Terminal Experience**: Full native terminal functionality with zero frontend overhead
+- **Improved Stability**: Eliminated all xterm.js rendering issues and connection problems
+- **Codebase Cleanup**: Systematic removal of all legacy wetty and xterm.js code
 
 ### Latest Updates (2025-07-09)
 - **Enhanced Terminal Management**: Improved session handling with better logging
@@ -246,6 +292,21 @@ This app is designed for personal use on your local network. It doesn't have aut
 - **Project Export**: Download entire projects as archives
 - **Authentication**: Optional security layer when needed
 
+## Technical Architecture
+
+### TTYd Integration
+- **Service Isolation**: Terminal functionality completely separated from main application
+- **HTTP Proxy**: `/terminal` route proxies to TTYd service on port 7681
+- **WebSocket Handling**: Manual WebSocket upgrade handling prevents conflicts
+- **iframe Embedding**: Seamless terminal embedding with proper security headers
+
+### Benefits of TTYd Architecture
+- **Native Performance**: No frontend terminal emulation overhead
+- **Stability**: Mature TTYd service handles all terminal complexity
+- **Maintainability**: Zero terminal-related code to maintain
+- **Reliability**: Eliminates WebSocket management complexity
+- **Cross-Platform**: Works identically across all devices and browsers
+
 ## License
 
 MIT License - Feel free to modify and use as you like!
@@ -256,6 +317,7 @@ This is a personal project designed for individual use. If you run into issues:
 1. Check the logs in the `logs/` directory
 2. Look at the browser console for errors
 3. Make sure all dependencies are installed correctly
+4. Verify TTYd is installed and accessible
 
 ---
 

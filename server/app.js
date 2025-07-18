@@ -13,6 +13,7 @@ const compression = require('compression');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 // Import utilities and middleware
 const logger = require('./utils/logger');
@@ -153,6 +154,37 @@ app.post('/api/auth/login', require('./middleware/auth').handleLogin);
 app.post('/api/auth/logout', require('./middleware/auth').handleLogout);
 app.get('/api/auth/user', basicAuth, require('./middleware/auth').getCurrentUser);
 
+// TTYd terminal proxy configuration - HTTP only, WebSocket handled separately
+const ttydProxy = createProxyMiddleware({
+  target: 'http://localhost:7681',
+  changeOrigin: true,
+  pathRewrite: {
+    '^/terminal': '', // remove /terminal prefix when forwarding to ttyd
+  },
+  ws: false, // DISABLE websocket proxy to avoid conflicts with Socket.IO
+  logLevel: 'silent',
+  timeout: 30000,
+  proxyTimeout: 30000,
+  secure: false,
+  onError: (err, req, res) => {
+    logger.error('TTYd proxy error:', { error: err.message, url: req.url, method: req.method });
+    if (!res.headersSent) {
+      res.status(502).json({ error: 'Terminal service unavailable', details: err.message });
+    }
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    // Remove headers that prevent iframe embedding
+    delete proxyRes.headers['x-frame-options'];
+    delete proxyRes.headers['content-security-policy'];
+    delete proxyRes.headers['x-content-type-options'];
+    
+    logger.debug('TTYd proxy response:', { statusCode: proxyRes.statusCode, url: req.url });
+  }
+});
+
+// TTYd terminal proxy route - HTTP only
+app.use('/terminal', ttydProxy);
+
 // Protected API routes
 app.use('/api', basicAuth, apiRoutes);
 app.use('/api/projects', basicAuth, projectRoutes);
@@ -244,6 +276,35 @@ const startServer = async () => {
   try {
     // Setup Claude aliases at startup
     setupClaudeAliases();
+    
+    // Manual WebSocket upgrade handling to avoid conflicts between Socket.IO and ttyd
+    server.on('upgrade', (request, socket, head) => {
+      const pathname = request.url;
+      logger.debug('WebSocket upgrade request:', { pathname, headers: request.headers });
+      
+      if (pathname.startsWith('/terminal')) {
+        // Forward terminal WebSocket upgrades to ttyd
+        logger.debug('Forwarding terminal WebSocket upgrade to ttyd');
+        
+        // Create a proxy for WebSocket upgrade
+        const { createProxyMiddleware } = require('http-proxy-middleware');
+        const wsProxy = createProxyMiddleware({
+          target: 'http://localhost:7681',
+          changeOrigin: true,
+          pathRewrite: {
+            '^/terminal': '', // remove /terminal prefix when forwarding to ttyd
+          },
+          ws: true,
+          logLevel: 'silent'
+        });
+        
+        wsProxy.upgrade(request, socket, head);
+      } else {
+        // Let Socket.IO handle its own WebSocket upgrades
+        logger.debug('Letting Socket.IO handle WebSocket upgrade');
+        // Socket.IO will handle its own upgrade events
+      }
+    });
     
     // Check if port is available
     server.listen(port, host, () => {
