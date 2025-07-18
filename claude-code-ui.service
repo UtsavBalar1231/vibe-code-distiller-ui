@@ -1,0 +1,25 @@
+[Unit]
+Description=Claude Code Web Manager
+Documentation=https://github.com/yourusername/claude-code-ui
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=distiller
+Group=distiller
+WorkingDirectory=/home/distiller/claudeCodeUi
+ExecStart=/home/distiller/.nvm/versions/node/v22.17.0/bin/npm run pm2:start
+ExecReload=/home/distiller/.nvm/versions/node/v22.17.0/bin/npm run pm2:restart
+ExecStop=/home/distiller/.nvm/versions/node/v22.17.0/bin/npm run pm2:stop
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=claude-code-ui
+Environment="NODE_ENV=production"
+Environment="PATH=/home/distiller/.nvm/versions/node/v22.17.0/bin:/usr/bin:/usr/local/bin"
+Environment="PM2_HOME=/home/distiller/.pm2"
+
+[Install]
+WantedBy=multi-user.target
