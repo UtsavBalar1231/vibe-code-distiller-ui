@@ -49,8 +49,11 @@ class TTYdTerminalManager {
             console.log('✅ TTYd terminal iframe loaded');
             this.isInitialized = true;
             
-            // 页面刷新时触发：初始化加载session列表
-            this.refreshSessionList();
+            // 页面刷新时触发：添加延迟以确保TTYd客户端完全准备好
+            console.log('⏱️ Waiting for TTYd client to be fully ready...');
+            setTimeout(() => {
+                this.refreshSessionList();
+            }, 2000); // 延迟2秒确保TTYd客户端完全建立连接
         };
 
         // 监听iframe错误
@@ -148,10 +151,13 @@ class TTYdTerminalManager {
             // 重新构建标签页
             this.rebuildTabs();
             
-            // 如果没有活跃session但有sessions存在，激活第一个
+            // 如果没有活跃session但有sessions存在，延迟激活第一个
             if (!this.activeSessionName && this.sessions.size > 0) {
                 const firstSession = Array.from(this.sessions.keys())[0];
-                this.switchToSession(firstSession);
+                console.log('⏱️ Delaying auto-switch to first session to ensure TTYd stability...');
+                setTimeout(() => {
+                    this.switchToSession(firstSession);
+                }, 1000); // 额外延迟1秒确保系统稳定
             }
             
             // 如果没有任何session，显示欢迎屏幕
@@ -229,13 +235,13 @@ class TTYdTerminalManager {
         return sessionName;
     }
 
-    switchToSession(sessionName) {
+    switchToSession(sessionName, retryCount = 0) {
         if (!this.sessions.has(sessionName)) {
             console.error('❌ Session not found:', sessionName);
             return;
         }
 
-        console.log('🔄 Switching to session:', sessionName);
+        console.log('🔄 Switching to session:', sessionName, retryCount > 0 ? `(retry ${retryCount})` : '');
 
         // 获取当前活动的session名称
         const currentSessionName = this.activeSessionName;
@@ -257,6 +263,17 @@ class TTYdTerminalManager {
             window.socket.switchTerminalSession(sessionName, currentSessionName);
         } else {
             console.warn('⚠️ Socket.IO not connected, session switch may not work properly');
+            
+            // 如果Socket.IO未连接且重试次数少于3次，延迟重试
+            if (retryCount < 3) {
+                console.log(`⏱️ Retrying session switch in ${(retryCount + 1) * 1000}ms...`);
+                setTimeout(() => {
+                    this.switchToSession(sessionName, retryCount + 1);
+                }, (retryCount + 1) * 1000);
+            } else {
+                console.error('❌ Max retry attempts reached for session switch');
+                this.showNotification('Failed to switch session after multiple attempts', 'error');
+            }
         }
     }
 
