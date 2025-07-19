@@ -337,21 +337,6 @@ class ClaudeCodeWebManager extends EventEmitter {
     renderSettingsContent(container) {
         container.innerHTML = `
             <div class="settings-panel active" data-panel="general">
-                <div class="settings-group">
-                    <h4>Appearance</h4>
-                    <div class="settings-item">
-                        <div class="settings-item-info">
-                            <div class="settings-item-title">Theme</div>
-                            <div class="settings-item-description">Choose between light and dark themes</div>
-                        </div>
-                        <div class="settings-item-control">
-                            <select id="theme-select">
-                                <option value="dark" ${theme.getTheme() === 'dark' ? 'selected' : ''}>Dark</option>
-                                <option value="light" ${theme.getTheme() === 'light' ? 'selected' : ''}>Light</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
                 
                 <div class="settings-group">
                     <h4>Notifications</h4>
@@ -445,9 +430,6 @@ class ClaudeCodeWebManager extends EventEmitter {
         this.updateTTYdStatus();
         
         // Setup settings event handlers
-        DOM.on('theme-select', 'change', (e) => {
-            theme.applyTheme(e.target.value);
-        });
         
         // Terminal settings event handlers
         DOM.on('apply-font-size', 'click', async (e) => {

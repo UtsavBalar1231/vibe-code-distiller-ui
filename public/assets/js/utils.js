@@ -696,24 +696,21 @@ class ModalManager {
  */
 class ThemeManager {
     constructor() {
-        this.currentTheme = Storage.get('theme', 'dark');
-        this.applyTheme(this.currentTheme);
+        // Force dark theme only
+        this.currentTheme = 'dark';
+        this.applyTheme('dark');
     }
     
     applyTheme(theme) {
+        // Always apply dark theme regardless of input
         document.body.className = document.body.className.replace(/theme-\w+/g, '');
-        document.body.classList.add(`theme-${theme}`);
-        this.currentTheme = theme;
-        Storage.set('theme', theme);
-    }
-    
-    toggle() {
-        const newTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
-        this.applyTheme(newTheme);
+        document.body.classList.add('theme-dark');
+        this.currentTheme = 'dark';
+        Storage.set('theme', 'dark');
     }
     
     getTheme() {
-        return this.currentTheme;
+        return 'dark';
     }
 }
 
