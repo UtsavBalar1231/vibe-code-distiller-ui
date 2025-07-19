@@ -7,6 +7,7 @@ class TTYdTerminalManager {
         this.isInitialized = false;
         this.refreshInterval = null;
         this._isRestoring = false; // 标记是否正在恢复session
+        this._isSwitchingSession = false; // 标记是否正在切换session
         
         // 绑定事件处理程序
         this.bindEvents();
@@ -41,6 +42,9 @@ class TTYdTerminalManager {
             console.error('❌ TTYd terminal iframe not found');
             return;
         }
+        
+        // 显示初始加载状态，避免用户看到base-session
+        this.showTerminalLoading();
 
         // 动态设置TTYd服务器地址
         this.setupTTYdURL();
@@ -81,6 +85,10 @@ class TTYdTerminalManager {
         
         // 设置iframe的src
         this.iframe.src = ttydURL;
+        
+        // 初始化时隐藏Iframe，避免显示base-session
+        this.iframe.style.display = 'none';
+        console.log('🔈 Hidden iframe during initialization to prevent base-session display');
     }
 
     setupSessionEventListeners() {
@@ -116,7 +124,12 @@ class TTYdTerminalManager {
             this.activeSessionName = data.sessionName;
             this.updateTabStyles();
             
-            // 使用tmux命令切换，无需刷新iframe
+            // session切换成功后显示iframe，隐藏loading状态，清除切换标记
+            console.log('✅ Session switched successfully, showing terminal iframe');
+            this._isSwitchingSession = false;
+            this.hideWelcomeScreen();
+            this.showIframe();
+            
             console.log('✅ Session switched using tmux command, no iframe refresh needed');
         });
     }
@@ -160,6 +173,9 @@ class TTYdTerminalManager {
             // 优先激活指定的session (新创建的session)
             if (sessionToActivate && this.sessions.has(sessionToActivate)) {
                 console.log('🎯 Auto-activating newly created session:', sessionToActivate);
+                // 在切换到新创建的session期间显示loading状态
+                this._isSwitchingSession = true;
+                this.showTerminalLoading();
                 setTimeout(() => {
                     this.switchToSession(sessionToActivate);
                 }, 1000); // 延迟1秒确保TTYd稳定
@@ -168,11 +184,16 @@ class TTYdTerminalManager {
             else if (!this.activeSessionName && this.sessions.size > 0 && !this._isRestoring) {
                 const firstSession = Array.from(this.sessions.keys())[0];
                 console.log('⏱️ Delaying auto-switch to first session to ensure TTYd stability...');
+                // 在自动切换期间继续显示loading状态
+                this._isSwitchingSession = true;
+                this.showTerminalLoading();
                 setTimeout(() => {
                     this.switchToSession(firstSession);
                 }, 1000); // 额外延迟1秒确保系统稳定
             } else if (this._isRestoring) {
                 console.log('🔄 In restore mode - skipping auto-switch to first session');
+                // 在恢复模式下也显示loading状态
+                this.showTerminalLoading();
             }
             
             // 如果没有任何session，显示欢迎屏幕
@@ -184,12 +205,25 @@ class TTYdTerminalManager {
                     console.log('✅ No sessions found during restore, disabled restore mode');
                 }
             } else {
-                this.hideWelcomeScreen();
-                this.showIframe();
+                // 有sessions存在时，检查当前是否已经有活动session
+                if (this.activeSessionName && this.sessions.has(this.activeSessionName) && !this._isSwitchingSession) {
+                    // 如果当前有活动session且该session仍然存在，且不在切换过程中，显示iframe
+                    console.log('📋 Sessions found, current active session still exists, showing iframe');
+                    this.hideWelcomeScreen();
+                    this.showIframe();
+                } else if (!this._isSwitchingSession) {
+                    // 如果没有活动session或活动session不存在，且不在切换过程中，显示loading状态等待session切换
+                    console.log('📋 Sessions found, showing loading status until session switch completes');
+                    this.showTerminalLoading();
+                } else {
+                    // 如果正在切换session过程中，不改变当前显示状态
+                    console.log('📋 Sessions found, but session switching in progress, keeping current state');
+                }
             }
             
         } catch (error) {
             console.error('❌ Failed to refresh session list:', error);
+            this._isSwitchingSession = false; // 刷新失败时清除标记
             this.showError('Failed to refresh session list');
         }
     }
@@ -345,11 +379,20 @@ class TTYdTerminalManager {
         // 更新标签页样式
         this.updateTabStyles();
 
-        // 隐藏欢迎屏幕
+        // 隐藏欢迎屏幕，并在session切换前显示loading状态避免显示base-session
         this.hideWelcomeScreen();
-
-        // 显示iframe
-        this.showIframe();
+        
+        // 只有在确认session切换成功后才显示iframe
+        // 这里先保持loading状态，等socket事件确认后再显示iframe
+        if (sessionName === currentSessionName && !retryCount) {
+            // 如果是相同session，立即显示iframe
+            this.showIframe();
+        } else {
+            // 如果是切换到不同session，先显示loading状态并标记正在切换
+            console.log('🔄 Session switching in progress, showing loading status...');
+            this._isSwitchingSession = true;
+            this.showTerminalLoading();
+        }
 
         // Auto-select corresponding project when switching to a terminal (terminal -> project linking)
         if (!this._skipProjectAutoSelect) {
@@ -370,6 +413,7 @@ class TTYdTerminalManager {
                 }, (retryCount + 1) * 1000);
             } else {
                 console.error('❌ Max retry attempts reached for session switch');
+                this._isSwitchingSession = false; // 切换失败时清除标记
                 this.showNotification('Failed to switch session after multiple attempts', 'error');
             }
         }
@@ -432,6 +476,7 @@ class TTYdTerminalManager {
         // 检查Socket.IO连接状态
         if (!window.socket || !window.socket.isConnected()) {
             console.error('❌ Socket.IO not connected, cannot create terminal session');
+            this._isSwitchingSession = false; // 连接失败时清除标记
             this.showError('Not connected to server. Please check your connection.');
             return false;
         }
@@ -456,13 +501,15 @@ class TTYdTerminalManager {
             console.log('🎯 Terminal session creation request sent:', sessionName);
             this.showNotification(`Creating terminal session: ${sessionName}`);
             
-            // 隐藏欢迎屏幕并显示iframe
+            // 隐藏欢迎屏幕，显示loading状态等待新session创建完成
             this.hideWelcomeScreen();
-            this.showIframe();
+            this._isSwitchingSession = true; // 标记正在创建新session
+            this.showTerminalLoading();
             
             return sessionName;
         } else {
             console.error('❌ Failed to send terminal session creation request');
+            this._isSwitchingSession = false; // 创建失败时清除标记
             this.showError('Failed to create terminal session');
             return false;
         }
@@ -510,6 +557,35 @@ class TTYdTerminalManager {
             `;
         }
     }
+
+    showTerminalLoading() {
+        console.log('💼 Showing terminal loading status...');
+        const welcomeScreen = document.getElementById('welcome-screen');
+        if (welcomeScreen) {
+            welcomeScreen.style.display = 'flex';
+        }
+        
+        if (this.iframe) {
+            this.iframe.style.display = 'none';
+        }
+        
+        // 修改welcome screen内容显示加载状态
+        const welcomeContent = document.querySelector('.welcome-content');
+        if (welcomeContent) {
+            welcomeContent.innerHTML = `
+                <h2>💼 Terminal Loading</h2>
+                <p>Preparing terminal session...</p>
+                <div class="loading-spinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+        }
+    }
+
 
     showRestartingStatus() {
         console.log('🔄 Showing TTYd restarting status...');
@@ -580,6 +656,9 @@ class TTYdTerminalManager {
                             // Wait a bit more for TTYd to be fully ready, then restore session
                             setTimeout(() => {
                                 console.log('🔄 Restoring session after TTYd reload:', currentActiveSession);
+                                // 恢复session期间显示loading状态
+                                this._isSwitchingSession = true;
+                                this.showTerminalLoading();
                                 this.switchToSession(currentActiveSession);
                                 // 恢复完成后清除恢复模式标志
                                 this._isRestoring = false;
@@ -591,19 +670,28 @@ class TTYdTerminalManager {
                             if (this.sessions.size > 0) {
                                 const firstSession = Array.from(this.sessions.keys())[0];
                                 console.log('🔄 Falling back to first available session:', firstSession);
+                                // 恢复fallback session期间显示loading状态
+                                this._isSwitchingSession = true;
+                                this.showTerminalLoading();
                                 setTimeout(() => {
                                     this.switchToSession(firstSession);
                                     // 恢复完成后清除恢复模式标志
                                     this._isRestoring = false;
                                     console.log('✅ Fallback restore completed, disabled restore mode');
                                 }, 1500);
+                            } else {
+                                // 没有session可恢复，显示欢迎屏幕
+                                console.log('📋 No sessions to restore, showing welcome screen');
+                                this.showWelcomeScreen();
+                                this._isRestoring = false;
                             }
                         }
                     }).catch(error => {
                         console.error('❌ Failed to refresh session list after TTYd reload:', error);
-                        // 即使失败也要清除恢复模式标志
+                        // 即使失败也要清除恢复模式标志和切换标记
                         this._isRestoring = false;
-                        console.log('✅ Restore failed, disabled restore mode');
+                        this._isSwitchingSession = false;
+                        console.log('✅ Restore failed, disabled restore mode and switching flag');
                     });
                     
                     // Remove the listener after use
@@ -721,6 +809,8 @@ class TTYdTerminalManager {
         this.sessions.clear();
         this.activeSessionName = null;
         this.isInitialized = false;
+        this._isRestoring = false;
+        this._isSwitchingSession = false;
     }
 }
 
