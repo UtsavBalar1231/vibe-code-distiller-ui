@@ -14,6 +14,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const config = require('config');
 
 // Import utilities and middleware
 const logger = require('./utils/logger');
@@ -37,9 +38,13 @@ const systemRoutes = require('./routes/system');
 const claudeRoutes = require('./routes/claude');
 const imageRoutes = require('./routes/images');
 const fileRoutes = require('./routes/files');
+const ttydRoutes = require('./routes/ttyd');
 
 // Import socket handler
 const socketHandler = require('./socket-handler');
+
+// Import TTYd service
+const ttydService = require('./services/ttyd-service');
 
 // Setup process error handlers
 setupProcessErrorHandlers();
@@ -154,36 +159,40 @@ app.post('/api/auth/login', require('./middleware/auth').handleLogin);
 app.post('/api/auth/logout', require('./middleware/auth').handleLogout);
 app.get('/api/auth/user', basicAuth, require('./middleware/auth').getCurrentUser);
 
-// TTYd terminal proxy configuration - HTTP only, WebSocket handled separately
-const ttydProxy = createProxyMiddleware({
-  target: 'http://localhost:7681',
-  changeOrigin: true,
-  pathRewrite: {
-    '^/terminal': '', // remove /terminal prefix when forwarding to ttyd
-  },
-  ws: false, // DISABLE websocket proxy to avoid conflicts with Socket.IO
-  logLevel: 'silent',
-  timeout: 30000,
-  proxyTimeout: 30000,
-  secure: false,
-  onError: (err, req, res) => {
-    logger.error('TTYd proxy error:', { error: err.message, url: req.url, method: req.method });
-    if (!res.headersSent) {
-      res.status(502).json({ error: 'Terminal service unavailable', details: err.message });
-    }
-  },
-  onProxyRes: (proxyRes, req, res) => {
-    // Remove headers that prevent iframe embedding
-    delete proxyRes.headers['x-frame-options'];
-    delete proxyRes.headers['content-security-policy'];
-    delete proxyRes.headers['x-content-type-options'];
-    
-    logger.debug('TTYd proxy response:', { statusCode: proxyRes.statusCode, url: req.url });
-  }
-});
 
-// TTYd terminal proxy route - HTTP only
-app.use('/terminal', ttydProxy);
+// TTYd terminal proxy route - Dynamic proxy that gets target from service
+const dynamicTTYdProxy = (req, res, next) => {
+  const ttydPort = ttydService.getStatus().port;
+  const proxy = createProxyMiddleware({
+    target: `http://localhost:${ttydPort}`,
+    changeOrigin: true,
+    pathRewrite: {
+      '^/terminal': '',
+    },
+    ws: false,
+    logLevel: 'silent',
+    timeout: 30000,
+    proxyTimeout: 30000,
+    secure: false,
+    onError: (err, req, res) => {
+      logger.error('TTYd proxy error:', { error: err.message, url: req.url, method: req.method });
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Terminal service unavailable', details: err.message });
+      }
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      delete proxyRes.headers['x-frame-options'];
+      delete proxyRes.headers['content-security-policy'];
+      delete proxyRes.headers['x-content-type-options'];
+      logger.debug('TTYd proxy response:', { statusCode: proxyRes.statusCode, url: req.url });
+    }
+  });
+  
+  return proxy(req, res, next);
+};
+
+// Register TTYd proxy route early
+app.use('/terminal', dynamicTTYdProxy);
 
 // Protected API routes
 app.use('/api', basicAuth, apiRoutes);
@@ -192,6 +201,7 @@ app.use('/api/system', basicAuth, systemRoutes);
 app.use('/api/claude', basicAuth, claudeRoutes);
 app.use('/api/images', basicAuth, imageRoutes);
 app.use('/api/files', basicAuth, fileRoutes);
+app.use('/api/ttyd', basicAuth, ttydRoutes);
 
 // Serve main application (with auth in production)
 app.get('/', (req, res, next) => {
@@ -277,6 +287,19 @@ const startServer = async () => {
     // Setup Claude aliases at startup
     setupClaudeAliases();
     
+    // Start TTYd service first
+    logger.info('Starting TTYd service...');
+    try {
+      await ttydService.start();
+      logger.info('TTYd service started successfully');
+      logger.info('TTYd proxy is ready (using dynamic proxy)');
+      
+    } catch (ttydError) {
+      logger.error('Failed to start TTYd service:', ttydError);
+      logger.error('Application will not start without TTYd service');
+      process.exit(1);
+    }
+    
     // Manual WebSocket upgrade handling to avoid conflicts between Socket.IO and ttyd
     server.on('upgrade', (request, socket, head) => {
       const pathname = request.url;
@@ -288,8 +311,9 @@ const startServer = async () => {
         
         // Create a proxy for WebSocket upgrade
         const { createProxyMiddleware } = require('http-proxy-middleware');
+        const ttydPort = ttydService.getStatus().port;
         const wsProxy = createProxyMiddleware({
-          target: 'http://localhost:7681',
+          target: `http://localhost:${ttydPort}`,
           changeOrigin: true,
           pathRewrite: {
             '^/terminal': '', // remove /terminal prefix when forwarding to ttyd
@@ -344,6 +368,15 @@ const startServer = async () => {
     // Graceful shutdown
     const shutdown = async (signal) => {
       logger.system('Shutdown initiated', { signal });
+      
+      // Stop TTYd service first
+      try {
+        logger.info('Stopping TTYd service...');
+        await ttydService.stop();
+        logger.info('TTYd service stopped');
+      } catch (ttydError) {
+        logger.error('Error stopping TTYd service:', ttydError);
+      }
       
       // Stop accepting new connections
       server.close(() => {
