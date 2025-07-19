@@ -378,6 +378,61 @@ class TTYdTerminalManager {
         // iframe会自动处理resize，无需特殊处理
         console.log('📏 Window resized, iframe will auto-adjust');
     }
+    
+    reloadTerminal() {
+        console.log('🔄 Reloading TTYd terminal iframe...');
+        
+        if (this.iframe) {
+            // Save the current active session before reload
+            const currentActiveSession = this.activeSessionName;
+            console.log('💾 Saving current active session for restoration:', currentActiveSession);
+            
+            // Force reload the iframe src to pick up new TTYd settings
+            const currentSrc = this.iframe.src;
+            this.iframe.src = '';
+            
+            // Small delay to ensure the src is cleared, then reload and restore session
+            setTimeout(() => {
+                this.iframe.src = currentSrc;
+                console.log('✅ TTYd terminal iframe reloaded');
+                
+                // Set up iframe load listener to restore session after reload
+                const restoreSession = () => {
+                    console.log('🎯 TTYd iframe loaded, attempting to restore session:', currentActiveSession);
+                    
+                    // First refresh session list to ensure we have latest data
+                    this.refreshSessionList().then(() => {
+                        if (currentActiveSession && this.sessions.has(currentActiveSession)) {
+                            // Wait a bit more for TTYd to be fully ready, then restore session
+                            setTimeout(() => {
+                                console.log('🔄 Restoring session after TTYd reload:', currentActiveSession);
+                                this.switchToSession(currentActiveSession);
+                            }, 1500); // 1.5 second delay to ensure TTYd is stable
+                        } else {
+                            console.log('⚠️ No session to restore or session not found');
+                            // If the saved session doesn't exist, just refresh the UI
+                            if (this.sessions.size > 0) {
+                                const firstSession = Array.from(this.sessions.keys())[0];
+                                console.log('🔄 Falling back to first available session:', firstSession);
+                                setTimeout(() => {
+                                    this.switchToSession(firstSession);
+                                }, 1500);
+                            }
+                        }
+                    }).catch(error => {
+                        console.error('❌ Failed to refresh session list after TTYd reload:', error);
+                    });
+                    
+                    // Remove the listener after use
+                    this.iframe.removeEventListener('load', restoreSession);
+                };
+                
+                // Listen for iframe load completion
+                this.iframe.addEventListener('load', restoreSession);
+                
+            }, 500);
+        }
+    }
 
     showNotification(message) {
         console.log('📢 Notification:', message);
