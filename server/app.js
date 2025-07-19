@@ -233,6 +233,68 @@ app.use(errorHandler);
 const port = process.env.PORT || SERVER.DEFAULT_PORT;
 const host = process.env.HOST || SERVER.DEFAULT_HOST;
 
+// Setup tmux configuration function
+const setupTmuxConfig = () => {
+  try {
+    const homeDir = os.homedir();
+    const tmuxConfPath = path.join(homeDir, '.tmux.conf');
+    
+    // Required tmux configuration lines
+    const requiredConfig = [
+      'set -g mouse on',
+      'set -g history-limit 10000'
+    ];
+    
+    let configContent = '';
+    let needsUpdate = false;
+    
+    // Check if .tmux.conf exists
+    if (fs.existsSync(tmuxConfPath)) {
+      configContent = fs.readFileSync(tmuxConfPath, 'utf8');
+      logger.info('Found existing .tmux.conf file');
+    } else {
+      logger.info('.tmux.conf file not found, will create it');
+      needsUpdate = true;
+    }
+    
+    // Check if required configurations exist
+    const missingConfig = requiredConfig.filter(line => !configContent.includes(line));
+    
+    if (missingConfig.length > 0 || needsUpdate) {
+      if (missingConfig.length > 0) {
+        logger.info(`Adding missing tmux configurations: ${missingConfig.join(', ')}`);
+        // Append missing configurations
+        const configToAdd = missingConfig.join('\n') + '\n';
+        if (configContent && !configContent.endsWith('\n')) {
+          configContent += '\n';
+        }
+        configContent += configToAdd;
+      } else if (!configContent) {
+        // Create new config file with required settings
+        configContent = requiredConfig.join('\n') + '\n';
+      }
+      
+      // Write the configuration file
+      fs.writeFileSync(tmuxConfPath, configContent);
+      logger.info('tmux configuration file updated successfully');
+      
+      // Source the tmux configuration if tmux is running
+      try {
+        execSync('tmux source-file ~/.tmux.conf 2>/dev/null', { stdio: 'ignore' });
+        logger.info('tmux configuration sourced successfully');
+      } catch (sourceError) {
+        // This is expected if no tmux sessions are running
+        logger.debug('Could not source tmux config (no active sessions)', sourceError.message);
+      }
+    } else {
+      logger.info('tmux configuration is already properly set up');
+    }
+    
+  } catch (error) {
+    logger.error('Error setting up tmux configuration:', error.message);
+  }
+};
+
 // Setup Claude aliases function
 const setupClaudeAliases = () => {
   try {
@@ -286,6 +348,9 @@ const startServer = async () => {
   try {
     // Setup Claude aliases at startup
     setupClaudeAliases();
+    
+    // Setup tmux configuration at startup
+    setupTmuxConfig();
     
     // Start TTYd service first
     logger.info('Starting TTYd service...');
