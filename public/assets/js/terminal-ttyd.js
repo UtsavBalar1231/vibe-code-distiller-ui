@@ -93,8 +93,8 @@ class TTYdTerminalManager {
             console.log('🎉 Session created event received:', data);
             this.showNotification(`Terminal session created: ${data.sessionName}`);
             
-            // 创建新的终端后触发：更新session列表
-            this.refreshSessionList();
+            // 创建新的终端后触发：更新session列表并自动激活新创建的session
+            this.refreshSessionList(data.sessionName);
         });
 
         // 监听session删除事件
@@ -120,14 +120,14 @@ class TTYdTerminalManager {
         });
     }
 
-    async refreshSessionList() {
+    async refreshSessionList(sessionToActivate = null) {
         if (!window.socket) {
             console.warn('⚠️ Socket.IO not available, cannot refresh session list');
             return;
         }
 
         try {
-            console.log('🔄 Refreshing session list...');
+            console.log('🔄 Refreshing session list...', sessionToActivate ? `(will activate: ${sessionToActivate})` : '');
             
             // 获取当前所有的claude-web session
             const sessions = await window.socket.getTerminalSessions();
@@ -151,8 +151,15 @@ class TTYdTerminalManager {
             // 重新构建标签页
             this.rebuildTabs();
             
+            // 优先激活指定的session (新创建的session)
+            if (sessionToActivate && this.sessions.has(sessionToActivate)) {
+                console.log('🎯 Auto-activating newly created session:', sessionToActivate);
+                setTimeout(() => {
+                    this.switchToSession(sessionToActivate);
+                }, 1000); // 延迟1秒确保TTYd稳定
+            }
             // 如果没有活跃session但有sessions存在，延迟激活第一个
-            if (!this.activeSessionName && this.sessions.size > 0) {
+            else if (!this.activeSessionName && this.sessions.size > 0) {
                 const firstSession = Array.from(this.sessions.keys())[0];
                 console.log('⏱️ Delaying auto-switch to first session to ensure TTYd stability...');
                 setTimeout(() => {
@@ -303,6 +310,23 @@ class TTYdTerminalManager {
                 tab.classList.remove('active');
             }
         });
+    }
+
+    // 选择并激活指定的session tab (被project-manager.js调用)
+    selectSessionTab(sessionName) {
+        if (!sessionName) {
+            console.warn('⚠️ selectSessionTab called with empty sessionName');
+            return false;
+        }
+
+        if (!this.sessions.has(sessionName)) {
+            console.warn('⚠️ selectSessionTab called with unknown sessionName:', sessionName);
+            return false;
+        }
+
+        console.log('🎯 selectSessionTab called for session:', sessionName);
+        this.switchToSession(sessionName);
+        return true;
     }
 
     async createNewTerminal(projectName = null) {
