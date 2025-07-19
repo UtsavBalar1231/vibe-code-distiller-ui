@@ -979,10 +979,6 @@ body {
         font-size: 14px;
     }
     
-    /* Hide theme toggle on very small screens */
-    #theme-toggle {
-        display: none;
-    }
     
     /* Further optimize status indicators for very small screens */
     .status-indicators {

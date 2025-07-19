@@ -12,7 +12,6 @@ class SocketClient extends EventEmitter {
         
         // Project connection state tracking
         this.projectStates = new Map(); // projectId -> {status, readyCallbacks, lastActivity}
-        this.pendingInputs = new Map(); // projectId -> input queue
         
         // Browser notifications
         this.notificationPermission = 'default';
@@ -168,11 +167,6 @@ class SocketClient extends EventEmitter {
             this.emit('project_status', data);
         });
         
-        // Terminal events
-        this.socket.on('terminal-output', (data) => {
-            this.emit('terminal_output', data);
-        });
-        
         // Project connection events
         this.socket.on('project-ready', (data) => {
             const { projectId } = data;
@@ -186,22 +180,26 @@ class SocketClient extends EventEmitter {
             this.emit('project_disconnected', data);
         });
         
-        this.socket.on('terminal-session-created', (data) => {
-            const { projectId } = data;
-            // Mark project as ready when terminal session is created
-            setTimeout(() => this.markProjectReady(projectId), 100);
-            this.emit('terminal_session_created', data);
-        });
-        
-        this.socket.on('terminal-input-error', (data) => {
-            const { projectId, message, details } = data;
-            console.error(`Terminal input error for ${projectId}: ${message}`, details);
-            this.emit('terminal_input_error', data);
-        });
         
         // Claude Code events
         this.socket.on('claude-response', (data) => {
             this.emit('claude_response', data);
+        });
+        
+        // Terminal session events
+        this.socket.on('terminal:session-created', (data) => {
+            console.log('Terminal session created:', data);
+            this.emit('terminal:session-created', data);
+        });
+        
+        this.socket.on('terminal:session-deleted', (data) => {
+            console.log('Terminal session deleted:', data);
+            this.emit('terminal:session-deleted', data);
+        });
+        
+        this.socket.on('terminal:session-switched', (data) => {
+            console.log('Terminal session switched:', data);
+            this.emit('terminal:session-switched', data);
         });
         
         // System events
@@ -283,21 +281,17 @@ class SocketClient extends EventEmitter {
     }
     
     handleClaudeNotification(notification) {
-        // Check if notifications are enabled before showing
-        if (!notifications.isNotificationEnabled()) {
-            return;
-        }
-        
         const { sessionId, projectName, message, title, timestamp } = notification;
         
+        // Show in-app notification (controlled by in-app notification settings)
+        if (notifications.isNotificationEnabled()) {
+            notifications.warning(message, { 
+                title: title, 
+                duration: 0 // Persistent notification
+            });
+        }
         
-        // Show in-app notification
-        notifications.warning(message, { 
-            title: title, 
-            duration: 0 // Persistent notification
-        });
-        
-        // Show browser notification if permission granted
+        // Show browser notification (independent of in-app notification settings)
         this.showBrowserNotification(title, message, projectName);
     }
     
@@ -322,19 +316,25 @@ class SocketClient extends EventEmitter {
                 Notification.requestPermission().then(permission => {
                     this.notificationPermission = permission;
                     
-                    if (permission === 'granted' && notifications.isNotificationEnabled()) {
-                        notifications.success('Browser notifications enabled! You can now receive notifications even when away from the page', {
-                            title: 'Notification Permission Granted',
-                            duration: 3000
-                        });
+                    if (permission === 'granted') {
+                        // Show in-app message about browser notification success (if in-app notifications enabled)
+                        if (notifications.isNotificationEnabled()) {
+                            notifications.success('Browser notifications enabled! You can now receive notifications even when away from the page', {
+                                title: 'Notification Permission Granted',
+                                duration: 3000
+                            });
+                        }
                         
-                        // Test notification
+                        // Test browser notification (independent of in-app notification settings)
                         this.showBrowserNotification('Claude Code Web Manager', 'Browser notifications enabled!', 'System');
-                    } else if (permission === 'denied' && notifications.isNotificationEnabled()) {
-                        notifications.warning('Browser notifications denied. You can manually enable notifications in browser settings', {
-                            title: 'Notification Permission Denied',
-                            duration: 5000
-                        });
+                    } else if (permission === 'denied') {
+                        // Show in-app message about browser notification denial (if in-app notifications enabled)
+                        if (notifications.isNotificationEnabled()) {
+                            notifications.warning('Browser notifications denied. You can manually enable notifications in browser settings', {
+                                title: 'Notification Permission Denied',
+                                duration: 5000
+                            });
+                        }
                     }
                 });
             } else {
@@ -344,11 +344,8 @@ class SocketClient extends EventEmitter {
     }
     
     showBrowserNotification(title, message, projectName) {
-        // Check if notifications are enabled
-        if (!notifications.isNotificationEnabled()) {
-            return;
-        }
-        
+        // Browser notifications are independent of in-app notification settings
+        // Only check browser permission
         if ('Notification' in window && this.notificationPermission === 'granted') {
             const notificationTitle = title;
             const notificationOptions = {
@@ -429,52 +426,6 @@ class SocketClient extends EventEmitter {
         return this.currentProject;
     }
     
-    // Terminal methods
-    sendTerminalInput(projectId, input) {
-        if (!this.isConnected()) {
-            console.warn('Cannot send terminal input: not connected to server');
-            return false;
-        }
-        
-        // Support both old project-based and new session-based inputs
-        if (projectId.startsWith('claude-web-')) {
-            // New session-based approach
-            this.socket.emit('terminal-input', { sessionName: projectId, input });
-            return true;
-        }
-        
-        // Legacy project-based approach
-        // Ensure we're connected to the project before sending input
-        if (this.currentProject !== projectId || !this.isProjectReady(projectId)) {
-            this.ensureProjectConnection(projectId, () => {
-                this.socket.emit('terminal-input', { projectId, input });
-            });
-            return true;
-        }
-        
-        this.socket.emit('terminal-input', { projectId, input });
-        return true;
-    }
-    
-    resizeTerminal(projectId, cols, rows) {
-        if (!this.isConnected()) {
-            console.warn('Cannot resize terminal: not connected to server');
-            return false;
-        }
-        
-        this.socket.emit('terminal-resize', { projectId, cols, rows });
-        return true;
-    }
-    
-    restartTerminal(projectId) {
-        if (!this.isConnected()) {
-            console.warn('Cannot restart terminal: not connected to server');
-            return false;
-        }
-        
-        this.socket.emit('terminal-restart', { projectId });
-        return true;
-    }
     
     // Claude Code methods
     sendClaudeCommand(projectId, command, context = {}) {
@@ -506,12 +457,62 @@ class SocketClient extends EventEmitter {
         return this.sendProjectAction(projectId, 'stop_claude', { force });
     }
     
-    createTerminal(projectId, options = {}) {
-        return this.sendProjectAction(projectId, 'create_terminal', options);
+    createTerminalSession(projectName, projectPath, options = {}) {
+        if (!this.isConnected()) {
+            console.warn('Cannot create terminal session: not connected to server');
+            return false;
+        }
+        
+        const sessionData = {
+            projectName,
+            projectPath,
+            cols: options.cols || 80,
+            rows: options.rows || 24,
+            sessionName: options.sessionName || null
+        };
+        
+        this.socket.emit('terminal:create-project-session', sessionData);
+        return true;
     }
     
-    destroyTerminal(projectId) {
-        return this.sendProjectAction(projectId, 'destroy_terminal');
+    deleteTerminalSession(sessionName) {
+        if (!this.isConnected()) {
+            console.warn('Cannot delete terminal session: not connected to server');
+            return false;
+        }
+        
+        this.socket.emit('terminal:delete-session', { sessionName });
+        return true;
+    }
+    
+    switchTerminalSession(sessionName, currentSessionName = null) {
+        if (!this.isConnected()) {
+            console.warn('Cannot switch terminal session: not connected to server');
+            return false;
+        }
+        
+        this.socket.emit('terminal:switch-session', { 
+            sessionName, 
+            currentSessionName 
+        });
+        return true;
+    }
+    
+    async getTerminalSessions() {
+        try {
+            const response = await fetch('/api/sessions');
+            const data = await response.json();
+            
+            if (data.success) {
+                return data.sessions;
+            } else {
+                console.error('Failed to get terminal sessions:', data.error);
+                return [];
+            }
+        } catch (error) {
+            console.error('Error fetching terminal sessions:', error);
+            return [];
+        }
     }
     
     // Utility methods
@@ -520,9 +521,6 @@ class SocketClient extends EventEmitter {
     }
     
     // Event handler shortcuts
-    onTerminalOutput(callback) {
-        return this.on('terminal_output', callback);
-    }
     
     onClaudeResponse(callback) {
         return this.on('claude_response', callback);
@@ -554,6 +552,18 @@ class SocketClient extends EventEmitter {
     
     onConnectionError(callback) {
         return this.on('connection_error', callback);
+    }
+    
+    onTerminalSessionCreated(callback) {
+        return this.on('terminal:session-created', callback);
+    }
+    
+    onTerminalSessionDeleted(callback) {
+        return this.on('terminal:session-deleted', callback);
+    }
+    
+    onTerminalSessionSwitched(callback) {
+        return this.on('terminal:session-switched', callback);
     }
     
     // Authentication methods (if needed)
@@ -654,14 +664,6 @@ class SocketClient extends EventEmitter {
             }
         }
         
-        // Process any pending inputs
-        const pendingInputs = this.pendingInputs.get(projectId);
-        if (pendingInputs && pendingInputs.length > 0) {
-            while (pendingInputs.length > 0) {
-                const input = pendingInputs.shift();
-                this.socket.emit('terminal-input', { projectId, input });
-            }
-        }
     }
     
     markProjectDisconnected(projectId) {

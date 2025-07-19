@@ -25,6 +25,7 @@ npm run pm2:delete   # Delete PM2 process
 ### Requirements
 - Node.js 18.0.0+
 - NPM 8.0.0+
+- TTYd (for terminal interface)
 - Supported on Linux/macOS with ARM64/x64 architectures
 
 ## Architecture
@@ -34,9 +35,6 @@ The application follows a layered service architecture built on Express.js:
 
 **Core Services:**
 - `claude-manager.js` - Manages Claude AI CLI sessions and processes
-- `terminal-service-tmux.js` - Handles persistent terminal sessions using tmux with real-time discovery
-- `terminal-service.js` - Standard terminal service (non-tmux fallback)
-- `terminal-service-wrapper.js` - Wrapper service for terminal session management
 - `project-service.js` - Project file and directory management
 - `file-service.js` - File system operations and file watching
 
@@ -50,9 +48,15 @@ The application follows a layered service architecture built on Express.js:
 
 **Real-time Communication:**
 - Socket.IO handlers in `socket-handler.js` manage WebSocket connections
-- Event-driven architecture for terminal I/O, project updates, and system monitoring
+- Event-driven architecture for project updates, system monitoring, and notifications
 - Multi-session support with auto-reconnection handling
 - Real-time system monitoring (CPU, temperature, memory usage)
+
+**Terminal Integration:**
+- TTYd service running on port 7681 provides web-based terminal interface
+- HTTP proxy at `/terminal` route forwards requests to TTYd
+- Manual WebSocket upgrade handling to prevent conflicts with Socket.IO
+- iframe-based terminal embedding for seamless integration
 
 **Tmux Session Management:**
 - Sessions follow naming convention: `claude-web-{projectId}-{timestamp}`
@@ -60,16 +64,15 @@ The application follows a layered service architecture built on Express.js:
 - No metadata files - tmux serves as single source of truth
 - Automatic session detection and reconnection across devices
 - Session persistence survives application restarts and network interruptions
-- Enhanced terminal session management with improved input handling
 
 ### Client Architecture
 - Pure HTML/CSS/JavaScript frontend (no framework dependencies)
-- xterm.js for browser-based terminal interface with web links addon
-- Socket.IO client for real-time communication
+- TTYd iframe for browser-based terminal interface
+- Socket.IO client for real-time communication (separated from terminal WebSocket)
 - Responsive design optimized for mobile and desktop
 - Modern interface with comprehensive features:
   - Project selection sidebar with resize functionality
-  - Terminal interface with multi-session support
+  - Terminal interface via iframe integration
   - File management with drag-and-drop upload
   - Image manager with preview capabilities
   - System monitoring dashboard
@@ -101,7 +104,7 @@ Key configuration areas:
 ### File Structure
 ```
 server/
-├── app.js              # Main Express application
+├── app.js              # Main Express application with TTYd proxy
 ├── socket-handler.js   # WebSocket event handling
 ├── middleware/         # Auth, CORS, error handling
 ├── routes/             # API endpoint definitions
@@ -112,13 +115,10 @@ server/
 │   ├── files.js       # File management operations
 │   └── images.js      # Image management operations
 ├── services/          # Core business logic
-│   ├── claude-manager.js         # Claude AI session management
-│   ├── terminal-service.js       # Standard terminal service
-│   ├── terminal-service-tmux.js  # Tmux-based terminal service
-│   ├── terminal-service-wrapper.js # Terminal service wrapper
-│   ├── project-service.js        # Project operations
-│   └── file-service.js           # File system operations
-└── utils/             # Logging, constants, validation
+│   ├── claude-manager.js # Claude AI session management
+│   ├── project-service.js # Project operations
+│   └── file-service.js    # File system operations
+└── utils/             # Logging, constants, validation, tmux utilities
 
 public/
 ├── index.html         # Main application page
@@ -127,14 +127,14 @@ public/
     ├── js/           # Client-side JavaScript modules
     │   ├── app.js           # Main application logic
     │   ├── socket-client.js # Socket.IO client handling
-    │   ├── terminal.js      # Terminal interface
+    │   ├── terminal-ttyd.js # TTYd terminal interface
     │   ├── project-manager.js # Project management UI
     │   ├── file-manager.js    # File management UI
     │   ├── image-manager.js   # Image management UI
     │   ├── vertical-divider.js # Sidebar resizing
     │   ├── sidebar-divider.js  # Sidebar panel divider
     │   └── utils.js           # Utility functions
-    ├── libs/         # External libraries (xterm.js, socket.io)
+    ├── libs/         # External libraries (socket.io)
     └── icons/        # Application icons
 
 config/               # Configuration files
@@ -170,11 +170,12 @@ The application includes specific optimizations for Raspberry Pi deployment:
 - **Naming Conventions**: Use structured naming patterns to eliminate need for separate mapping files
 - **Simplify Dependencies**: Remove redundant file I/O when system commands provide the same information
 - **Async-First Design**: Make methods async when they involve external system calls for better performance
+- **Separation of Concerns**: Keep WebSocket handlers separate for different services (Socket.IO vs TTYd)
 
 ### Core Dependencies
 - **express**: Web framework
 - **socket.io**: Real-time communication
-- **node-pty**: Terminal process management
+- **http-proxy-middleware**: TTYd proxy integration
 - **chokidar**: File watching
 - **fs-extra**: Enhanced file system operations
 - **winston**: Logging framework
@@ -186,12 +187,12 @@ The application includes specific optimizations for Raspberry Pi deployment:
 - 新增功能：将项目的新功能加入到claude.md中，以便跟踪项目演进和特性更新
 
 ### Core Features (2025-07-02 - Present)
-- **Tmux Integration**: Added persistent terminal sessions using tmux
-  - Sessions persist across browser/device changes
-  - Automatic session discovery and reconnection
-  - Cross-device session continuation
+- **TTYd Integration**: Web-based terminal interface using TTYd + iframe
+  - Direct terminal access without complex WebSocket handling
+  - Seamless integration with existing application
+  - Cross-device session continuation via tmux
   - Automatic session restoration after reconnection
-  - Optional feature controlled by config/terminal.tmux.enabled
+  - Simple and reliable terminal interface
 
 - **Enhanced Terminal Management**: Comprehensive terminal session handling
   - Multiple terminal sessions per project
@@ -250,3 +251,77 @@ The application includes specific optimizations for Raspberry Pi deployment:
   - Connection state tracking and auto-reconnection
   - Project room management for multi-user scenarios
   - Enhanced authentication middleware for Socket.IO
+
+### Terminal Architecture Revolution (2025-07-18)
+- **TTYd Migration**: Complete migration from xterm.js to TTYd + iframe architecture
+  - **Problem Solved**: Eliminated complex WebSocket handling and session management
+  - **Technology Stack**: Replaced xterm.js + node-pty with TTYd + iframe
+  - **Benefits**: Simplified codebase, improved reliability, native terminal experience
+  - **WebSocket Conflict Resolution**: Separated Socket.IO and TTYd WebSocket handling
+  - **Code Reduction**: Removed ~500 lines of terminal-related code
+  - **Improved Stability**: Eliminated xterm.js rendering issues and connection problems
+
+- **WebSocket Architecture Optimization**: Resolved WebSocket upgrade conflicts
+  - **Root Cause**: TTYd proxy WebSocket upgrades conflicted with Socket.IO
+  - **Solution**: Manual WebSocket upgrade handling with path-based routing
+  - **Implementation**: Server-side upgrade event handling for `/terminal` vs `/socket.io`
+  - **Result**: Stable WebSocket connections for both services
+  - **Lesson**: Always separate WebSocket upgrade handling when multiple services need WebSocket
+
+- **Codebase Cleanup**: Systematic removal of legacy code
+  - Removed all wetty-related files and dependencies
+  - Cleaned up terminal service abstractions
+  - Simplified proxy configuration
+  - Eliminated redundant terminal management code
+  - Renamed files to reflect new architecture
+
+## Architecture Optimization Lessons
+
+### TTYd Integration Success (2025-07-18)
+
+**问题识别**: xterm.js + node-pty 架构过于复杂，存在WebSocket冲突和渲染问题
+**解决方案**: 迁移到TTYd + iframe架构，简化终端集成
+
+#### 重构收益
+- **架构简化**: 移除复杂的terminal service层，减少~500行代码
+- **稳定性提升**: 消除xterm.js的渲染问题和WebSocket冲突
+- **用户体验**: 获得原生terminal体验，无需复杂的前端渲染
+- **维护成本**: 大幅降低terminal相关代码的维护复杂度
+
+#### 技术实现
+- **TTYd服务**: 在7681端口提供web终端服务
+- **HTTP代理**: `/terminal` 路由代理到TTYd
+- **iframe集成**: 前端通过iframe嵌入TTYd界面
+- **WebSocket分离**: 手动处理WebSocket升级，避免与Socket.IO冲突
+
+#### 关键突破
+- **WebSocket冲突解决**: 发现并解决Socket.IO与TTYd代理的WebSocket升级冲突
+- **路径过滤**: 实现基于路径的WebSocket升级路由
+- **架构分离**: 将终端功能与应用业务逻辑完全分离
+
+#### 设计原则
+1. **简单胜过复杂**: 选择成熟的TTYd而非自建terminal方案
+2. **关注点分离**: 将terminal功能与应用核心功能分离
+3. **问题隔离**: 通过iframe隔离terminal相关的潜在问题
+4. **冲突预防**: 提前考虑不同服务间的WebSocket冲突
+
+#### 经验总结
+- **架构选择**: 有时候"删除代码"比"添加代码"更有价值
+- **服务分离**: 复杂功能应该考虑使用专门的服务而非自建
+- **WebSocket管理**: 多个WebSocket服务需要仔细管理升级事件
+- **测试驱动**: 通过实际测试发现并解决真实问题
+
+这次重构是一个很好的"从复杂到简单"的案例，证明了选择合适的技术栈可以大幅降低系统复杂度。
+
+## Future Optimization Opportunities
+- 考虑为其他复杂功能也采用类似的"服务分离"模式
+- 评估是否有其他地方可以用成熟的第三方服务替代自建方案
+- 持续关注系统的架构简洁性和服务边界清晰度
+- 继续优化移动端体验和响应式设计
+- 考虑增加更多的系统监控指标
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

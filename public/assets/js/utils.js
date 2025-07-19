@@ -369,7 +369,6 @@ class NotificationManager {
     init() {
         this.updateVisibility();
         this.setupToggle();
-        this.interceptBrowserNotifications();
     }
     
     setupToggle() {
@@ -419,36 +418,6 @@ class NotificationManager {
         }
     }
     
-    interceptBrowserNotifications() {
-        // Store original Notification constructor
-        this.originalNotification = window.Notification;
-        
-        // Create a proxy to intercept browser notifications
-        const self = this;
-        if (window.Notification) {
-            window.Notification = function(title, options = {}) {
-                // Check if notifications are enabled
-                if (!self.isEnabled) {
-                    // Create a fake notification object that does nothing
-                    return {
-                        close: () => {},
-                        onclick: null,
-                        onshow: null,
-                        onclose: null,
-                        onerror: null
-                    };
-                }
-                
-                // If enabled, create the real notification
-                return new self.originalNotification(title, options);
-            };
-            
-            // Copy static properties
-            Object.keys(self.originalNotification).forEach(key => {
-                window.Notification[key] = self.originalNotification[key];
-            });
-        }
-    }
     
     isNotificationEnabled() {
         return this.isEnabled;
@@ -696,33 +665,21 @@ class ModalManager {
  */
 class ThemeManager {
     constructor() {
-        this.currentTheme = Storage.get('theme', 'dark');
-        this.applyTheme(this.currentTheme);
+        // Force dark theme only
+        this.currentTheme = 'dark';
+        this.applyTheme('dark');
     }
     
     applyTheme(theme) {
+        // Always apply dark theme regardless of input
         document.body.className = document.body.className.replace(/theme-\w+/g, '');
-        document.body.classList.add(`theme-${theme}`);
-        this.currentTheme = theme;
-        Storage.set('theme', theme);
-        
-        // Update theme toggle button
-        const themeToggle = DOM.get('theme-toggle');
-        if (themeToggle) {
-            const icon = themeToggle.querySelector('.icon');
-            if (icon) {
-                icon.textContent = theme === 'dark' ? '☀️' : '🌙';
-            }
-        }
-    }
-    
-    toggle() {
-        const newTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
-        this.applyTheme(newTheme);
+        document.body.classList.add('theme-dark');
+        this.currentTheme = 'dark';
+        Storage.set('theme', 'dark');
     }
     
     getTheme() {
-        return this.currentTheme;
+        return 'dark';
     }
 }
 
