@@ -124,14 +124,6 @@ class ClaudeCodeWebManager extends EventEmitter {
             this.closeMobileMenu();
         });
         
-        // Theme toggle
-        DOM.on('theme-toggle', 'click', () => {
-            theme.toggle();
-            // Update terminal themes after theme change
-            if (window.terminalManager) {
-                window.terminalManager.updateTerminalTheme();
-            }
-        });
         
         // Settings button
         DOM.on('settings-btn', 'click', () => {
@@ -421,13 +413,10 @@ class ClaudeCodeWebManager extends EventEmitter {
                     <div class="settings-item">
                         <div class="settings-item-info">
                             <div class="settings-item-title">TTYd Service</div>
-                            <div class="settings-item-description">Control the TTYd terminal service</div>
+                            <div class="settings-item-description">Terminal service status information</div>
                         </div>
                         <div class="settings-item-control">
-                            <div style="display: flex; gap: 8px;">
-                                <button class="btn btn-secondary btn-small" id="restart-ttyd">Restart TTYd</button>
-                                <span class="service-status" id="ttyd-status">Loading...</span>
-                            </div>
+                            <span class="service-status" id="ttyd-status">Loading...</span>
                         </div>
                     </div>
                 </div>
@@ -458,10 +447,6 @@ class ClaudeCodeWebManager extends EventEmitter {
         // Setup settings event handlers
         DOM.on('theme-select', 'change', (e) => {
             theme.applyTheme(e.target.value);
-            // Update terminal themes after theme change
-            if (window.terminalManager) {
-                window.terminalManager.updateTerminalTheme();
-            }
         });
         
         // Terminal settings event handlers
@@ -481,6 +466,8 @@ class ClaudeCodeWebManager extends EventEmitter {
                 
                 if (response.success) {
                     notifications.success('Font size updated! TTYd service has been restarted.');
+                    // Update TTYd status after configuration change
+                    this.updateTTYdStatus();
                     // Reload the terminal iframe to reflect changes
                     if (window.terminalManager) {
                         setTimeout(() => {
@@ -495,32 +482,6 @@ class ClaudeCodeWebManager extends EventEmitter {
             } finally {
                 e.target.disabled = false;
                 e.target.textContent = 'Apply';
-            }
-        });
-        
-        DOM.on('restart-ttyd', 'click', async (e) => {
-            try {
-                e.target.disabled = true;
-                e.target.textContent = 'Restarting...';
-                
-                const response = await HTTP.post('/api/ttyd/restart');
-                
-                if (response.success) {
-                    notifications.success('TTYd service restarted successfully');
-                    // Reload the terminal iframe
-                    if (window.terminalManager) {
-                        setTimeout(() => {
-                            window.terminalManager.reloadTerminal();
-                        }, 2000);
-                    }
-                } else {
-                    notifications.error(`Failed to restart TTYd: ${response.error}`);
-                }
-            } catch (error) {
-                notifications.error(`Error restarting TTYd: ${error.message}`);
-            } finally {
-                e.target.disabled = false;
-                e.target.textContent = 'Restart TTYd';
             }
         });
         

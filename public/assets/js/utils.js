@@ -705,15 +705,6 @@ class ThemeManager {
         document.body.classList.add(`theme-${theme}`);
         this.currentTheme = theme;
         Storage.set('theme', theme);
-        
-        // Update theme toggle button
-        const themeToggle = DOM.get('theme-toggle');
-        if (themeToggle) {
-            const icon = themeToggle.querySelector('.icon');
-            if (icon) {
-                icon.textContent = theme === 'dark' ? '☀️' : '🌙';
-            }
-        }
     }
     
     toggle() {

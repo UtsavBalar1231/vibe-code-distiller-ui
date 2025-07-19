@@ -10,7 +10,6 @@ A personal web interface for managing Claude Code CLI on your Raspberry Pi. This
 - 📁 **Project Management**: Browse, create, and manage your coding projects
 - 🔄 **Real-time Updates**: Live terminal output, project changes, and system stats
 - 📊 **System Monitoring**: CPU, temperature, and memory monitoring for Raspberry Pi
-- 🎨 **Dark Theme**: Optimized dark interface for comfortable coding
 - 🔔 **Notifications**: Desktop notifications with toggle functionality
 - 📱 **Mobile Optimized**: Responsive design for phones and tablets
 - 🔧 **File Management**: Drag-and-drop upload, download, and file operations
