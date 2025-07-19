@@ -329,13 +329,13 @@ class ClaudeCodeWebManager extends EventEmitter {
         console.log('📊 System status update:', data);
     }
     
-    showSettings(defaultTab = 'general') {
+    async showSettings(defaultTab = 'general') {
         const settingsModal = DOM.get('settings-modal');
         const settingsContent = settingsModal?.querySelector('.settings-content');
         
         if (settingsContent) {
             this.renderSettingsContent(settingsContent);
-            this.loadSettingsValues();
+            await this.loadSettingsValues();
             this.switchSettingsTab(defaultTab);
         }
         
@@ -409,10 +409,25 @@ class ClaudeCodeWebManager extends EventEmitter {
                     <div class="settings-item">
                         <div class="settings-item-info">
                             <div class="settings-item-title">Font Size</div>
-                            <div class="settings-item-description">Terminal font size in pixels</div>
+                            <div class="settings-item-description">Terminal font size (8-32 pixels). Changes require TTYd service restart.</div>
                         </div>
                         <div class="settings-item-control">
-                            <input type="range" id="terminal-font-size" min="10" max="24" value="14">
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="number" id="terminal-font-size" min="8" max="32" value="15" style="width: 80px;">
+                                <button class="btn btn-primary btn-small" id="apply-font-size">Apply</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <div class="settings-item-info">
+                            <div class="settings-item-title">TTYd Service</div>
+                            <div class="settings-item-description">Control the TTYd terminal service</div>
+                        </div>
+                        <div class="settings-item-control">
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-secondary btn-small" id="restart-ttyd">Restart TTYd</button>
+                                <span class="service-status" id="ttyd-status">Loading...</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -437,6 +452,9 @@ class ClaudeCodeWebManager extends EventEmitter {
             </div>
         `;
         
+        // Update TTYd status display
+        this.updateTTYdStatus();
+        
         // Setup settings event handlers
         DOM.on('theme-select', 'change', (e) => {
             theme.applyTheme(e.target.value);
@@ -447,11 +465,62 @@ class ClaudeCodeWebManager extends EventEmitter {
         });
         
         // Terminal settings event handlers
-        DOM.on('terminal-font-size', 'input', (e) => {
-            const fontSize = parseInt(e.target.value);
-            if (window.terminalManager && window.terminalManager.activeTerminal) {
-                const terminal = window.terminalManager.terminals.get(window.terminalManager.activeTerminal).terminal;
-                window.terminalManager.setTerminalFont(terminal, fontSize);
+        DOM.on('apply-font-size', 'click', async (e) => {
+            const fontSize = parseInt(DOM.get('terminal-font-size').value);
+            
+            if (isNaN(fontSize) || fontSize < 8 || fontSize > 32) {
+                notifications.error('Font size must be between 8 and 32 pixels');
+                return;
+            }
+            
+            try {
+                e.target.disabled = true;
+                e.target.textContent = 'Applying...';
+                
+                const response = await HTTP.post('/api/ttyd/config', { fontSize });
+                
+                if (response.success) {
+                    notifications.success('Font size updated! TTYd service has been restarted.');
+                    // Reload the terminal iframe to reflect changes
+                    if (window.terminalManager) {
+                        setTimeout(() => {
+                            window.terminalManager.reloadTerminal();
+                        }, 2000);
+                    }
+                } else {
+                    notifications.error(`Failed to update font size: ${response.error}`);
+                }
+            } catch (error) {
+                notifications.error(`Error updating font size: ${error.message}`);
+            } finally {
+                e.target.disabled = false;
+                e.target.textContent = 'Apply';
+            }
+        });
+        
+        DOM.on('restart-ttyd', 'click', async (e) => {
+            try {
+                e.target.disabled = true;
+                e.target.textContent = 'Restarting...';
+                
+                const response = await HTTP.post('/api/ttyd/restart');
+                
+                if (response.success) {
+                    notifications.success('TTYd service restarted successfully');
+                    // Reload the terminal iframe
+                    if (window.terminalManager) {
+                        setTimeout(() => {
+                            window.terminalManager.reloadTerminal();
+                        }, 2000);
+                    }
+                } else {
+                    notifications.error(`Failed to restart TTYd: ${response.error}`);
+                }
+            } catch (error) {
+                notifications.error(`Error restarting TTYd: ${error.message}`);
+            } finally {
+                e.target.disabled = false;
+                e.target.textContent = 'Restart TTYd';
             }
         });
         
@@ -506,14 +575,26 @@ class ClaudeCodeWebManager extends EventEmitter {
         
     }
     
-    loadSettingsValues() {
-        // Load terminal settings
-        const savedFontSize = Storage.get('terminal-font-size') || 14;
-        
-        // Set font size slider value
-        const fontSizeSlider = DOM.get('terminal-font-size');
-        if (fontSizeSlider) {
-            fontSizeSlider.value = savedFontSize;
+    async loadSettingsValues() {
+        // Load terminal settings from TTYd service
+        try {
+            const response = await HTTP.get('/api/ttyd/config');
+            if (response.success) {
+                const fontSizeInput = DOM.get('terminal-font-size');
+                if (fontSizeInput) {
+                    fontSizeInput.value = response.data.fontSize || 15;
+                }
+                
+                // Update TTYd status
+                this.updateTTYdStatus();
+            }
+        } catch (error) {
+            console.warn('Failed to load TTYd configuration:', error);
+            // Fallback to default value
+            const fontSizeInput = DOM.get('terminal-font-size');
+            if (fontSizeInput) {
+                fontSizeInput.value = 15;
+            }
         }
         
         // Load notification settings
@@ -716,6 +797,31 @@ class ClaudeCodeWebManager extends EventEmitter {
                     });
                 }
             });
+        }
+    }
+    
+    async updateTTYdStatus() {
+        const statusElement = DOM.get('ttyd-status');
+        if (!statusElement) return;
+        
+        try {
+            const response = await HTTP.get('/api/ttyd/status');
+            if (response.success) {
+                const status = response.data;
+                if (status.isRunning) {
+                    statusElement.textContent = `Running (PID: ${status.pid}, Port: ${status.port})`;
+                    statusElement.style.color = '#4CAF50';
+                } else {
+                    statusElement.textContent = 'Not Running';
+                    statusElement.style.color = '#f44336';
+                }
+            } else {
+                statusElement.textContent = 'Status Unknown';
+                statusElement.style.color = '#ff9800';
+            }
+        } catch (error) {
+            statusElement.textContent = 'Error checking status';
+            statusElement.style.color = '#f44336';
         }
     }
 }
