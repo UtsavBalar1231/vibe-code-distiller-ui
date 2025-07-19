@@ -27,27 +27,22 @@ A personal web interface for managing Claude Code CLI on your Raspberry Pi. This
 ### Prerequisites
 - Raspberry Pi with Node.js 18+ installed
 - Claude Code CLI installed and configured
-- TTYd installed for terminal interface
 - Basic familiarity with terminal/command line
 
 ### Installation
 
-1. **Install TTYd**:
-```bash
-# On Raspberry Pi OS / Ubuntu
-sudo apt update
-sudo apt install ttyd
-
-# Or build from source if not available
-git clone https://github.com/tsl0922/ttyd.git
-cd ttyd && make && sudo make install
-```
-
-2. **Clone and install**:
+1. **Clone and install**:
 ```bash
 git clone <your-repo-url>
 cd claude-code-web-manager
 npm install
+```
+
+2. **Setup dependencies**:
+```bash
+# Install tmux and download TTYd binary
+chmod +x setup-dependencies.sh
+./setup-dependencies.sh
 ```
 
 3. **Start the application**:
@@ -180,8 +175,9 @@ sudo lsof -ti:8080 | xargs kill -9
 - Update the path in `config/default.json` if needed
 
 **Can't find TTYd**:
-- Install TTYd: `sudo apt install ttyd`
-- Verify installation: `ttyd --version`
+- Ensure TTYd binary exists: `ls -la ttyd.aarch64`
+- Re-run setup script: `./setup-dependencies.sh`
+- Verify TTYd binary is executable: `chmod +x ttyd.aarch64`
 
 **Terminal not loading**:
 - Check if TTYd is running: `ps aux | grep ttyd`
@@ -317,7 +313,7 @@ This is a personal project designed for individual use. If you run into issues:
 1. Check the logs in the `logs/` directory
 2. Look at the browser console for errors
 3. Make sure all dependencies are installed correctly
-4. Verify TTYd is installed and accessible
+4. Verify TTYd binary exists and is executable in the project root
 
 ---
 
