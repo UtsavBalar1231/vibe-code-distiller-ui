@@ -6,6 +6,7 @@ class TTYdTerminalManager {
         this.iframe = null;
         this.isInitialized = false;
         this.refreshInterval = null;
+        this._isRestoring = false; // 标记是否正在恢复session
         
         // 绑定事件处理程序
         this.bindEvents();
@@ -163,18 +164,25 @@ class TTYdTerminalManager {
                     this.switchToSession(sessionToActivate);
                 }, 1000); // 延迟1秒确保TTYd稳定
             }
-            // 如果没有活跃session但有sessions存在，延迟激活第一个
-            else if (!this.activeSessionName && this.sessions.size > 0) {
+            // 如果没有活跃session但有sessions存在，延迟激活第一个(但不在恢复模式下)
+            else if (!this.activeSessionName && this.sessions.size > 0 && !this._isRestoring) {
                 const firstSession = Array.from(this.sessions.keys())[0];
                 console.log('⏱️ Delaying auto-switch to first session to ensure TTYd stability...');
                 setTimeout(() => {
                     this.switchToSession(firstSession);
                 }, 1000); // 额外延迟1秒确保系统稳定
+            } else if (this._isRestoring) {
+                console.log('🔄 In restore mode - skipping auto-switch to first session');
             }
             
             // 如果没有任何session，显示欢迎屏幕
             if (this.sessions.size === 0) {
                 this.showWelcomeScreen();
+                // 如果在恢复模式下没有session，也要清除恢复模式
+                if (this._isRestoring) {
+                    this._isRestoring = false;
+                    console.log('✅ No sessions found during restore, disabled restore mode');
+                }
             } else {
                 this.hideWelcomeScreen();
                 this.showIframe();
@@ -478,6 +486,8 @@ class TTYdTerminalManager {
         const welcomeScreen = document.getElementById('welcome-screen');
         if (welcomeScreen) {
             welcomeScreen.style.display = 'flex';
+            // 恢复默认的welcome内容
+            this.resetWelcomeContent();
         }
         
         if (this.iframe) {
@@ -485,6 +495,48 @@ class TTYdTerminalManager {
         }
         
         this.activeSessionName = null;
+    }
+
+    resetWelcomeContent() {
+        const welcomeContent = document.querySelector('.welcome-content');
+        if (welcomeContent) {
+            welcomeContent.innerHTML = `
+                <h2>Welcome to Claude Code Web Manager</h2>
+                <p>Create a new terminal session to get started with Claude Code CLI.</p>
+                <div class="welcome-actions">
+                    <button class="btn btn-primary" id="welcome-new-terminal">Create New Terminal</button>
+                    <button class="btn btn-secondary" id="welcome-new-project">Create New Project</button>
+                </div>
+            `;
+        }
+    }
+
+    showRestartingStatus() {
+        console.log('🔄 Showing TTYd restarting status...');
+        const welcomeScreen = document.getElementById('welcome-screen');
+        if (welcomeScreen) {
+            welcomeScreen.style.display = 'flex';
+        }
+        
+        if (this.iframe) {
+            this.iframe.style.display = 'none';
+        }
+        
+        // 修改welcome screen内容显示重启状态
+        const welcomeContent = document.querySelector('.welcome-content');
+        if (welcomeContent) {
+            welcomeContent.innerHTML = `
+                <h2>🔄 TTYd Service Restarting</h2>
+                <p>Please wait while the terminal service is restarting...</p>
+                <div class="loading-spinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+        }
     }
 
     handleResize() {
@@ -499,6 +551,15 @@ class TTYdTerminalManager {
             // Save the current active session before reload
             const currentActiveSession = this.activeSessionName;
             console.log('💾 Saving current active session for restoration:', currentActiveSession);
+            
+            // 显示重启状态，避免用户看到base-session
+            this.showRestartingStatus();
+            
+            // 清空当前活动session名称，确保后续强制切换
+            this.activeSessionName = null;
+            // 设置恢复模式标志，避免自动切换到第一个session
+            this._isRestoring = true;
+            console.log('🔄 Cleared activeSessionName and enabled restore mode');
             
             // Force reload the iframe src to pick up new TTYd settings
             const currentSrc = this.iframe.src;
@@ -520,6 +581,9 @@ class TTYdTerminalManager {
                             setTimeout(() => {
                                 console.log('🔄 Restoring session after TTYd reload:', currentActiveSession);
                                 this.switchToSession(currentActiveSession);
+                                // 恢复完成后清除恢复模式标志
+                                this._isRestoring = false;
+                                console.log('✅ Session restore completed, disabled restore mode');
                             }, 1500); // 1.5 second delay to ensure TTYd is stable
                         } else {
                             console.log('⚠️ No session to restore or session not found');
@@ -529,11 +593,17 @@ class TTYdTerminalManager {
                                 console.log('🔄 Falling back to first available session:', firstSession);
                                 setTimeout(() => {
                                     this.switchToSession(firstSession);
+                                    // 恢复完成后清除恢复模式标志
+                                    this._isRestoring = false;
+                                    console.log('✅ Fallback restore completed, disabled restore mode');
                                 }, 1500);
                             }
                         }
                     }).catch(error => {
                         console.error('❌ Failed to refresh session list after TTYd reload:', error);
+                        // 即使失败也要清除恢复模式标志
+                        this._isRestoring = false;
+                        console.log('✅ Restore failed, disabled restore mode');
                     });
                     
                     // Remove the listener after use
