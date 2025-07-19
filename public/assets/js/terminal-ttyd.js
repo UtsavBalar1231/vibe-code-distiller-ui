@@ -477,7 +477,7 @@ class TTYdTerminalManager {
     showWelcomeScreen() {
         const welcomeScreen = document.getElementById('welcome-screen');
         if (welcomeScreen) {
-            welcomeScreen.style.display = 'block';
+            welcomeScreen.style.display = 'flex';
         }
         
         if (this.iframe) {
