@@ -229,9 +229,9 @@ app.use(notFoundHandler);
 // Error handler (must be last)
 app.use(errorHandler);
 
-// Get port from environment or default
-const port = process.env.PORT || SERVER.DEFAULT_PORT;
-const host = process.env.HOST || SERVER.DEFAULT_HOST;
+// Get port from environment, config, or default
+const port = process.env.PORT || config.get('server.port') || SERVER.DEFAULT_PORT;
+const host = process.env.HOST || config.get('server.host') || SERVER.DEFAULT_HOST;
 
 // Setup tmux configuration function
 const setupTmuxConfig = () => {
