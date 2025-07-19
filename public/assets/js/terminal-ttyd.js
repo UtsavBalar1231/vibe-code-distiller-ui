@@ -311,16 +311,25 @@ class TTYdTerminalManager {
         return sessionName;
     }
 
-    switchToSession(sessionName, retryCount = 0) {
+    switchToSession(sessionName, retryCount = 0, skipSocketEvent = false) {
         if (!this.sessions.has(sessionName)) {
             console.error('❌ Session not found:', sessionName);
             return;
         }
 
-        console.log('🔄 Switching to session:', sessionName, retryCount > 0 ? `(retry ${retryCount})` : '');
+        console.log('🔄 Switching to session:', sessionName, retryCount > 0 ? `(retry ${retryCount})` : '', skipSocketEvent ? '(skip socket event)' : '');
 
         // 获取当前活动的session名称
         const currentSessionName = this.activeSessionName;
+
+        // 如果已经是当前活动session，只更新UI不发送Socket事件
+        if (sessionName === currentSessionName && !retryCount) {
+            console.log('✅ Already active session, updating UI only');
+            this.updateTabStyles();
+            this.hideWelcomeScreen();
+            this.showIframe();
+            return;
+        }
 
         // 更新活动session
         this.activeSessionName = sessionName;
@@ -339,17 +348,17 @@ class TTYdTerminalManager {
             this.autoSelectProject(sessionName);
         }
 
-        // 通过Socket.IO请求切换session，现在后端会正确处理TTYd client
-        if (window.socket && window.socket.isConnected()) {
+        // 只有在非跳过Socket事件模式下才发送Socket.IO请求
+        if (!skipSocketEvent && window.socket && window.socket.isConnected()) {
             window.socket.switchTerminalSession(sessionName, currentSessionName);
-        } else {
+        } else if (!skipSocketEvent) {
             console.warn('⚠️ Socket.IO not connected, session switch may not work properly');
             
             // 如果Socket.IO未连接且重试次数少于3次，延迟重试
             if (retryCount < 3) {
                 console.log(`⏱️ Retrying session switch in ${(retryCount + 1) * 1000}ms...`);
                 setTimeout(() => {
-                    this.switchToSession(sessionName, retryCount + 1);
+                    this.switchToSession(sessionName, retryCount + 1, skipSocketEvent);
                 }, (retryCount + 1) * 1000);
             } else {
                 console.error('❌ Max retry attempts reached for session switch');
@@ -402,7 +411,8 @@ class TTYdTerminalManager {
         
         // Set flag to prevent project auto-selection when triggered by project
         this._skipProjectAutoSelect = true;
-        this.switchToSession(sessionName);
+        // Skip socket event to prevent duplicate notifications from bidirectional linking
+        this.switchToSession(sessionName, 0, true);
         this._skipProjectAutoSelect = false;
         
         return true;
