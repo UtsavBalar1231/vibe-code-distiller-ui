@@ -212,25 +212,97 @@ class ImageManager {
         });
     }
 
-    sendPathToTerminal(relativePath) {
-        if (!this.socket) {
-            this.showNotification('No terminal connection available', 'warning');
+    async sendPathToTerminal(relativePath) {
+        const terminalManager = window.terminalManager;
+        
+        if (!terminalManager) {
+            this.showNotification('Terminal system not available', 'warning');
             return;
         }
-
+        
+        const activeSession = terminalManager.getActiveSession();
+        
+        if (!activeSession || !activeSession.name) {
+            this.showNotification('No active terminal session. Please select a terminal tab first.', 'warning');
+            return;
+        }
+        
+        // Only work with session-based terminals
+        if (!activeSession.name.startsWith('claude-web-')) {
+            this.showNotification('Invalid terminal session format', 'warning');
+            return;
+        }
+        
         if (!this.currentProjectId) {
             this.showNotification('No project selected', 'warning');
             return;
         }
-
-        // Send the path to terminal without newline so user can review before executing
-        // Send the path to the active terminal session using the SocketClient method
-        const success = this.socket.sendTerminalInput(this.currentProjectId, relativePath);
         
-        if (success) {
-            this.showNotification(`Path sent to terminal: ${relativePath}`, 'info');
-        } else {
-            this.showNotification('Failed to send path to terminal', 'error');
+        // Construct absolute path from relative path
+        const absolutePath = this.constructAbsolutePath(relativePath);
+        if (!absolutePath) {
+            this.showNotification('Failed to construct absolute path', 'warning');
+            return;
+        }
+        
+        try {
+            // Send the absolute file path to the terminal via new API
+            const response = await fetch('/api/terminal/send-input', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    sessionName: activeSession.name,
+                    text: absolutePath
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showNotification(`Path sent to terminal: ${absolutePath}`, 'info');
+            } else {
+                throw new Error(result.details || result.error || 'Failed to send path');
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to send path to terminal:', error);
+            this.showNotification(`Failed to send path to terminal: ${error.message}`, 'error');
+        }
+    }
+    
+    constructAbsolutePath(relativePath) {
+        try {
+            // Get project information to construct absolute path
+            const projectManager = window.projectManager;
+            if (!projectManager) {
+                console.warn('ProjectManager not available for path construction');
+                return null;
+            }
+            
+            const project = projectManager.getProject(this.currentProjectId);
+            if (!project) {
+                console.warn('Project not found for path construction:', this.currentProjectId);
+                return null;
+            }
+            
+            // The project.path should contain the absolute path to the project directory
+            const projectPath = project.path;
+            if (!projectPath) {
+                console.warn('Project path not available for path construction');
+                return null;
+            }
+            
+            // Combine project path with relative path
+            // Remove leading slash from relative path if it exists
+            const cleanRelativePath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
+            const absolutePath = `${projectPath}/${cleanRelativePath}`;
+            
+            return absolutePath;
+        } catch (error) {
+            console.error('Error constructing absolute path:', error);
+            return null;
         }
     }
 

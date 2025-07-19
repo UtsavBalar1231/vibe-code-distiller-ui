@@ -396,11 +396,10 @@ class FileManager {
         }
     }
 
-    sendToTerminal(filePath) {
+    async sendToTerminal(filePath) {
         const terminalManager = window.terminalManager;
-        const socketClient = window.socket;
         
-        if (!terminalManager || !socketClient) {
+        if (!terminalManager) {
             notifications.warning('Terminal system not available');
             return;
         }
@@ -408,32 +407,19 @@ class FileManager {
         const activeSession = terminalManager.getActiveSession();
         console.log('🔍 sendToTerminal debug:', {
             activeSession: activeSession,
-            hasProjectId: activeSession && activeSession.projectId ? true : false,
             hasSessionName: activeSession && activeSession.name ? true : false,
             filePath: filePath
         });
         
-        if (!activeSession) {
+        if (!activeSession || !activeSession.name) {
             notifications.warning('No active terminal session. Please select a terminal tab first.');
             return;
         }
         
-        // Handle both session-based and project-based terminals
-        let terminalIdentifier = null;
-        if (activeSession.name && activeSession.name.startsWith('claude-web-')) {
-            // Session-based terminal (new approach)
-            terminalIdentifier = activeSession.name;
-        } else if (activeSession.projectId) {
-            // Project-based terminal (legacy approach)
-            terminalIdentifier = activeSession.projectId;
-        }
-        
-        if (!terminalIdentifier) {
-            const errorMsg = activeSession.name ? 
-                `Terminal session "${activeSession.name}" is not associated with a project.` :
-                'Active terminal is not associated with a project.';
-            notifications.warning(errorMsg);
-            console.warn('🚨 sendToTerminal: No valid terminal identifier found', { activeSession });
+        // Only work with session-based terminals
+        if (!activeSession.name.startsWith('claude-web-')) {
+            notifications.warning('Invalid terminal session format');
+            console.warn('🚨 sendToTerminal: Invalid session name format', { activeSession });
             return;
         }
         
@@ -446,15 +432,33 @@ class FileManager {
             return;
         }
         
-        // Send the absolute file path to the terminal via socket
-        const success = socketClient.sendTerminalInput(terminalIdentifier, absolutePath);
-        
-        if (success) {
-            notifications.info(`File path sent to terminal: ${absolutePath}`);
-            console.log('✅ File path sent successfully:', { terminalIdentifier, absolutePath });
-        } else {
-            notifications.warning('Failed to send file path to terminal');
-            console.error('❌ Failed to send file path:', { terminalIdentifier, absolutePath });
+        try {
+            // Send the absolute file path to the terminal via new API
+            console.log('📤 Sending file path to terminal:', { sessionName: activeSession.name, absolutePath });
+            
+            const response = await fetch('/api/terminal/send-input', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    sessionName: activeSession.name,
+                    text: absolutePath
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                notifications.info(`File path sent to terminal: ${absolutePath}`);
+                console.log('✅ File path sent successfully:', { sessionName: activeSession.name, absolutePath });
+            } else {
+                throw new Error(result.details || result.error || 'Failed to send file path');
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to send file path to terminal:', error);
+            notifications.error(`Failed to send file path to terminal: ${error.message}`);
         }
     }
 

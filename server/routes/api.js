@@ -4,6 +4,9 @@ const logger = require('../utils/logger');
 const { SUCCESS_MESSAGES } = require('../utils/constants');
 const path = require('path');
 const TmuxUtils = require('../utils/tmux-utils');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 // API status endpoint
 router.get('/status', (req, res) => {
@@ -342,6 +345,82 @@ router.delete('/sessions/:sessionName', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to delete session',
+      details: error.message
+    });
+  }
+});
+
+// Send text input to a terminal session
+router.post('/terminal/send-input', async (req, res) => {
+  try {
+    const { sessionName, text } = req.body;
+    
+    // Validate required parameters
+    if (!sessionName || !text) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters',
+        details: 'Both sessionName and text are required'
+      });
+    }
+    
+    // 防止发送到base-session
+    if (sessionName === 'base-session') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot send input to base session',
+        details: 'base-session is a system session and should not receive input'
+      });
+    }
+    
+    // Validate session name format
+    if (!sessionName.startsWith('claude-web-')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid session name format',
+        details: 'Session name must start with claude-web-'
+      });
+    }
+    
+    // Check if session exists before trying to send input
+    const sessionExists = await TmuxUtils.hasSession(sessionName);
+    
+    if (!sessionExists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found',
+        details: `Terminal session '${sessionName}' does not exist`
+      });
+    }
+    
+    // Escape text for safe shell execution
+    const escapedText = text.replace(/"/g, '\\"');
+    
+    // Use tmux send-keys to send text to the terminal session (without Enter)
+    const command = `tmux send-keys -t "${sessionName}" "${escapedText}"`;
+    logger.info('Sending text to terminal (without executing):', { sessionName, text: text.substring(0, 100) + (text.length > 100 ? '...' : '') });
+    
+    await execAsync(command);
+    
+    logger.info('Text sent successfully to terminal:', { sessionName });
+    
+    res.json({
+      success: true,
+      message: 'Text sent to terminal successfully',
+      sessionName,
+      textLength: text.length
+    });
+    
+  } catch (error) {
+    logger.error('Error sending text to terminal:', {
+      sessionName: req.body.sessionName,
+      error: error.message,
+      stack: error.stack
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send text to terminal',
       details: error.message
     });
   }
