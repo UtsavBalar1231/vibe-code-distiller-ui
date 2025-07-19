@@ -607,6 +607,13 @@ class SocketManager {
         return;
       }
       
+      // 防止删除base-session
+      if (sessionName === 'base-session') {
+        logger.warn('Attempt to delete base-session blocked:', { sessionName, socketId: socket.id });
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { message: 'Cannot delete base session' });
+        return;
+      }
+      
       // Validate session name format
       if (!sessionName.startsWith('claude-web-')) {
         logger.warn('Invalid session name format:', { sessionName, socketId: socket.id });

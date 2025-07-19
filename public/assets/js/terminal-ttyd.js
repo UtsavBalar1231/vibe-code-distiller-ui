@@ -102,8 +102,8 @@ class TTYdTerminalManager {
             console.log('🗑️ Session deleted event received:', data);
             this.showNotification(`Terminal session deleted: ${data.sessionName}`);
             
-            // 删除某个终端时触发：更新session列表
-            this.refreshSessionList();
+            // 删除某个终端时触发：智能选择下一个要激活的session
+            this.handleSessionDeleted(data.sessionName);
         });
 
         // 监听session切换事件
@@ -132,11 +132,16 @@ class TTYdTerminalManager {
             // 获取当前所有的claude-web session
             const sessions = await window.socket.getTerminalSessions();
             
+            // 过滤掉base-session和非claude-web sessions
+            const filteredSessions = sessions.filter(session => {
+                return session.name.startsWith('claude-web-') && session.name !== 'base-session';
+            });
+            
             // 清空现有的session信息
             this.sessions.clear();
             
             // 更新session信息
-            sessions.forEach(session => {
+            filteredSessions.forEach(session => {
                 this.sessions.set(session.name, {
                     name: session.name,
                     projectId: session.projectId,
@@ -178,6 +183,70 @@ class TTYdTerminalManager {
         } catch (error) {
             console.error('❌ Failed to refresh session list:', error);
             this.showError('Failed to refresh session list');
+        }
+    }
+
+    // 处理session删除事件，智能选择下一个要激活的session
+    async handleSessionDeleted(deletedSessionName) {
+        console.log('🧠 Handling intelligent session deletion for:', deletedSessionName);
+        
+        // 获取删除前的session列表顺序
+        const sessionKeys = Array.from(this.sessions.keys());
+        const deletedSessionIndex = sessionKeys.indexOf(deletedSessionName);
+        
+        // 从session列表中移除被删除的session
+        this.sessions.delete(deletedSessionName);
+        
+        // 刷新session列表
+        await this.refreshSessionList();
+        
+        // 如果没有其他session了，显示欢迎屏幕
+        if (this.sessions.size === 0) {
+            console.log('📋 No more sessions, showing welcome screen');
+            this.showWelcomeScreen();
+            return;
+        }
+        
+        // 智能选择下一个要激活的session
+        let nextSessionToActivate = null;
+        const currentSessionKeys = Array.from(this.sessions.keys());
+        
+        if (deletedSessionIndex >= 0 && sessionKeys.length > 1) {
+            // 如果删除的不是最后一个session，选择左侧的第一个终端
+            if (deletedSessionIndex > 0) {
+                // 找到被删除session左侧的第一个还存在的session
+                for (let i = deletedSessionIndex - 1; i >= 0; i--) {
+                    const candidateSession = sessionKeys[i];
+                    if (this.sessions.has(candidateSession)) {
+                        nextSessionToActivate = candidateSession;
+                        break;
+                    }
+                }
+            }
+            
+            // 如果没有找到左侧的session，选择右侧的第一个
+            if (!nextSessionToActivate && deletedSessionIndex < sessionKeys.length - 1) {
+                for (let i = deletedSessionIndex + 1; i < sessionKeys.length; i++) {
+                    const candidateSession = sessionKeys[i];
+                    if (this.sessions.has(candidateSession)) {
+                        nextSessionToActivate = candidateSession;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 如果还是没有找到，就选择第一个可用的session
+        if (!nextSessionToActivate && currentSessionKeys.length > 0) {
+            nextSessionToActivate = currentSessionKeys[0];
+        }
+        
+        // 激活选中的session
+        if (nextSessionToActivate) {
+            console.log('🎯 Intelligently switching to session:', nextSessionToActivate);
+            setTimeout(() => {
+                this.switchToSession(nextSessionToActivate);
+            }, 500); // 短暂延迟确保UI更新完成
         }
     }
 
@@ -265,6 +334,11 @@ class TTYdTerminalManager {
         // 显示iframe
         this.showIframe();
 
+        // Auto-select corresponding project when switching to a terminal (terminal -> project linking)
+        if (!this._skipProjectAutoSelect) {
+            this.autoSelectProject(sessionName);
+        }
+
         // 通过Socket.IO请求切换session，现在后端会正确处理TTYd client
         if (window.socket && window.socket.isConnected()) {
             window.socket.switchTerminalSession(sessionName, currentSessionName);
@@ -325,7 +399,12 @@ class TTYdTerminalManager {
         }
 
         console.log('🎯 selectSessionTab called for session:', sessionName);
+        
+        // Set flag to prevent project auto-selection when triggered by project
+        this._skipProjectAutoSelect = true;
         this.switchToSession(sessionName);
+        this._skipProjectAutoSelect = false;
+        
         return true;
     }
 
@@ -495,6 +574,51 @@ class TTYdTerminalManager {
     // 获取所有sessions
     getAllSessions() {
         return Array.from(this.sessions.values());
+    }
+
+    /**
+     * Auto-select corresponding project when terminal is switched (terminal -> project linking)
+     */
+    autoSelectProject(sessionName) {
+        if (!sessionName || !window.projectManager) {
+            return;
+        }
+        
+        // Extract project name from session name
+        const projectName = this.extractProjectNameFromSessionName(sessionName);
+        if (!projectName) {
+            console.log('🔍 No project name found for session:', sessionName, '(likely a temporary terminal)');
+            return;
+        }
+        
+        console.log(`🎯 Auto-selecting project "${projectName}" for terminal session:`, sessionName);
+        
+        // Select the corresponding project
+        window.projectManager.selectProjectByName(projectName);
+    }
+    
+    /**
+     * Extract project name from session name
+     * Expected format: claude-web-{projectName}-{number}
+     * Returns null for temporary sessions (claude-web-session-{timestamp})
+     */
+    extractProjectNameFromSessionName(sessionName) {
+        if (!sessionName || typeof sessionName !== 'string') {
+            return null;
+        }
+        
+        // Skip temporary sessions (claude-web-session-{timestamp})
+        if (sessionName.startsWith('claude-web-session-')) {
+            return null;
+        }
+        
+        // Parse project sessions: claude-web-{projectName}-{number}
+        const match = sessionName.match(/^claude-web-(.+)-\d+$/);
+        if (match) {
+            return match[1];
+        }
+        
+        return null;
     }
 
     // 清理资源

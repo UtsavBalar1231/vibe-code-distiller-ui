@@ -262,6 +262,11 @@ router.get('/sessions', async (req, res) => {
     const sessionInfos = [];
     
     for (const sessionName of sessions) {
+      // 过滤掉base-session，确保用户永远看不到
+      if (sessionName === 'base-session' || !sessionName.startsWith('claude-web-')) {
+        continue;
+      }
+      
       const info = await TmuxUtils.getSessionInfo(sessionName);
       const parsed = TmuxUtils.parseSessionName(sessionName);
       
@@ -292,6 +297,15 @@ router.get('/sessions', async (req, res) => {
 router.delete('/sessions/:sessionName', async (req, res) => {
   try {
     const { sessionName } = req.params;
+    
+    // 防止删除base-session
+    if (sessionName === 'base-session') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete base session',
+        details: 'base-session is a system session and cannot be deleted'
+      });
+    }
     
     // Validate session name format
     if (!sessionName.startsWith('claude-web-')) {

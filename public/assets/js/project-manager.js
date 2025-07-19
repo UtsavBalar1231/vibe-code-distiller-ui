@@ -281,8 +281,10 @@ class ProjectManager extends EventEmitter {
             
             this.emit('project_selected', project);
             
-            // Auto-select corresponding terminal tab if exists
-            this.autoSelectTerminalTab(project);
+            // Auto-select corresponding terminal tab if exists (only if not triggered by terminal)
+            if (!this._skipTerminalAutoSelect) {
+                this.autoSelectTerminalTab(project);
+            }
             
             // Notify file manager about project change
             if (window.fileManager) {
@@ -886,6 +888,30 @@ class ProjectManager extends EventEmitter {
         await this.loadProjects();
     }
     
+    /**
+     * Select project by name (for terminal-to-project linking)
+     */
+    selectProjectByName(projectName) {
+        if (!projectName) {
+            return false;
+        }
+        
+        // Find project by name
+        const project = Array.from(this.projects.values()).find(p => p.name === projectName);
+        if (project) {
+            console.log(`🎯 Auto-selecting project "${projectName}" from terminal`);
+            
+            // Set flag to prevent terminal auto-selection when triggered by terminal
+            this._skipTerminalAutoSelect = true;
+            this.selectProject(project.id);
+            this._skipTerminalAutoSelect = false;
+            
+            return true;
+        }
+        
+        return false;
+    }
+    
     // Terminal session event handlers
     handleTerminalSessionCreated(data) {
         const { projectId } = data;
@@ -938,55 +964,73 @@ class ProjectManager extends EventEmitter {
             return;
         }
         
-        // Get all terminal tabs
-        const terminalTabs = document.querySelectorAll('.terminal-tab');
-        if (!terminalTabs.length) {
+        // Get all sessions from terminal manager
+        const sessions = window.terminalManager.getAllSessions();
+        if (!sessions || sessions.length === 0) {
             return;
         }
         
-        // Find tabs for this project (command naming rule: claude-web-{projectName}-{number})
-        const projectTerminalTabs = [];
-        terminalTabs.forEach(tab => {
-            const tabTitle = tab.querySelector('.tab-title, .title');
-            if (tabTitle) {
-                const tabName = tabTitle.textContent.trim();
-                const projectName = this.extractProjectNameFromTerminalName(tabName);
-                
-                if (projectName === project.name) {
-                    projectTerminalTabs.push({
-                        tab: tab,
-                        name: tabName,
-                        element: tab
-                    });
-                }
+        // Find sessions for this project (actual session name format: claude-web-{projectName}-{number})
+        const projectSessions = [];
+        sessions.forEach(session => {
+            const projectName = this.extractProjectNameFromSessionName(session.name);
+            if (projectName === project.name) {
+                projectSessions.push(session);
             }
         });
         
-        // Select the first terminal tab for this project (from left to right)
-        if (projectTerminalTabs.length > 0) {
-            const firstTab = projectTerminalTabs[0];
+        // Select the first terminal session for this project (from left to right)
+        if (projectSessions.length > 0) {
+            const firstSession = projectSessions[0];
             
-            // If it's a session-based tab, use terminalManager to select it
-            if (window.terminalManager.selectSessionTab && firstTab.name.startsWith('claude-web-')) {
-                window.terminalManager.selectSessionTab(firstTab.name);
-            } else {
-                // For legacy terminal tabs, trigger click event
-                firstTab.tab.click();
+            console.log(`🎯 Auto-selecting terminal for project "${project.name}":`, firstSession.name);
+            
+            // Use terminalManager to select the session
+            if (window.terminalManager.selectSessionTab) {
+                window.terminalManager.selectSessionTab(firstSession.name);
             }
         }
     }
     
     /**
-     * Extract project name from terminal tab name
+     * Extract project name from session name (not display name)
      * Expected format: claude-web-{projectName}-{number}
      */
-    extractProjectNameFromTerminalName(terminalName) {
-        if (!terminalName || !this.isValidTerminalName(terminalName)) {
+    extractProjectNameFromSessionName(sessionName) {
+        if (!sessionName || typeof sessionName !== 'string') {
             return null;
         }
         
-        // Parse: claude-web-{projectName}-{number}
-        const match = terminalName.match(/^claude-web-(.+)-\d+$/);
+        // Skip temporary sessions (claude-web-session-{timestamp})
+        if (sessionName.startsWith('claude-web-session-')) {
+            return null;
+        }
+        
+        // Parse project sessions: claude-web-{projectName}-{number}
+        const match = sessionName.match(/^claude-web-(.+)-\d+$/);
+        if (match) {
+            return match[1];
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Extract project name from terminal tab name (display name)
+     * Expected format: {projectName}-{number} (after claude-web- prefix removed)
+     */
+    extractProjectNameFromTerminalName(terminalName) {
+        if (!terminalName || typeof terminalName !== 'string') {
+            return null;
+        }
+        
+        // Skip temporary terminals (session-{timestamp})
+        if (terminalName.startsWith('session-')) {
+            return null;
+        }
+        
+        // Parse display name: {projectName}-{number}
+        const match = terminalName.match(/^(.+)-\d+$/);
         if (match) {
             return match[1];
         }
@@ -1002,8 +1046,8 @@ class ProjectManager extends EventEmitter {
             return false;
         }
         
-        // Check naming rule: claude-web-{projectName}-{number}
-        return /^claude-web-.+-\d+$/.test(terminalName);
+        // Check naming rule: {projectName}-{number} or session-{timestamp}
+        return /^.+-\d+$/.test(terminalName);
     }
 }
 
