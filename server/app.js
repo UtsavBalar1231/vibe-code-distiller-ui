@@ -13,6 +13,8 @@ const compression = require('compression');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
+const { createProxyMiddleware } = require('http-proxy-middleware');
+const config = require('config');
 
 // Import utilities and middleware
 const logger = require('./utils/logger');
@@ -36,9 +38,13 @@ const systemRoutes = require('./routes/system');
 const claudeRoutes = require('./routes/claude');
 const imageRoutes = require('./routes/images');
 const fileRoutes = require('./routes/files');
+const ttydRoutes = require('./routes/ttyd');
 
 // Import socket handler
 const socketHandler = require('./socket-handler');
+
+// Import TTYd service
+const ttydService = require('./services/ttyd-service');
 
 // Setup process error handlers
 setupProcessErrorHandlers();
@@ -153,6 +159,41 @@ app.post('/api/auth/login', require('./middleware/auth').handleLogin);
 app.post('/api/auth/logout', require('./middleware/auth').handleLogout);
 app.get('/api/auth/user', basicAuth, require('./middleware/auth').getCurrentUser);
 
+
+// TTYd terminal proxy route - Dynamic proxy that gets target from service
+const dynamicTTYdProxy = (req, res, next) => {
+  const ttydPort = ttydService.getStatus().port;
+  const proxy = createProxyMiddleware({
+    target: `http://localhost:${ttydPort}`,
+    changeOrigin: true,
+    pathRewrite: {
+      '^/terminal': '',
+    },
+    ws: false,
+    logLevel: 'silent',
+    timeout: 30000,
+    proxyTimeout: 30000,
+    secure: false,
+    onError: (err, req, res) => {
+      logger.error('TTYd proxy error:', { error: err.message, url: req.url, method: req.method });
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Terminal service unavailable', details: err.message });
+      }
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      delete proxyRes.headers['x-frame-options'];
+      delete proxyRes.headers['content-security-policy'];
+      delete proxyRes.headers['x-content-type-options'];
+      logger.debug('TTYd proxy response:', { statusCode: proxyRes.statusCode, url: req.url });
+    }
+  });
+  
+  return proxy(req, res, next);
+};
+
+// Register TTYd proxy route early
+app.use('/terminal', dynamicTTYdProxy);
+
 // Protected API routes
 app.use('/api', basicAuth, apiRoutes);
 app.use('/api/projects', basicAuth, projectRoutes);
@@ -160,6 +201,7 @@ app.use('/api/system', basicAuth, systemRoutes);
 app.use('/api/claude', basicAuth, claudeRoutes);
 app.use('/api/images', basicAuth, imageRoutes);
 app.use('/api/files', basicAuth, fileRoutes);
+app.use('/api/ttyd', basicAuth, ttydRoutes);
 
 // Serve main application (with auth in production)
 app.get('/', (req, res, next) => {
@@ -187,9 +229,71 @@ app.use(notFoundHandler);
 // Error handler (must be last)
 app.use(errorHandler);
 
-// Get port from environment or default
-const port = process.env.PORT || SERVER.DEFAULT_PORT;
-const host = process.env.HOST || SERVER.DEFAULT_HOST;
+// Get port from environment, config, or default
+const port = process.env.PORT || config.get('server.port') || SERVER.DEFAULT_PORT;
+const host = process.env.HOST || config.get('server.host') || SERVER.DEFAULT_HOST;
+
+// Setup tmux configuration function
+const setupTmuxConfig = () => {
+  try {
+    const homeDir = os.homedir();
+    const tmuxConfPath = path.join(homeDir, '.tmux.conf');
+    
+    // Required tmux configuration lines
+    const requiredConfig = [
+      'set -g mouse on',
+      'set -g history-limit 10000'
+    ];
+    
+    let configContent = '';
+    let needsUpdate = false;
+    
+    // Check if .tmux.conf exists
+    if (fs.existsSync(tmuxConfPath)) {
+      configContent = fs.readFileSync(tmuxConfPath, 'utf8');
+      logger.info('Found existing .tmux.conf file');
+    } else {
+      logger.info('.tmux.conf file not found, will create it');
+      needsUpdate = true;
+    }
+    
+    // Check if required configurations exist
+    const missingConfig = requiredConfig.filter(line => !configContent.includes(line));
+    
+    if (missingConfig.length > 0 || needsUpdate) {
+      if (missingConfig.length > 0) {
+        logger.info(`Adding missing tmux configurations: ${missingConfig.join(', ')}`);
+        // Append missing configurations
+        const configToAdd = missingConfig.join('\n') + '\n';
+        if (configContent && !configContent.endsWith('\n')) {
+          configContent += '\n';
+        }
+        configContent += configToAdd;
+      } else if (!configContent) {
+        // Create new config file with required settings
+        configContent = requiredConfig.join('\n') + '\n';
+      }
+      
+      // Write the configuration file
+      fs.writeFileSync(tmuxConfPath, configContent);
+      logger.info('tmux configuration file updated successfully');
+      
+      // Source the tmux configuration if tmux is running
+      try {
+        execSync('tmux source-file ~/.tmux.conf 2>/dev/null', { stdio: 'ignore' });
+        logger.info('tmux configuration sourced successfully');
+      } catch (sourceError) {
+        // This is expected if no tmux sessions are running
+        logger.debug('Could not source tmux config (no active sessions)', sourceError.message);
+      }
+    } else {
+      logger.info('tmux configuration is already properly set up');
+    }
+    
+  } catch (error) {
+    logger.error('Error setting up tmux configuration:', error.message);
+  }
+};
 
 // Setup Claude aliases function
 const setupClaudeAliases = () => {
@@ -245,6 +349,52 @@ const startServer = async () => {
     // Setup Claude aliases at startup
     setupClaudeAliases();
     
+    // Setup tmux configuration at startup
+    setupTmuxConfig();
+    
+    // Start TTYd service first
+    logger.info('Starting TTYd service...');
+    try {
+      await ttydService.start();
+      logger.info('TTYd service started successfully');
+      logger.info('TTYd proxy is ready (using dynamic proxy)');
+      
+    } catch (ttydError) {
+      logger.error('Failed to start TTYd service:', ttydError);
+      logger.error('Application will not start without TTYd service');
+      process.exit(1);
+    }
+    
+    // Manual WebSocket upgrade handling to avoid conflicts between Socket.IO and ttyd
+    server.on('upgrade', (request, socket, head) => {
+      const pathname = request.url;
+      logger.debug('WebSocket upgrade request:', { pathname, headers: request.headers });
+      
+      if (pathname.startsWith('/terminal')) {
+        // Forward terminal WebSocket upgrades to ttyd
+        logger.debug('Forwarding terminal WebSocket upgrade to ttyd');
+        
+        // Create a proxy for WebSocket upgrade
+        const { createProxyMiddleware } = require('http-proxy-middleware');
+        const ttydPort = ttydService.getStatus().port;
+        const wsProxy = createProxyMiddleware({
+          target: `http://localhost:${ttydPort}`,
+          changeOrigin: true,
+          pathRewrite: {
+            '^/terminal': '', // remove /terminal prefix when forwarding to ttyd
+          },
+          ws: true,
+          logLevel: 'silent'
+        });
+        
+        wsProxy.upgrade(request, socket, head);
+      } else {
+        // Let Socket.IO handle its own WebSocket upgrades
+        logger.debug('Letting Socket.IO handle WebSocket upgrade');
+        // Socket.IO will handle its own upgrade events
+      }
+    });
+    
     // Check if port is available
     server.listen(port, host, () => {
       logger.system('Server started', {
@@ -283,6 +433,15 @@ const startServer = async () => {
     // Graceful shutdown
     const shutdown = async (signal) => {
       logger.system('Shutdown initiated', { signal });
+      
+      // Stop TTYd service first
+      try {
+        logger.info('Stopping TTYd service...');
+        await ttydService.stop();
+        logger.info('TTYd service stopped');
+      } catch (ttydError) {
+        logger.error('Error stopping TTYd service:', ttydError);
+      }
       
       // Stop accepting new connections
       server.close(() => {

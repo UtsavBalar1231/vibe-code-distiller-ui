@@ -3,7 +3,6 @@ const router = express.Router();
 const { asyncHandler } = require('../middleware/error-handler');
 const { schemas, middleware } = require('../utils/validator');
 const claudeManager = require('../services/claude-manager');
-const terminalService = require('../services/terminal-service-wrapper');
 const projectService = require('../services/project-service');
 const logger = require('../utils/logger');
 
@@ -23,10 +22,6 @@ router.post('/:projectId/start',
       verbose
     });
     
-    // Create associated terminal session
-    await terminalService.createClaudeTerminal(projectId, project.path, {
-      shell
-    });
     
     logger.claude('Claude Code session started via API', projectId);
     
@@ -49,13 +44,6 @@ router.post('/:projectId/stop',
     // Stop Claude session
     const claudeResult = await claudeManager.stopSession(projectId, force);
     
-    // Stop associated terminal session if exists
-    try {
-      await terminalService.destroySession(projectId);
-    } catch (error) {
-      // Terminal session might not exist, ignore error
-      logger.warn('Terminal session not found during Claude stop:', { projectId });
-    }
     
     logger.claude('Claude Code session stopped via API', projectId);
     
@@ -74,14 +62,11 @@ router.get('/:projectId/status',
     const { projectId } = req.params;
     
     const claudeStatus = claudeManager.getSessionStatus(projectId);
-    const terminalStatus = await terminalService.getSessionStatus(projectId);
     
     res.json({
       success: true,
       status: {
-        claude: claudeStatus,
-        terminal: terminalStatus,
-        integrated: claudeStatus.exists && terminalStatus.exists
+        claude: claudeStatus
       },
       timestamp: new Date().toISOString()
     });
@@ -148,7 +133,6 @@ router.get('/',
 router.post('/stop-all',
   asyncHandler(async (req, res) => {
     await claudeManager.stopAllSessions();
-    await terminalService.destroyAllSessions();
     
     logger.warn('All Claude Code sessions stopped via API', {
       user: req.user?.username,

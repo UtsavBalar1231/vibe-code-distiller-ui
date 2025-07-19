@@ -87,7 +87,7 @@ const corsWithLogging = (req, res, next) => {
 
 // Security headers middleware
 const securityHeaders = (req, res, next) => {
-  // Content Security Policy
+  // Content Security Policy - Allow iframe embedding for terminal
   res.setHeader('Content-Security-Policy', 
     "default-src 'self'; " +
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
@@ -96,13 +96,14 @@ const securityHeaders = (req, res, next) => {
     "img-src 'self' data: blob:; " +
     "media-src 'self' blob:; " +
     "connect-src 'self' ws: wss:; " +
-    "frame-ancestors 'none'; " +
+    "frame-src 'self'; " +
+    "frame-ancestors 'self'; " +
     "base-uri 'self'; " +
     "form-action 'self'"
   );
   
-  // Prevent clickjacking
-  res.setHeader('X-Frame-Options', 'DENY');
+  // Allow iframe embedding from same origin (for terminal)
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   
   // Prevent MIME sniffing
   res.setHeader('X-Content-Type-Options', 'nosniff');
