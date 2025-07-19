@@ -281,21 +281,17 @@ class SocketClient extends EventEmitter {
     }
     
     handleClaudeNotification(notification) {
-        // Check if notifications are enabled before showing
-        if (!notifications.isNotificationEnabled()) {
-            return;
-        }
-        
         const { sessionId, projectName, message, title, timestamp } = notification;
         
+        // Show in-app notification (controlled by in-app notification settings)
+        if (notifications.isNotificationEnabled()) {
+            notifications.warning(message, { 
+                title: title, 
+                duration: 0 // Persistent notification
+            });
+        }
         
-        // Show in-app notification
-        notifications.warning(message, { 
-            title: title, 
-            duration: 0 // Persistent notification
-        });
-        
-        // Show browser notification if permission granted
+        // Show browser notification (independent of in-app notification settings)
         this.showBrowserNotification(title, message, projectName);
     }
     
@@ -320,19 +316,25 @@ class SocketClient extends EventEmitter {
                 Notification.requestPermission().then(permission => {
                     this.notificationPermission = permission;
                     
-                    if (permission === 'granted' && notifications.isNotificationEnabled()) {
-                        notifications.success('Browser notifications enabled! You can now receive notifications even when away from the page', {
-                            title: 'Notification Permission Granted',
-                            duration: 3000
-                        });
+                    if (permission === 'granted') {
+                        // Show in-app message about browser notification success (if in-app notifications enabled)
+                        if (notifications.isNotificationEnabled()) {
+                            notifications.success('Browser notifications enabled! You can now receive notifications even when away from the page', {
+                                title: 'Notification Permission Granted',
+                                duration: 3000
+                            });
+                        }
                         
-                        // Test notification
+                        // Test browser notification (independent of in-app notification settings)
                         this.showBrowserNotification('Claude Code Web Manager', 'Browser notifications enabled!', 'System');
-                    } else if (permission === 'denied' && notifications.isNotificationEnabled()) {
-                        notifications.warning('Browser notifications denied. You can manually enable notifications in browser settings', {
-                            title: 'Notification Permission Denied',
-                            duration: 5000
-                        });
+                    } else if (permission === 'denied') {
+                        // Show in-app message about browser notification denial (if in-app notifications enabled)
+                        if (notifications.isNotificationEnabled()) {
+                            notifications.warning('Browser notifications denied. You can manually enable notifications in browser settings', {
+                                title: 'Notification Permission Denied',
+                                duration: 5000
+                            });
+                        }
                     }
                 });
             } else {
@@ -342,11 +344,8 @@ class SocketClient extends EventEmitter {
     }
     
     showBrowserNotification(title, message, projectName) {
-        // Check if notifications are enabled
-        if (!notifications.isNotificationEnabled()) {
-            return;
-        }
-        
+        // Browser notifications are independent of in-app notification settings
+        // Only check browser permission
         if ('Notification' in window && this.notificationPermission === 'granted') {
             const notificationTitle = title;
             const notificationOptions = {
