@@ -202,6 +202,12 @@ class SocketClient extends EventEmitter {
             this.emit('terminal:session-switched', data);
         });
         
+        // Terminal scroll events
+        this.socket.on('terminal-scroll-result', (data) => {
+            console.log('Terminal scroll result:', data);
+            this.emit('terminal:scroll-result', data);
+        });
+        
         // System events
         this.socket.on('system-status', (data) => {
             this.emit('system_status', data);
