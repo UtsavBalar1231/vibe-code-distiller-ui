@@ -14,13 +14,18 @@ class TTYdService {
         this.isStarting = false;
         this.isStopping = false;
         
-        // Static configuration from config file (immutable)
-        this.staticConfig = config.get('ttyd');
+        // Hardcoded static configuration
+        this.staticConfig = {
+            executable: "./ttyd.aarch64",
+            baseCommand: "tmux new-session -A -s base-session",
+            arguments: ["-W", "-t", "disableLeaveAlert=true"]
+        };
         
-        // Dynamic configuration (mutable, user settings)
+        // Dynamic configuration from config file (mutable, user settings)
+        const ttydConfig = config.get('ttyd');
         this.dynamicConfig = {
-            fontSize: this.staticConfig.fontSize || 15,
-            port: this.staticConfig.port || 7681
+            fontSize: ttydConfig.fontSize || 15,
+            port: ttydConfig.port || 7681
         };
         
         this.startupTimeout = 10000; // 10 seconds
@@ -339,6 +344,13 @@ class TTYdService {
             isStarting: this.isStarting,
             isStopping: this.isStopping
         };
+    }
+
+    /**
+     * Get static configuration
+     */
+    getStaticConfig() {
+        return { ...this.staticConfig };
     }
 
     /**
