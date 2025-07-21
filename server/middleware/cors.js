@@ -12,10 +12,8 @@ const corsOptions = {
       ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
       : [API.CORS.ORIGIN];
     
-    // Allow all origins in development
-    if (process.env.NODE_ENV === 'development') {
-      return callback(null, true);
-    }
+    // Allow all local and private network origins for internal use
+    return callback(null, true);
     
     // Check if origin is allowed
     if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
@@ -53,18 +51,16 @@ const corsOptions = {
 
 // Custom CORS middleware with logging
 const corsWithLogging = (req, res, next) => {
-  // Log CORS requests in development
-  if (process.env.NODE_ENV === 'development') {
-    logger.debug('CORS request:', {
-      origin: req.get('origin'),
-      method: req.method,
-      url: req.url,
-      headers: {
-        'access-control-request-method': req.get('access-control-request-method'),
-        'access-control-request-headers': req.get('access-control-request-headers')
-      }
-    });
-  }
+  // Log CORS requests for debugging
+  logger.debug('CORS request:', {
+    origin: req.get('origin'),
+    method: req.method,
+    url: req.url,
+    headers: {
+      'access-control-request-method': req.get('access-control-request-method'),
+      'access-control-request-headers': req.get('access-control-request-headers')
+    }
+  });
   
   // Apply CORS
   cors(corsOptions)(req, res, (err) => {

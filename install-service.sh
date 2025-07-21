@@ -61,7 +61,6 @@ RestartSec=10
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=claude-code-ui
-Environment="NODE_ENV=production"
 Environment="PATH=${NPM_DIR}:/usr/bin:/usr/local/bin"
 Environment="PM2_HOME=/home/${CURRENT_USER}/.pm2"
 
