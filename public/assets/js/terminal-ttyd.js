@@ -8,6 +8,7 @@ class TTYdTerminalManager {
         this.refreshInterval = null;
         this._isRestoring = false; // 标记是否正在恢复session
         this._isSwitchingSession = false; // 标记是否正在切换session
+        this.isInCopyMode = false; // Track if currently in copy mode
         
         // 绑定事件处理程序
         this.bindEvents();
@@ -27,6 +28,61 @@ class TTYdTerminalManager {
         // 监听窗口大小变化
         window.addEventListener('resize', () => {
             this.handleResize();
+        });
+
+        // Terminal scroll controls with enhanced event handling
+        document.getElementById('scroll-up')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            this.scrollTerminal('up', 'line');
+        });
+
+        document.getElementById('scroll-down')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            this.scrollTerminal('down', 'line');
+        });
+
+        // Add mousedown event to further prevent event bubbling
+        document.getElementById('scroll-up')?.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        document.getElementById('scroll-down')?.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        // Copy mode exit button
+        document.getElementById('copy-mode-exit-button')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            this.goToBottomAndExit();
+        });
+
+        document.getElementById('copy-mode-exit-button')?.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        // Touch events for mobile devices
+        document.getElementById('scroll-up')?.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.scrollTerminal('up', 'line');
+        });
+
+        document.getElementById('scroll-down')?.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.scrollTerminal('down', 'line');
+        });
+
+        document.getElementById('copy-mode-exit-button')?.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.goToBottomAndExit();
         });
     }
 
@@ -361,6 +417,10 @@ class TTYdTerminalManager {
 
         console.log('🔄 Switching to session:', sessionName, retryCount > 0 ? `(retry ${retryCount})` : '', skipSocketEvent ? '(skip socket event)' : '');
 
+        // Reset copy mode state when switching sessions
+        this.isInCopyMode = false;
+        this.hideCopyModeExitButton();
+
         // 获取当前活动的session名称
         const currentSessionName = this.activeSessionName;
 
@@ -378,6 +438,9 @@ class TTYdTerminalManager {
 
         // 更新标签页样式
         this.updateTabStyles();
+
+        // Show scroll controls when terminal is active
+        this.showScrollControls();
 
         // 隐藏欢迎屏幕，并在session切换前显示loading状态避免显示base-session
         this.hideWelcomeScreen();
@@ -527,6 +590,9 @@ class TTYdTerminalManager {
         if (this.iframe) {
             this.iframe.style.display = 'block';
         }
+        
+        // Always show scroll controls when iframe is visible
+        this.showScrollControls();
     }
 
     showWelcomeScreen() {
@@ -542,6 +608,9 @@ class TTYdTerminalManager {
         }
         
         this.activeSessionName = null;
+
+        // Hide scroll controls when showing welcome screen
+        this.hideScrollControls();
     }
 
     resetWelcomeContent() {
@@ -584,6 +653,9 @@ class TTYdTerminalManager {
                 </style>
             `;
         }
+
+        // Hide scroll controls during loading
+        this.hideScrollControls();
     }
 
 
@@ -789,6 +861,135 @@ class TTYdTerminalManager {
         return null;
     }
 
+    // Terminal scrolling functions 
+    async scrollTerminal(direction, mode = 'line') {
+        const activeSession = this.getActiveSession();
+        
+        if (!activeSession || !activeSession.name) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/terminal/scroll', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionName: activeSession.name,
+                    direction: direction,
+                    mode: mode
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to scroll');
+            }
+            
+            // Mark as in copy mode and show exit button
+            this.isInCopyMode = true;
+            this.showCopyModeExitButton();
+            
+        } catch (error) {
+            console.error('Failed to scroll terminal:', error);
+            if (window.notifications) {
+                window.notifications.error(`Scroll failed: ${error.message}`);
+            }
+        }
+    }
+    
+    // Go to bottom and exit copy mode
+    async goToBottomAndExit() {
+        const activeSession = this.getActiveSession();
+        
+        if (!activeSession || !activeSession.name) {
+            // Hide button even if no active session
+            this.isInCopyMode = false;
+            this.hideCopyModeExitButton();
+            return;
+        }
+        
+        // Always hide button first, regardless of API result
+        this.isInCopyMode = false;
+        this.hideCopyModeExitButton();
+        
+        try {
+            const response = await fetch('/api/terminal/go-to-bottom-and-exit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionName: activeSession.name
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to go to bottom and exit');
+            }
+            
+            console.log('Successfully went to bottom and exited copy mode');
+            
+        } catch (error) {
+            console.error('Failed to go to bottom and exit copy mode:', error);
+            if (window.notifications) {
+                window.notifications.error(`Go to bottom failed: ${error.message}`);
+            }
+            
+            // Try to at least exit copy mode manually if API fails
+            try {
+                await fetch('/api/terminal/exit-copy-mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionName: activeSession.name })
+                });
+            } catch (fallbackError) {
+                console.error('Fallback exit copy mode also failed:', fallbackError);
+            }
+        }
+    }
+    
+
+    // Show scroll controls when terminal is active
+    showScrollControls() {
+        const scrollControls = document.getElementById('terminal-scroll-controls');
+        if (scrollControls) {
+            scrollControls.style.display = 'flex';
+        }
+    }
+
+    // Hide scroll controls when no terminal is active
+    hideScrollControls() {
+        const scrollControls = document.getElementById('terminal-scroll-controls');
+        if (scrollControls) {
+            scrollControls.style.display = 'none';
+        }
+        
+        // Also hide copy mode exit button
+        this.hideCopyModeExitButton();
+        this.isInCopyMode = false;
+    }
+
+    // Show copy mode exit button
+    showCopyModeExitButton() {
+        const exitButton = document.getElementById('copy-mode-exit-button');
+        if (exitButton) {
+            exitButton.style.display = 'block';
+        }
+    }
+
+    // Hide copy mode exit button
+    hideCopyModeExitButton() {
+        const exitButton = document.getElementById('copy-mode-exit-button');
+        if (exitButton) {
+            exitButton.style.display = 'none';
+        }
+    }
+
     // 清理资源
     destroy() {
         console.log('🧹 Destroying TTYd Terminal Manager...');
@@ -811,6 +1012,7 @@ class TTYdTerminalManager {
         this.isInitialized = false;
         this._isRestoring = false;
         this._isSwitchingSession = false;
+        this.isInCopyMode = false;
     }
 }
 
