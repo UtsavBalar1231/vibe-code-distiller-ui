@@ -853,8 +853,15 @@
     }
 }
 
-/* Touch device optimizations */
-@media (pointer: coarse) {
+/* Hide scroll buttons on desktop/PC (screen width >= 1024px) */
+@media (min-width: 1024px) {
+    .terminal-scroll-controls {
+        display: none !important;
+    }
+}
+
+/* Touch device optimizations for mobile devices */
+@media (max-width: 1023px) and (pointer: coarse) {
     .scroll-btn {
         width: 52px;
         height: 52px;
@@ -862,6 +869,19 @@
     }
     
     /* Prevent touch scroll on buttons */
+    .terminal-scroll-controls {
+        touch-action: manipulation;
+    }
+}
+
+/* Fallback for devices that don't support pointer queries */
+@media (max-width: 1023px) {
+    .scroll-btn {
+        width: 52px;
+        height: 52px;
+        font-size: 22px;
+    }
+    
     .terminal-scroll-controls {
         touch-action: manipulation;
     }
