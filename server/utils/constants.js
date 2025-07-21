@@ -75,11 +75,14 @@ const WEBSOCKET = {
     LEAVE_PROJECT: 'leave-project',
     TERMINAL_INPUT: 'terminal-input',
     TERMINAL_RESIZE: 'terminal-resize',
+    TERMINAL_SCROLL: 'terminal-scroll',
+    TERMINAL_GO_TO_BOTTOM: 'terminal-go-to-bottom',
     CLAUDE_COMMAND: 'claude-command',
     PROJECT_ACTION: 'project-action',
     
     // Server to Client
     TERMINAL_OUTPUT: 'terminal-output',
+    TERMINAL_SCROLL_RESULT: 'terminal-scroll-result',
     CLAUDE_RESPONSE: 'claude-response',
     PROJECT_STATUS: 'project-status',
     SYSTEM_STATUS: 'system-status',

@@ -77,7 +77,6 @@ The application follows a layered service architecture built on Express.js:
   - Image manager with preview capabilities
   - System monitoring dashboard
   - Notification system with browser integration
-  - Authentication modal (when enabled)
   - Mobile-optimized navigation
 
 ### Configuration
@@ -90,23 +89,20 @@ Key configuration areas:
 - Claude executable path and session management
 - Terminal appearance and behavior
 - WebSocket timeouts and buffer sizes
-- Authentication and security settings
 - Logging levels and file locations
 
 ### Security Features
-- Optional authentication system (disabled by default)
 - Rate limiting middleware
 - CORS configuration
 - Security headers via Helmet
 - Input validation with Joi
-- Session management for authenticated users
 
 ### File Structure
 ```
 server/
 ├── app.js              # Main Express application with TTYd proxy
 ├── socket-handler.js   # WebSocket event handling
-├── middleware/         # Auth, CORS, error handling
+├── middleware/         # CORS, error handling
 ├── routes/             # API endpoint definitions
 │   ├── api.js         # General API routes
 │   ├── claude.js      # Claude AI integration
@@ -250,7 +246,6 @@ The application includes specific optimizations for Raspberry Pi deployment:
   - Better error handling for socket events
   - Connection state tracking and auto-reconnection
   - Project room management for multi-user scenarios
-  - Enhanced authentication middleware for Socket.IO
 
 ### Terminal Architecture Revolution (2025-07-18)
 - **TTYd Migration**: Complete migration from xterm.js to TTYd + iframe architecture

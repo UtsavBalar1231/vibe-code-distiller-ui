@@ -1,4 +1,5 @@
 const express = require('express');
+const config = require('config');
 const router = express.Router();
 const logger = require('../utils/logger');
 const { SUCCESS_MESSAGES } = require('../utils/constants');
@@ -75,7 +76,7 @@ router.get('/docs', (req, res) => {
       version: '1.0.0',
       description: 'RESTful API for managing Claude Code projects and sessions',
       baseUrl: `${req.protocol}://${req.get('host')}/api`,
-      authentication: process.env.ENABLE_AUTH === 'true' ? 'Basic Auth' : 'None',
+      authentication: 'None',
       
       endpoints: {
         projects: {
@@ -198,8 +199,6 @@ router.get('/docs', (req, res) => {
         codes: [
           'VALIDATION_ERROR - Invalid input data',
           'NOT_FOUND - Resource not found',
-          'UNAUTHORIZED - Authentication required',
-          'FORBIDDEN - Access denied',
           'PROJECT_NOT_FOUND - Project does not exist',
           'CLAUDE_SESSION_FAILED - Failed to start Claude session',
           'TERMINAL_CREATE_FAILED - Failed to create terminal',
@@ -421,6 +420,174 @@ router.post('/terminal/send-input', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to send text to terminal',
+      details: error.message
+    });
+  }
+});
+
+// Terminal scrolling API
+router.post('/terminal/scroll', async (req, res) => {
+  try {
+    const { sessionName, direction, mode = 'page' } = req.body;
+    
+    // Validate required parameters
+    if (!sessionName || !direction) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: sessionName and direction'
+      });
+    }
+    
+    // Validate direction
+    if (!['up', 'down'].includes(direction)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Direction must be "up" or "down"'
+      });
+    }
+    
+    // Validate session name format
+    if (!sessionName.startsWith('claude-web-')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid session name format'
+      });
+    }
+    
+    // Check if session exists
+    const sessionExists = await TmuxUtils.hasSession(sessionName);
+    if (!sessionExists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found',
+        details: `Terminal session '${sessionName}' does not exist`
+      });
+    }
+    
+    // Execute scroll
+    const success = await TmuxUtils.scrollInCopyMode(sessionName, direction, mode);
+    
+    if (success) {
+      logger.info('Terminal scroll executed successfully:', { sessionName, direction, mode });
+      res.json({
+        success: true,
+        message: `Scrolled ${direction} in ${mode} mode`,
+        sessionName,
+        direction,
+        mode
+      });
+    } else {
+      throw new Error('Failed to execute scroll command');
+    }
+    
+  } catch (error) {
+    logger.error('Error scrolling terminal:', {
+      sessionName: req.body.sessionName,
+      direction: req.body.direction,
+      error: error.message,
+      stack: error.stack
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      details: error.message
+    });
+  }
+});
+
+// Exit copy mode API (used by frontend auto-exit timer)
+router.post('/terminal/exit-copy-mode', async (req, res) => {
+  try {
+    const { sessionName } = req.body;
+    
+    if (!sessionName || !sessionName.startsWith('claude-web-')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid session name'
+      });
+    }
+    
+    const sessionExists = await TmuxUtils.hasSession(sessionName);
+    if (!sessionExists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+    
+    const success = await TmuxUtils.exitCopyMode(sessionName);
+    
+    res.json({
+      success,
+      message: success ? 'Exited copy mode' : 'Failed to exit copy mode'
+    });
+    
+  } catch (error) {
+    logger.error('Error exiting copy mode:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      details: error.message
+    });
+  }
+});
+
+// Go to bottom and exit copy mode API
+router.post('/terminal/go-to-bottom-and-exit', async (req, res) => {
+  try {
+    const { sessionName } = req.body;
+    
+    // Validate required parameters
+    if (!sessionName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameter: sessionName'
+      });
+    }
+    
+    // Validate session name format
+    if (!sessionName.startsWith('claude-web-')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid session name format'
+      });
+    }
+    
+    // Check if session exists
+    const sessionExists = await TmuxUtils.hasSession(sessionName);
+    if (!sessionExists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found',
+        details: `Terminal session '${sessionName}' does not exist`
+      });
+    }
+    
+    // Execute go to bottom and exit
+    const success = await TmuxUtils.goToBottomAndExit(sessionName);
+    
+    if (success) {
+      logger.info('Go to bottom and exit executed successfully:', { sessionName });
+      res.json({
+        success: true,
+        message: 'Jumped to bottom and exited copy mode',
+        sessionName
+      });
+    } else {
+      throw new Error('Failed to execute go to bottom and exit command');
+    }
+    
+  } catch (error) {
+    logger.error('Error in go to bottom and exit:', {
+      sessionName: req.body.sessionName,
+      error: error.message,
+      stack: error.stack
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
       details: error.message
     });
   }

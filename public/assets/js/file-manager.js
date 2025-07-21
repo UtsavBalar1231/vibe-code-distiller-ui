@@ -531,11 +531,52 @@ class FileManager {
         const menuRect = menu.getBoundingClientRect();
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
-        const offset = 10; // Increased offset for better edge clearance
+        const offset = 10;
         
         let adjustedX = x;
         let adjustedY = y;
         
+        // Check if we're on mobile (small screens)
+        const isMobile = viewportWidth <= 768;
+        
+        if (isMobile) {
+            // For mobile, find the file browser container to ensure menu is visible within it
+            const fileBrowser = document.getElementById('file-browser');
+            const panelContent = fileBrowser?.closest('.panel-content');
+            
+            if (panelContent) {
+                const panelRect = panelContent.getBoundingClientRect();
+                const containerBottom = panelRect.bottom;
+                const containerRight = panelRect.right;
+                const containerTop = panelRect.top;
+                const containerLeft = panelRect.left;
+                
+                // Adjust position to keep menu within the visible panel area
+                // Check right boundary within panel
+                if (x + menuRect.width > containerRight) {
+                    adjustedX = Math.max(containerLeft + offset, containerRight - menuRect.width - offset);
+                }
+                
+                // Check bottom boundary within panel  
+                if (y + menuRect.height > containerBottom) {
+                    adjustedY = Math.max(containerTop + offset, containerBottom - menuRect.height - offset);
+                }
+                
+                // Ensure menu doesn't go above the panel
+                if (adjustedY < containerTop + offset) {
+                    adjustedY = containerTop + offset;
+                }
+                
+                // Ensure menu doesn't go left of the panel
+                if (adjustedX < containerLeft + offset) {
+                    adjustedX = containerLeft + offset;
+                }
+                
+                return { x: adjustedX, y: adjustedY };
+            }
+        }
+        
+        // Fallback to viewport-based positioning for desktop or when panel not found
         // Check right boundary
         if (x + menuRect.width > viewportWidth) {
             adjustedX = viewportWidth - menuRect.width - offset;

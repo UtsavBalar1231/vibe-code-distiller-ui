@@ -164,7 +164,7 @@ router.post('/stop', async (req, res) => {
 router.get('/config', async (req, res) => {
     try {
         const status = ttydService.getStatus();
-        const staticConfig = config.get('ttyd');
+        const staticConfig = ttydService.getStaticConfig();
         
         res.json({
             success: true,

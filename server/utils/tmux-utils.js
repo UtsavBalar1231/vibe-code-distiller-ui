@@ -175,6 +175,128 @@ class TmuxUtils {
     }
   }
   
+  // Terminal scrolling functions for copy mode
+  static async enterCopyMode(sessionName) {
+    try {
+      await execAsync(`tmux copy-mode -t "${sessionName}"`);
+      logger.info(`Entered copy mode for session: ${sessionName}`);
+      return true;
+    } catch (error) {
+      logger.error(`Failed to enter copy mode: ${error.message}`);
+      return false;
+    }
+  }
+
+  static async exitCopyMode(sessionName) {
+    try {
+      await execAsync(`tmux send-keys -t "${sessionName}" 'q'`);
+      logger.info(`Exited copy mode for session: ${sessionName}`);
+      return true;
+    } catch (error) {
+      logger.error(`Failed to exit copy mode: ${error.message}`);
+      return false;
+    }
+  }
+
+  static async scrollUp(sessionName, lines = 'line') {
+    try {
+      let scrollCommand;
+      switch(lines) {
+        case 'line':
+          scrollCommand = 'Up';
+          break;
+        case 'page':
+          scrollCommand = 'PageUp';
+          break;
+        case 'halfpage':
+          scrollCommand = 'C-u';
+          break;
+        default:
+          // Custom number of lines, send multiple Up keys
+          for(let i = 0; i < parseInt(lines); i++) {
+            await execAsync(`tmux send-keys -t "${sessionName}" 'Up'`);
+          }
+          return true;
+      }
+      
+      await execAsync(`tmux send-keys -t "${sessionName}" '${scrollCommand}'`);
+      return true;
+    } catch (error) {
+      logger.error(`Failed to scroll up: ${error.message}`);
+      return false;
+    }
+  }
+
+  static async scrollDown(sessionName, lines = 'line') {
+    try {
+      let scrollCommand;
+      switch(lines) {
+        case 'line':
+          scrollCommand = 'Down';
+          break;
+        case 'page':
+          scrollCommand = 'PageDown';
+          break;
+        case 'halfpage':
+          scrollCommand = 'C-d';
+          break;
+        default:
+          // Custom number of lines, send multiple Down keys
+          for(let i = 0; i < parseInt(lines); i++) {
+            await execAsync(`tmux send-keys -t "${sessionName}" 'Down'`);
+          }
+          return true;
+      }
+      
+      await execAsync(`tmux send-keys -t "${sessionName}" '${scrollCommand}'`);
+      return true;
+    } catch (error) {
+      logger.error(`Failed to scroll down: ${error.message}`);
+      return false;
+    }
+  }
+
+  // Combined method: enter copy mode and scroll (frontend manages auto-exit)
+  static async scrollInCopyMode(sessionName, direction, lines = 'line') {
+    try {
+      // First enter copy mode
+      await this.enterCopyMode(sessionName);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Execute scroll
+      if (direction === 'up') {
+        await this.scrollUp(sessionName, lines);
+      } else {
+        await this.scrollDown(sessionName, lines);
+      }
+      
+      return true;
+    } catch (error) {
+      logger.error(`Failed to scroll in copy mode: ${error.message}`);
+      return false;
+    }
+  }
+
+  // Go to bottom in copy mode and exit
+  static async goToBottomAndExit(sessionName) {
+    try {
+      // Send Shift+G to jump to bottom in copy mode
+      await execAsync(`tmux send-keys -t "${sessionName}" 'S-g'`);
+      logger.info(`Jumped to bottom in copy mode for session: ${sessionName}`);
+      
+      // Small delay to ensure the jump is processed
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Exit copy mode
+      await this.exitCopyMode(sessionName);
+      
+      return true;
+    } catch (error) {
+      logger.error(`Failed to go to bottom and exit copy mode: ${error.message}`);
+      return false;
+    }
+  }
+  
   static async getTTYdClients() {
     try {
       // Find TTYd process

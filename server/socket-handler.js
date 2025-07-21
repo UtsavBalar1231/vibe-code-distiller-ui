@@ -13,14 +13,8 @@ class SocketManager {
   }
 
   setupNamespace() {
-    // Authentication middleware for Socket.IO
+    // Setup socket connection handling
     this.io.use((socket, next) => {
-      const token = socket.handshake.auth.token || socket.handshake.query.token;
-      
-      if (process.env.ENABLE_AUTH === 'true' && !token) {
-        return next(new Error('Authentication required'));
-      }
-      
       // Store socket metadata
       socket.metadata = {
         ip: socket.request.connection.remoteAddress,
@@ -86,6 +80,15 @@ class SocketManager {
     
     socket.on('terminal:switch-session', (data) => {
       this.handleSwitchSession(socket, data);
+    });
+
+    // Terminal scroll events
+    socket.on(WEBSOCKET.EVENTS.TERMINAL_SCROLL, (data) => {
+      this.handleTerminalScroll(socket, data);
+    });
+    
+    socket.on(WEBSOCKET.EVENTS.TERMINAL_GO_TO_BOTTOM, (data) => {
+      this.handleTerminalGoToBottom(socket, data);
     });
 
     // Claude Code events
@@ -731,6 +734,158 @@ class SocketManager {
       });
       socket.emit(WEBSOCKET.EVENTS.ERROR, {
         message: 'Failed to switch session',
+        details: error.message
+      });
+    }
+  }
+
+  // Terminal scroll event handler
+  async handleTerminalScroll(socket, data) {
+    try {
+      const { sessionName, direction, mode = 'line' } = data;
+      
+      logger.debug('Terminal scroll request received:', { 
+        sessionName, 
+        direction, 
+        mode,
+        socketId: socket.id 
+      });
+      
+      // Validate required parameters
+      if (!sessionName || !direction) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { 
+          message: 'Missing required parameters: sessionName and direction' 
+        });
+        return;
+      }
+      
+      // Validate direction
+      if (!['up', 'down'].includes(direction)) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { 
+          message: 'Direction must be "up" or "down"' 
+        });
+        return;
+      }
+      
+      // Validate session name format
+      if (!sessionName.startsWith('claude-web-')) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { 
+          message: 'Invalid session name format' 
+        });
+        return;
+      }
+      
+      const TmuxUtils = require('./utils/tmux-utils');
+      
+      // Check if session exists
+      const sessionExists = await TmuxUtils.hasSession(sessionName);
+      if (!sessionExists) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { 
+          message: 'Session not found',
+          details: `Terminal session '${sessionName}' does not exist` 
+        });
+        return;
+      }
+      
+      // Execute scroll
+      const success = await TmuxUtils.scrollInCopyMode(sessionName, direction, mode);
+      
+      // Emit result back to client
+      socket.emit(WEBSOCKET.EVENTS.TERMINAL_SCROLL_RESULT, {
+        success,
+        sessionName,
+        direction,
+        mode,
+        message: success ? `Scrolled ${direction} in ${mode} mode` : 'Failed to execute scroll command'
+      });
+      
+      if (success) {
+        logger.debug('Terminal scroll executed successfully:', { sessionName, direction, mode });
+      } else {
+        logger.error('Terminal scroll failed:', { sessionName, direction, mode });
+      }
+      
+    } catch (error) {
+      logger.error('Error handling terminal scroll:', {
+        sessionName: data.sessionName,
+        direction: data.direction,
+        socketId: socket.id,
+        error: error.message,
+        stack: error.stack
+      });
+      
+      socket.emit(WEBSOCKET.EVENTS.ERROR, {
+        message: 'Internal server error',
+        details: error.message
+      });
+    }
+  }
+
+  // Terminal go to bottom event handler
+  async handleTerminalGoToBottom(socket, data) {
+    try {
+      const { sessionName } = data;
+      
+      logger.debug('Terminal go to bottom request received:', { 
+        sessionName,
+        socketId: socket.id 
+      });
+      
+      // Validate required parameters
+      if (!sessionName) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { 
+          message: 'Missing required parameter: sessionName' 
+        });
+        return;
+      }
+      
+      // Validate session name format
+      if (!sessionName.startsWith('claude-web-')) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { 
+          message: 'Invalid session name format' 
+        });
+        return;
+      }
+      
+      const TmuxUtils = require('./utils/tmux-utils');
+      
+      // Check if session exists
+      const sessionExists = await TmuxUtils.hasSession(sessionName);
+      if (!sessionExists) {
+        socket.emit(WEBSOCKET.EVENTS.ERROR, { 
+          message: 'Session not found',
+          details: `Terminal session '${sessionName}' does not exist` 
+        });
+        return;
+      }
+      
+      // Execute go to bottom and exit
+      const success = await TmuxUtils.goToBottomAndExit(sessionName);
+      
+      // Emit result back to client
+      socket.emit(WEBSOCKET.EVENTS.TERMINAL_SCROLL_RESULT, {
+        success,
+        sessionName,
+        action: 'go-to-bottom-and-exit',
+        message: success ? 'Jumped to bottom and exited copy mode' : 'Failed to execute go to bottom and exit command'
+      });
+      
+      if (success) {
+        logger.debug('Terminal go to bottom executed successfully:', { sessionName });
+      } else {
+        logger.error('Terminal go to bottom failed:', { sessionName });
+      }
+      
+    } catch (error) {
+      logger.error('Error handling terminal go to bottom:', {
+        sessionName: data.sessionName,
+        socketId: socket.id,
+        error: error.message,
+        stack: error.stack
+      });
+      
+      socket.emit(WEBSOCKET.EVENTS.ERROR, {
+        message: 'Internal server error',
         details: error.message
       });
     }

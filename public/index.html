@@ -31,31 +31,6 @@
         </div>
     </div>
 
-    <!-- Authentication Modal -->
-    <div id="auth-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>🔐 Authentication Required</h3>
-            </div>
-            <div class="modal-body">
-                <form id="login-form">
-                    <div class="form-group">
-                        <label for="username">Username:</label>
-                        <input type="text" id="username" name="username" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="password">Password:</label>
-                        <input type="password" id="password" name="password" required>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Login</button>
-                    </div>
-                </form>
-                <div id="auth-error" class="error-message" style="display: none;"></div>
-            </div>
-        </div>
-    </div>
-
     <!-- Main Application Container -->
     <div id="app" class="app-container" style="display: none;">
         <!-- Header -->
@@ -203,6 +178,24 @@
                             style="display: none; width: 100%; height: 100%; border: none;"
                             title="Terminal">
                         </iframe>
+                        
+                        <!-- Terminal Scroll Controls -->
+                        <div class="terminal-scroll-controls" id="terminal-scroll-controls" style="display: none;">
+                            <button class="scroll-btn scroll-up" id="scroll-up" title="Scroll Up (Line)" aria-label="Scroll up in terminal">
+                                ↑
+                            </button>
+                            <button class="scroll-btn scroll-down" id="scroll-down" title="Scroll Down (Line)" aria-label="Scroll down in terminal">
+                                ↓
+                            </button>
+                        </div>
+                        
+                        <!-- Copy Mode Exit Button -->
+                        <div class="copy-mode-exit-button" id="copy-mode-exit-button" style="display: none;">
+                            <button class="exit-btn" title="Go to input prompt" aria-label="Go to bottom and exit copy mode">
+                                <span class="exit-btn-icon">⬇</span>
+                                <span class="exit-btn-text">Go to Input</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 

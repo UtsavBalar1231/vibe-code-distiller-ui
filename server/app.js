@@ -29,7 +29,6 @@ const {
   securityHeaders, 
   preflightRateLimit 
 } = require('./middleware/cors');
-const { basicAuth, optionalAuth } = require('./middleware/auth');
 
 // Import routes
 const apiRoutes = require('./routes/api');
@@ -154,10 +153,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Authentication routes (no auth required for login)
-app.post('/api/auth/login', require('./middleware/auth').handleLogin);
-app.post('/api/auth/logout', require('./middleware/auth').handleLogout);
-app.get('/api/auth/user', basicAuth, require('./middleware/auth').getCurrentUser);
 
 
 // TTYd terminal proxy route - Dynamic proxy that gets target from service
@@ -194,23 +189,17 @@ const dynamicTTYdProxy = (req, res, next) => {
 // Register TTYd proxy route early
 app.use('/terminal', dynamicTTYdProxy);
 
-// Protected API routes
-app.use('/api', basicAuth, apiRoutes);
-app.use('/api/projects', basicAuth, projectRoutes);
-app.use('/api/system', basicAuth, systemRoutes);
-app.use('/api/claude', basicAuth, claudeRoutes);
-app.use('/api/images', basicAuth, imageRoutes);
-app.use('/api/files', basicAuth, fileRoutes);
-app.use('/api/ttyd', basicAuth, ttydRoutes);
+// API routes (no authentication required)
+app.use('/api', apiRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/system', systemRoutes);
+app.use('/api/claude', claudeRoutes);
+app.use('/api/images', imageRoutes);
+app.use('/api/files', fileRoutes);
+app.use('/api/ttyd', ttydRoutes);
 
-// Serve main application (with auth in production)
-app.get('/', (req, res, next) => {
-  if (process.env.NODE_ENV === 'production') {
-    basicAuth(req, res, next);
-  } else {
-    next();
-  }
-}, (req, res) => {
+// Serve main application
+app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 

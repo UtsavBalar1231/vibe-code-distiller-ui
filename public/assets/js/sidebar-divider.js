@@ -55,9 +55,10 @@ class SidebarDivider {
         document.addEventListener('mouseup', () => this.stopDrag());
         
         // Touch events for mobile
-        this.divider.addEventListener('touchstart', (e) => this.startDrag(e.touches[0]));
-        document.addEventListener('touchmove', (e) => this.drag(e.touches[0]));
-        document.addEventListener('touchend', () => this.stopDrag());
+        this.divider.addEventListener('touchstart', (e) => this.handleTouchStart(e), {passive: false});
+        document.addEventListener('touchmove', (e) => this.handleTouchMove(e), {passive: false});
+        document.addEventListener('touchend', () => this.stopDrag(), {passive: false});
+        document.addEventListener('touchcancel', () => this.stopDrag(), {passive: false});
         
         // Prevent text selection during drag
         this.divider.addEventListener('selectstart', (e) => e.preventDefault());
@@ -109,6 +110,38 @@ class SidebarDivider {
         
         // Save the current state
         this.saveState();
+    }
+    
+    handleTouchStart(event) {
+        // Check if touch event has valid touch points
+        if (!event.touches || event.touches.length === 0) {
+            console.warn('TouchStart event has no touch points');
+            return;
+        }
+        
+        try {
+            this.startDrag(event.touches[0]);
+        } catch (error) {
+            console.error('Error in touch start:', error);
+        }
+    }
+    
+    handleTouchMove(event) {
+        // Only process if we're dragging and have valid touch points
+        if (!this.isDragging) return;
+        
+        if (!event.touches || event.touches.length === 0) {
+            // No touch points, stop dragging
+            this.stopDrag();
+            return;
+        }
+        
+        try {
+            this.drag(event.touches[0]);
+        } catch (error) {
+            console.error('Error in touch move:', error);
+            this.stopDrag();
+        }
     }
     
     saveState() {

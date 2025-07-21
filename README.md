@@ -14,7 +14,6 @@ A personal web interface for managing Claude Code CLI on your Raspberry Pi. This
 - 📱 **Mobile Optimized**: Responsive design for phones and tablets
 - 🔧 **File Management**: Drag-and-drop upload, download, and file operations
 - 🖼️ **Image Management**: Dedicated image preview and management system
-- 🔐 **Authentication**: Optional authentication system for security
 - 📏 **Resizable UI**: Adjustable sidebar and panel layouts
 - 🔄 **Multi-Session**: Multiple terminal sessions per project
 - 📤 **Project Export**: Download entire projects as archives
@@ -250,9 +249,6 @@ npx playwright test
 - Use the same session across devices for seamless coding
 - The interface adapts to phone/tablet screen sizes
 
-### Security Note
-This app is designed for personal use on your local network. It doesn't have authentication enabled by default since it's meant to be used only by you on your own Pi.
-
 ## What's New
 
 ### Architecture Revolution (2025-07-18)
@@ -285,7 +281,6 @@ This app is designed for personal use on your local network. It doesn't have aut
 - **Resizable UI**: Adjustable sidebar and panel layouts
 - **Multi-Session Support**: Multiple terminal sessions per project
 - **Project Export**: Download entire projects as archives
-- **Authentication**: Optional security layer when needed
 
 ## Technical Architecture
 
