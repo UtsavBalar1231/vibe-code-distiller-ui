@@ -10,6 +10,14 @@ class TTYdTerminalManager {
         this._isSwitchingSession = false; // 标记是否正在切换session
         this.isInCopyMode = false; // Track if currently in copy mode
         
+        // Continuous scrolling variables
+        this.scrollInterval = null;
+        this.scrollDirection = null;
+        this.initialScrollDelay = 300; // Initial delay before continuous scrolling starts
+        this.continuousScrollSpeed = 150; // Interval between scrolls in ms
+        this.fastScrollSpeed = 100; // Faster speed after acceleration
+        this.accelerationDelay = 2000; // Time before acceleration kicks in
+        
         // 绑定事件处理程序
         this.bindEvents();
     }
@@ -30,33 +38,11 @@ class TTYdTerminalManager {
             this.handleResize();
         });
 
-        // Terminal scroll controls with enhanced event handling
-        document.getElementById('scroll-up')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            this.scrollTerminal('up', 'line');
-        });
+        // Terminal scroll controls with continuous scrolling support
+        this.bindScrollButton('scroll-up', 'up');
+        this.bindScrollButton('scroll-down', 'down');
 
-        document.getElementById('scroll-down')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            this.scrollTerminal('down', 'line');
-        });
-
-        // Add mousedown event to further prevent event bubbling
-        document.getElementById('scroll-up')?.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
-
-        document.getElementById('scroll-down')?.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
-
-        // Copy mode exit button
+        // Copy mode exit button (unchanged)
         document.getElementById('copy-mode-exit-button')?.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -67,17 +53,6 @@ class TTYdTerminalManager {
         document.getElementById('copy-mode-exit-button')?.addEventListener('mousedown', (e) => {
             e.preventDefault();
             e.stopPropagation();
-        });
-
-        // Touch events for mobile devices
-        document.getElementById('scroll-up')?.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            this.scrollTerminal('up', 'line');
-        });
-
-        document.getElementById('scroll-down')?.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            this.scrollTerminal('down', 'line');
         });
 
         document.getElementById('copy-mode-exit-button')?.addEventListener('touchstart', (e) => {
@@ -187,6 +162,12 @@ class TTYdTerminalManager {
             this.showIframe();
             
             console.log('✅ Session switched using tmux command, no iframe refresh needed');
+        });
+
+        // 监听终端滚动结果事件
+        window.socket.on('terminal:scroll-result', (data) => {
+            console.log('📜 Terminal scroll result received:', data);
+            this.handleScrollResult(data);
         });
     }
 
@@ -417,9 +398,10 @@ class TTYdTerminalManager {
 
         console.log('🔄 Switching to session:', sessionName, retryCount > 0 ? `(retry ${retryCount})` : '', skipSocketEvent ? '(skip socket event)' : '');
 
-        // Reset copy mode state when switching sessions
+        // Reset copy mode state and stop continuous scrolling when switching sessions
         this.isInCopyMode = false;
         this.hideCopyModeExitButton();
+        this.stopContinuousScroll();
 
         // 获取当前活动的session名称
         const currentSessionName = this.activeSessionName;
@@ -861,7 +843,131 @@ class TTYdTerminalManager {
         return null;
     }
 
-    // Terminal scrolling functions 
+    // Continuous scrolling button binding
+    bindScrollButton(buttonId, direction) {
+        const button = document.getElementById(buttonId);
+        if (!button) return;
+
+        // Mouse events
+        button.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            this.startContinuousScroll(direction);
+        });
+
+        button.addEventListener('mouseup', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.stopContinuousScroll();
+        });
+
+        button.addEventListener('mouseleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.stopContinuousScroll();
+        });
+
+        // Touch events for mobile devices
+        button.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            this.startContinuousScroll(direction);
+        });
+
+        button.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.stopContinuousScroll();
+        });
+
+        button.addEventListener('touchcancel', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.stopContinuousScroll();
+        });
+
+        // Prevent context menu on long press
+        button.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+    }
+
+    // Start continuous scrolling
+    startContinuousScroll(direction) {
+        // Prevent multiple intervals
+        this.stopContinuousScroll();
+        
+        this.scrollDirection = direction;
+        
+        // Immediate first scroll
+        this.scrollTerminal(direction, 'line');
+        
+        // Start continuous scrolling after initial delay
+        setTimeout(() => {
+            if (this.scrollDirection === direction) { // Check if still holding
+                this.scrollInterval = setInterval(() => {
+                    if (this.scrollDirection === direction) {
+                        this.scrollTerminal(direction, 'line');
+                    } else {
+                        this.stopContinuousScroll();
+                    }
+                }, this.continuousScrollSpeed);
+                
+                // Accelerate scrolling after acceleration delay
+                setTimeout(() => {
+                    if (this.scrollDirection === direction && this.scrollInterval) {
+                        clearInterval(this.scrollInterval);
+                        this.scrollInterval = setInterval(() => {
+                            if (this.scrollDirection === direction) {
+                                this.scrollTerminal(direction, 'line');
+                            } else {
+                                this.stopContinuousScroll();
+                            }
+                        }, this.fastScrollSpeed);
+                    }
+                }, this.accelerationDelay);
+            }
+        }, this.initialScrollDelay);
+    }
+
+    // Stop continuous scrolling
+    stopContinuousScroll() {
+        if (this.scrollInterval) {
+            clearInterval(this.scrollInterval);
+            this.scrollInterval = null;
+        }
+        this.scrollDirection = null;
+    }
+
+    // Handle WebSocket scroll result
+    handleScrollResult(data) {
+        if (data.success) {
+            console.log('✅ Terminal scroll via WebSocket successful:', data);
+            
+            // Mark as in copy mode for scroll actions
+            if (data.direction || data.action === 'scroll') {
+                this.isInCopyMode = true;
+                this.showCopyModeExitButton();
+            }
+            
+            // Handle go-to-bottom-and-exit action
+            if (data.action === 'go-to-bottom-and-exit') {
+                this.isInCopyMode = false;
+                this.hideCopyModeExitButton();
+                this.stopContinuousScroll();
+                console.log('✅ Exited copy mode via WebSocket');
+            }
+        } else {
+            console.error('❌ Terminal scroll via WebSocket failed:', data);
+            if (window.notifications) {
+                window.notifications.error(`Scroll failed: ${data.message || 'Unknown error'}`);
+            }
+        }
+    }
+
+    // Terminal scrolling functions with WebSocket optimization
     async scrollTerminal(direction, mode = 'line') {
         const activeSession = this.getActiveSession();
         
@@ -869,7 +975,32 @@ class TTYdTerminalManager {
             return;
         }
         
+        // Try WebSocket first for better performance
+        if (window.socket && window.socket.isConnected()) {
+            try {
+                console.log('📡 Using WebSocket for terminal scroll:', { direction, mode });
+                
+                // Emit WebSocket event
+                window.socket.socket.emit('terminal-scroll', {
+                    sessionName: activeSession.name,
+                    direction: direction,
+                    mode: mode
+                });
+                
+                // WebSocket result will be handled by handleScrollResult method
+                return;
+                
+            } catch (error) {
+                console.warn('⚠️ WebSocket scroll failed, falling back to HTTP:', error);
+            }
+        } else {
+            console.warn('⚠️ WebSocket not available, using HTTP fallback');
+        }
+        
+        // HTTP fallback
         try {
+            console.log('🌐 Using HTTP fallback for terminal scroll:', { direction, mode });
+            
             const response = await fetch('/api/terminal/scroll', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -886,19 +1017,21 @@ class TTYdTerminalManager {
                 throw new Error(result.error || 'Failed to scroll');
             }
             
-            // Mark as in copy mode and show exit button
+            // Mark as in copy mode and show exit button (for HTTP fallback)
             this.isInCopyMode = true;
             this.showCopyModeExitButton();
             
+            console.log('✅ Terminal scroll via HTTP successful');
+            
         } catch (error) {
-            console.error('Failed to scroll terminal:', error);
+            console.error('❌ Failed to scroll terminal via HTTP:', error);
             if (window.notifications) {
                 window.notifications.error(`Scroll failed: ${error.message}`);
             }
         }
     }
     
-    // Go to bottom and exit copy mode
+    // Go to bottom and exit copy mode with WebSocket optimization  
     async goToBottomAndExit() {
         const activeSession = this.getActiveSession();
         
@@ -909,11 +1042,35 @@ class TTYdTerminalManager {
             return;
         }
         
-        // Always hide button first, regardless of API result
+        // Always hide button and stop scrolling first, regardless of API result
         this.isInCopyMode = false;
         this.hideCopyModeExitButton();
+        this.stopContinuousScroll();
         
+        // Try WebSocket first for better performance
+        if (window.socket && window.socket.isConnected()) {
+            try {
+                console.log('📡 Using WebSocket for go to bottom and exit');
+                
+                // Emit WebSocket event
+                window.socket.socket.emit('terminal-go-to-bottom', {
+                    sessionName: activeSession.name
+                });
+                
+                // WebSocket result will be handled by handleScrollResult method
+                return;
+                
+            } catch (error) {
+                console.warn('⚠️ WebSocket go to bottom failed, falling back to HTTP:', error);
+            }
+        } else {
+            console.warn('⚠️ WebSocket not available, using HTTP fallback');
+        }
+        
+        // HTTP fallback
         try {
+            console.log('🌐 Using HTTP fallback for go to bottom and exit');
+            
             const response = await fetch('/api/terminal/go-to-bottom-and-exit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -932,10 +1089,10 @@ class TTYdTerminalManager {
                 throw new Error(result.error || 'Failed to go to bottom and exit');
             }
             
-            console.log('Successfully went to bottom and exited copy mode');
+            console.log('✅ Go to bottom and exit via HTTP successful');
             
         } catch (error) {
-            console.error('Failed to go to bottom and exit copy mode:', error);
+            console.error('❌ Failed to go to bottom and exit copy mode via HTTP:', error);
             if (window.notifications) {
                 window.notifications.error(`Go to bottom failed: ${error.message}`);
             }
@@ -969,8 +1126,9 @@ class TTYdTerminalManager {
             scrollControls.style.display = 'none';
         }
         
-        // Also hide copy mode exit button
+        // Also hide copy mode exit button and stop continuous scrolling
         this.hideCopyModeExitButton();
+        this.stopContinuousScroll();
         this.isInCopyMode = false;
     }
 
@@ -1000,6 +1158,9 @@ class TTYdTerminalManager {
             this.refreshInterval = null;
         }
         
+        // 清理连续滚动定时器
+        this.stopContinuousScroll();
+        
         // 清理DOM
         const tabsContainer = document.getElementById('terminal-tabs');
         if (tabsContainer) {
@@ -1013,6 +1174,8 @@ class TTYdTerminalManager {
         this._isRestoring = false;
         this._isSwitchingSession = false;
         this.isInCopyMode = false;
+        this.scrollInterval = null;
+        this.scrollDirection = null;
     }
 }
 
