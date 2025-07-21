@@ -1059,11 +1059,20 @@ kbd {
     .context-menu {
         min-width: 200px;
         max-width: calc(100vw - var(--spacing-lg));
+        z-index: calc(var(--z-modal) + 10);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     }
     
     .context-menu-item {
         padding: var(--spacing-md);
         min-height: 44px;
+    }
+    
+    /* Ensure menu is always visible and clickable on mobile */
+    .context-menu.active {
+        transform: scale(1) !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
     }
 }
 

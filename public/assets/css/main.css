@@ -919,6 +919,14 @@ body {
         min-height: var(--spacing-touch);
     }
     
+    /* Compact New Terminal button for mobile */
+    #new-terminal-btn {
+        min-height: 32px;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: var(--font-size-xs);
+        flex-shrink: 0;
+    }
+    
     /* Project items larger for touch */
     .project-item {
         padding: var(--spacing-md);
@@ -952,6 +960,17 @@ body {
     
     .header-actions .btn-icon {
         padding: var(--spacing-xs);
+    }
+    
+    /* Ultra compact New Terminal button for very small screens */
+    #new-terminal-btn {
+        min-height: 28px;
+        padding: var(--spacing-xs) var(--spacing-xs);
+        font-size: 0.65rem;
+        max-width: 80px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     
     .welcome-content {
