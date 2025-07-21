@@ -132,7 +132,7 @@ router.post('/upload', upload.single('image'), [
     res.status(500).json({
       success: false,
       message: 'Failed to upload image',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: error.message
     });
   }
 });
@@ -208,7 +208,7 @@ router.get('/list/:projectId', [
     res.status(500).json({
       success: false,
       message: 'Failed to list images',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: error.message
     });
   }
 });
@@ -269,7 +269,7 @@ router.delete('/:projectId/:filename', [
     res.status(500).json({
       success: false,
       message: 'Failed to delete image',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: error.message
     });
   }
 });
@@ -314,7 +314,7 @@ router.get('/serve/:projectId/:filename', [
     res.status(500).json({
       success: false,
       message: 'Failed to serve image',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: error.message
     });
   }
 });

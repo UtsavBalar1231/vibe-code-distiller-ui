@@ -95,13 +95,11 @@ app.use(compression({
 }));
 
 // Request logging
-if (process.env.NODE_ENV !== 'test') {
-  app.use(morgan('combined', {
-    stream: {
-      write: (message) => logger.info(message.trim())
-    }
-  }));
-}
+app.use(morgan('combined', {
+  stream: {
+    write: (message) => logger.info(message.trim())
+  }
+}));
 
 // CORS and security headers
 app.use(preflightRateLimit);
@@ -130,16 +128,8 @@ app.use(express.urlencoded({
 // Cookie parsing
 app.use(cookieParser());
 
-// Static files (with optional auth for production)
-if (process.env.NODE_ENV === 'production') {
-  app.use('/assets', optionalAuth, express.static(path.join(__dirname, '../public/assets'), {
-    maxAge: '7d',
-    etag: true,
-    lastModified: true
-  }));
-} else {
-  app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
-}
+// Static files
+app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
 
 // Health check endpoint (no auth required)
 app.get('/health', (req, res) => {
@@ -206,7 +196,7 @@ app.get('/', (req, res) => {
 // Serve other static files
 app.use(express.static(path.join(__dirname, '../public'), {
   index: false,
-  maxAge: process.env.NODE_ENV === 'production' ? '1d' : '0'
+  maxAge: '0'
 }));
 
 // Setup Socket.IO handlers
@@ -389,7 +379,7 @@ const startServer = async () => {
       logger.system('Server started', {
         port,
         host,
-        environment: process.env.NODE_ENV || 'development',
+        environment: 'development',
         pid: process.pid,
         memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB'
       });
@@ -399,7 +389,7 @@ const startServer = async () => {
 ║                 🔧 Claude Code Web Manager                     ║
 ║                                                                ║
 ║  Server running at: http://${host}:${port}                           ║
-║  Environment: ${(process.env.NODE_ENV || 'development').padEnd(20)} ║
+║  Environment: development       ║
 ║  PID: ${process.pid.toString().padEnd(25)}                          ║
 ║  Memory: ${(Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB').padEnd(20)} ║
 ║                                                                ║

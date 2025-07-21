@@ -7,12 +7,6 @@ module.exports = {
     watch: false,
     max_memory_restart: '200M',
     env: {
-      NODE_ENV: 'development',
-      PORT: 3000,
-      NODE_CONFIG_STRICT_MODE: false
-    },
-    env_production: {
-      NODE_ENV: 'production',
       PORT: 3000,
       NODE_CONFIG_STRICT_MODE: false
     },
