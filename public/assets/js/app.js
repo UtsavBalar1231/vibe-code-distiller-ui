@@ -26,9 +26,6 @@ class ClaudeCodeWebManager extends EventEmitter {
             // Initialize shortcuts panel if available
             this.initializeShortcutsPanel();
             
-            // Check authentication
-            await this.checkAuthentication();
-            
             // Hide loading screen and show app
             this.hideLoadingScreen();
             
@@ -193,83 +190,6 @@ class ClaudeCodeWebManager extends EventEmitter {
         }
     }
     
-    async checkAuthentication() {
-        try {
-            // Check if authentication is enabled
-            const response = await HTTP.get('/api/auth/user');
-            
-            if (!response.success && response.error === 'Not authenticated') {
-                this.showAuthModal();
-                return;
-            }
-            
-            // Authentication successful or not required
-            console.log('✅ Authentication check passed');
-            
-        } catch (error) {
-            if (error.message.includes('401')) {
-                // Auth is likely disabled, continue without auth
-                console.log('✅ Authentication not required (disabled)');
-            } else {
-                console.warn('Authentication check failed:', error);
-                // Continue anyway for development
-            }
-        }
-    }
-    
-    showAuthModal() {
-        const authModal = DOM.get('auth-modal');
-        const loginForm = DOM.get('login-form');
-        
-        if (authModal && loginForm) {
-            DOM.show(authModal);
-            
-            // Setup login form handler
-            DOM.on(loginForm, 'submit', async (e) => {
-                e.preventDefault();
-                await this.handleLogin(e.target);
-            });
-        }
-    }
-    
-    async handleLogin(form) {
-        try {
-            const formData = new FormData(form);
-            const credentials = {
-                username: formData.get('username'),
-                password: formData.get('password')
-            };
-            
-            const response = await HTTP.post('/api/auth/login', credentials);
-            
-            if (response.success) {
-                DOM.hide('auth-modal');
-                notifications.success('Login successful');
-                
-                // Re-initialize socket with auth
-                socket.authenticate(response.token);
-                
-            } else {
-                this.showAuthError(response.error || 'Login failed');
-            }
-            
-        } catch (error) {
-            console.error('Login failed:', error);
-            this.showAuthError(error.message);
-        }
-    }
-    
-    showAuthError(message) {
-        const errorElement = DOM.get('auth-error');
-        if (errorElement) {
-            errorElement.textContent = message;
-            DOM.show(errorElement);
-            
-            setTimeout(() => {
-                DOM.hide(errorElement);
-            }, 5000);
-        }
-    }
     
     initializeSystemMonitoring() {
         // Update system metrics periodically

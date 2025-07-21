@@ -1,4 +1,5 @@
 const express = require('express');
+const config = require('config');
 const router = express.Router();
 const logger = require('../utils/logger');
 const { SUCCESS_MESSAGES } = require('../utils/constants');
@@ -75,7 +76,7 @@ router.get('/docs', (req, res) => {
       version: '1.0.0',
       description: 'RESTful API for managing Claude Code projects and sessions',
       baseUrl: `${req.protocol}://${req.get('host')}/api`,
-      authentication: process.env.ENABLE_AUTH === 'true' ? 'Basic Auth' : 'None',
+      authentication: 'None',
       
       endpoints: {
         projects: {
@@ -198,8 +199,6 @@ router.get('/docs', (req, res) => {
         codes: [
           'VALIDATION_ERROR - Invalid input data',
           'NOT_FOUND - Resource not found',
-          'UNAUTHORIZED - Authentication required',
-          'FORBIDDEN - Access denied',
           'PROJECT_NOT_FOUND - Project does not exist',
           'CLAUDE_SESSION_FAILED - Failed to start Claude session',
           'TERMINAL_CREATE_FAILED - Failed to create terminal',

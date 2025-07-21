@@ -13,14 +13,8 @@ class SocketManager {
   }
 
   setupNamespace() {
-    // Authentication middleware for Socket.IO
+    // Setup socket connection handling
     this.io.use((socket, next) => {
-      const token = socket.handshake.auth.token || socket.handshake.query.token;
-      
-      if (process.env.ENABLE_AUTH === 'true' && !token) {
-        return next(new Error('Authentication required'));
-      }
-      
       // Store socket metadata
       socket.metadata = {
         ip: socket.request.connection.remoteAddress,

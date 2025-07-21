@@ -572,15 +572,6 @@ class SocketClient extends EventEmitter {
         return this.on('terminal:session-switched', callback);
     }
     
-    // Authentication methods (if needed)
-    authenticate(token) {
-        if (this.socket) {
-            this.socket.auth = { token };
-            if (this.socket.connected) {
-                this.socket.disconnect().connect();
-            }
-        }
-    }
     
     // Debugging methods
     enableDebugLogs() {
