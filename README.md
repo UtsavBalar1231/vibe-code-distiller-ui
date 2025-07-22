@@ -140,41 +140,11 @@ The main configuration file is `config/default.json`. Here are the key settings 
 - **Multi-Device Continuation**: You can reconnect from any device and continue where you left off
 - **Remote Access**: With network tunneling, you can operate the terminal from anywhere
 
-## Troubleshooting
+### Smart Notifications
+- **Claude Code Completion Alerts**: Automatic browser notifications when Claude Code tasks finish
+- **Hook Integration**: Leverages Claude Code's hook system for seamless notification delivery
+- **Desktop Integration**: Native browser notifications that work even when the tab is in background
 
-### Common Issues
-
-**Port 8080 is busy**:
-```bash
-# Kill whatever is using port 8080
-sudo lsof -ti:8080 | xargs kill -9
-# Or change the port in config/default.json
-```
-
-**Can't find Claude CLI**:
-- Make sure `claude` command works in your terminal
-- Update the path in `config/default.json` if needed
-
-**Can't find TTYd**:
-- Ensure TTYd binary exists: `ls -la ttyd.aarch64`
-- Re-run setup script: `./setup-dependencies.sh`
-- Verify TTYd binary is executable: `chmod +x ttyd.aarch64`
-
-**Terminal not loading**:
-- Check if TTYd is running: `ps aux | grep ttyd`
-- Verify port 7681 is accessible: `netstat -tlnp | grep 7681`
-
-**Can't connect from other devices**:
-- Make sure your Pi's firewall allows port 8080
-- Check that you're using the correct IP address
-
-### Logs
-Check the logs if something goes wrong:
-```bash
-tail -f logs/combined.log   # All logs (INFO, WARN, ERROR)
-tail -f logs/error.log      # Error logs only
-tail -f logs/exceptions.log # Uncaught exceptions
-```
 
 ## Advanced Usage
 
@@ -193,9 +163,6 @@ pm2 startup
 pm2 save
 ```
 
-### Custom Shell Commands
-Add your own shortcuts by modifying the terminal service or creating custom scripts in your project directories.
-
 ## Development
 
 ### File Structure
@@ -209,16 +176,6 @@ Add your own shortcuts by modifying the terminal service or creating custom scri
 1. Backend: Add new routes in `server/routes/`
 2. Frontend: Add new JavaScript modules in `public/assets/js/`
 3. Styling: Update CSS in `public/assets/css/`
-
-### Testing
-Use Playwright to test the interface in a real browser:
-```bash
-# Install Playwright
-npm install -D playwright
-
-# Run tests (create your own test files)
-npx playwright test
-```
 
 ## Tips & Tricks
 
