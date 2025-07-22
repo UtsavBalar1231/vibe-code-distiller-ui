@@ -192,9 +192,6 @@ echo "🚀 Starting service..."
 systemctl daemon-reload
 systemctl enable ${SERVICE_NAME}
 
-# Enable network-online.target for proper networking
-systemctl enable systemd-networkd-wait-online.service 2>/dev/null || true
-
 # Start the service
 systemctl start ${SERVICE_NAME}
 
