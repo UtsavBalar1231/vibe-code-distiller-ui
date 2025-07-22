@@ -63,15 +63,12 @@ The main configuration file is `config/default.json`. Here are the key settings 
     "port": 8080,
     "host": "0.0.0.0"
   },
-  "claude": {
-    "executable": "claude",
-    "maxSessions": 5
+  "projects": {
+    "rootDir": "~/projects"
   },
-  "terminal": {
-    "tmux": {
-      "enabled": true,
-      "sessionPrefix": "claude-web"
-    }
+  "ttyd": {
+    "port": 7681,
+    "fontSize": 15
   }
 }
 ```
@@ -80,82 +77,68 @@ The main configuration file is `config/default.json`. Here are the key settings 
 
 ```
 ├── server/                    # Backend Node.js application
-│   ├── app.js                # Main server file with TTYd proxy
-│   ├── services/             # Core services
-│   │   ├── claude-manager.js # Claude Code session management
+│   ├── app.js                # Main Express server with TTYd proxy
+│   ├── socket-handler.js     # WebSocket event handling
+│   ├── middleware/           # Express middleware
+│   │   ├── cors.js          # CORS configuration
+│   │   └── error-handler.js # Error handling middleware
+│   ├── routes/              # API endpoints
+│   │   ├── api.js          # General API routes
+│   │   ├── claude.js       # Claude Code integration
+│   │   ├── files.js        # File management operations
+│   │   ├── images.js       # Image management
+│   │   ├── projects.js     # Project CRUD operations
+│   │   ├── system.js       # System monitoring
+│   │   └── ttyd.js         # TTYd terminal routes
+│   ├── services/           # Core business logic
+│   │   ├── claude-manager.js # Claude session management
+│   │   ├── file-service.js   # File system operations
 │   │   ├── project-service.js # Project operations
-│   │   └── file-service.js   # File system operations
-│   └── routes/               # API endpoints
-├── public/                   # Frontend files
-│   ├── index.html           # Main page
-│   └── assets/              # CSS, JS, and libraries
-│       └── js/
-│           └── terminal-ttyd.js # TTYd terminal interface
-├── config/                  # Configuration files
-└── logs/                   # Application logs
+│   │   └── ttyd-service.js   # TTYd service management
+│   └── utils/              # Utility modules
+│       ├── constants.js    # Application constants
+│       ├── logger.js       # Winston logger configuration
+│       ├── tmux-utils.js   # Tmux session utilities
+│       └── validator.js    # Input validation schemas
+├── public/                 # Frontend static files
+│   ├── index.html         # Main application page
+│   └── assets/
+│       ├── css/           # Stylesheets
+│       │   ├── main.css   # Main styles
+│       │   ├── components.css # Component styles
+│       │   └── terminal.css # Terminal specific styles
+│       ├── js/            # Client-side JavaScript modules
+│       │   ├── app.js           # Main application logic
+│       │   ├── socket-client.js # Socket.IO client handling
+│       │   ├── terminal-ttyd.js # TTYd terminal interface
+│       │   ├── project-manager.js # Project management UI
+│       │   ├── file-manager.js    # File management UI
+│       │   ├── image-manager.js   # Image management UI
+│       │   ├── shortcuts-panel.js # Keyboard shortcuts panel
+│       │   ├── vertical-divider.js # Sidebar resizing
+│       │   ├── sidebar-divider.js  # Sidebar panel divider
+│       │   └── utils.js           # Frontend utilities
+│       ├── libs/          # External libraries
+│       │   └── socket.io.min.js # Socket.IO client library
+│       └── icons/         # Application icons
+│           └── favicon.ico
+├── config/               # Configuration files
+│   └── default.json     # Main configuration
+├── logs/                # Application logs
+├── ttyd.aarch64        # TTYd binary for ARM64
+├── ecosystem.config.js  # PM2 configuration
+├── setup-dependencies.sh # Dependency setup script
+├── install-service.sh   # Service installation script
+└── uninstall-service.sh # Service removal script
 ```
 
-## How It Works
+## Key Features
 
-### Terminal Architecture
-- **TTYd Integration**: Uses TTYd service for native terminal experience
-- **iframe Embedding**: Terminal embedded seamlessly via iframe
-- **WebSocket Separation**: Isolated WebSocket handling for stability
-- **Proxy Configuration**: HTTP proxy routes `/terminal` to TTYd service
-
-### Terminal Sessions
-- Each project gets its own terminal session
-- Sessions persist even when you close your browser (thanks to tmux)
-- You can reconnect from any device and continue where you left off
-- Native terminal experience with full keyboard support
-
-### Project Management
-- Browse your projects in the sidebar navigation
-- Click the "New Project" button to create new projects (automatically saved in ~/projects)
-- Click the "+" button next to any project to create a new terminal session for that project
-- Upload files directly to specific projects using drag-and-drop
-- Download entire projects as compressed archives to your local device
-
-## Features Explained
-
-### TTYd Terminal Integration
-Modern terminal interface with native experience:
-- **Native Performance**: Full-featured terminal without frontend overhead
-- **Stable Connections**: Eliminated complex WebSocket management
-- **Cross-Device Compatibility**: Works seamlessly across all devices
-- **Keyboard Support**: Full keyboard support including special keys
-- **Copy/Paste**: Native copy/paste functionality
-
-### Tmux Integration
-When enabled, your terminal sessions become persistent:
-- Start coding on your laptop
-- Switch to your phone/tablet and continue
-- Sessions survive browser crashes and network disconnections
-- Sessions are automatically managed for you
-
-### File Management
-- **Drag-and-drop upload**: Drop files directly into the interface
-- **Download functionality**: Download individual files or entire project archives
-- **File operations**: Create, delete, rename files and folders
-- **File preview modal**: Preview files with enhanced error handling
-- **Double-click integration**: Send file path to terminal for easy Claude Code queries
-- **Syntax highlighting**: Code files display with proper syntax highlighting
-
-### Image Management
-- **Dedicated image interface**: Separate image management system
-- **Image preview**: View images directly in the browser
-- **Image upload**: Drag-and-drop image files
-- **Format support**: Common image formats (PNG, JPG, GIF, etc.)
-- **Integrated workflow**: Seamless integration with file management
-
-### System Monitoring
-Keep track of your Raspberry Pi's health with real-time monitoring:
-- **CPU usage**: Real-time CPU utilization percentage
-- **Temperature monitoring**: System temperature for thermal management
-- **Memory usage**: RAM utilization and available memory
-- **Live updates**: Automatic refresh of system statistics
-- **Status indicators**: Visual indicators in the header
-- **Performance tracking**: Monitor system performance during development
+### Terminal Session Management
+- **Isolated Project Sessions**: Each project gets its own terminal session
+- **Persistent Sessions**: Sessions persist even when you close your browser (thanks to tmux)
+- **Multi-Device Continuation**: You can reconnect from any device and continue where you left off
+- **Remote Access**: With network tunneling, you can operate the terminal from anywhere
 
 ## Troubleshooting
 
@@ -188,8 +171,9 @@ sudo lsof -ti:8080 | xargs kill -9
 ### Logs
 Check the logs if something goes wrong:
 ```bash
-tail -f logs/app.log        # General logs
+tail -f logs/combined.log   # All logs (INFO, WARN, ERROR)
 tail -f logs/error.log      # Error logs only
+tail -f logs/exceptions.log # Uncaught exceptions
 ```
 
 ## Advanced Usage
@@ -249,53 +233,6 @@ npx playwright test
 - Use the same session across devices for seamless coding
 - The interface adapts to phone/tablet screen sizes
 
-## What's New
-
-### Architecture Revolution (2025-07-18)
-- **TTYd Migration**: Complete migration from xterm.js to TTYd + iframe architecture
-- **Massive Simplification**: Removed ~500 lines of complex terminal code
-- **WebSocket Conflict Resolution**: Solved WebSocket upgrade conflicts between Socket.IO and TTYd
-- **Native Terminal Experience**: Full native terminal functionality with zero frontend overhead
-- **Improved Stability**: Eliminated all xterm.js rendering issues and connection problems
-- **Codebase Cleanup**: Systematic removal of all legacy wetty and xterm.js code
-
-### Latest Updates (2025-07-09)
-- **Enhanced Terminal Management**: Improved session handling with better logging
-- **Socket Communication**: Better error handling and connection management
-- **Terminal Restart**: Added terminal restart functionality
-- **UI Improvements**: Enhanced terminal display and sizing fixes
-
-### Recent Major Features (2025-07-08)
-- **Tmux Optimization**: Eliminated JSON file dependency for better performance
-- **Real-time Session Discovery**: Direct tmux command integration
-- **Architecture Simplification**: Reduced code complexity by ~100 lines
-- **Enhanced Reliability**: Improved session persistence and state management
-
-### Core Feature Set (2025-07-02 - 2025-07-08)
-- **Tmux Integration**: Persistent terminal sessions across devices
-- **File Management**: Comprehensive file operations with drag-and-drop
-- **Image Management**: Dedicated image handling and preview system
-- **Notifications**: Desktop notifications with toggle functionality
-- **Mobile Optimization**: Responsive design for all devices
-- **System Monitoring**: Real-time Pi resource monitoring
-- **Resizable UI**: Adjustable sidebar and panel layouts
-- **Multi-Session Support**: Multiple terminal sessions per project
-- **Project Export**: Download entire projects as archives
-
-## Technical Architecture
-
-### TTYd Integration
-- **Service Isolation**: Terminal functionality completely separated from main application
-- **HTTP Proxy**: `/terminal` route proxies to TTYd service on port 7681
-- **WebSocket Handling**: Manual WebSocket upgrade handling prevents conflicts
-- **iframe Embedding**: Seamless terminal embedding with proper security headers
-
-### Benefits of TTYd Architecture
-- **Native Performance**: No frontend terminal emulation overhead
-- **Stability**: Mature TTYd service handles all terminal complexity
-- **Maintainability**: Zero terminal-related code to maintain
-- **Reliability**: Eliminates WebSocket management complexity
-- **Cross-Platform**: Works identically across all devices and browsers
 
 ## License
 
