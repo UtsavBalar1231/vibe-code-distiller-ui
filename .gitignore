@@ -174,4 +174,6 @@ dev/
 development/
 
 # Bug fix plans
-bug_fix/
+bug_fix/.claude/settings.local.json
+.claude/settings.local.json
+CLAUDE.md
