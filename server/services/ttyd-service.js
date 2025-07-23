@@ -18,7 +18,12 @@ class TTYdService {
         this.staticConfig = {
             executable: "./ttyd.aarch64",
             baseCommand: "tmux new-session -A -s base-session",
-            arguments: ["-W", "-t", "disableLeaveAlert=true"]
+            arguments: [
+                "-W", 
+                "-t", "disableLeaveAlert=true",
+                "-t", "macOptionIsMeta=true",
+                "-t", "macOptionClickForcesSelection=true"
+            ]
         };
         
         // Dynamic configuration from config file (mutable, user settings)
