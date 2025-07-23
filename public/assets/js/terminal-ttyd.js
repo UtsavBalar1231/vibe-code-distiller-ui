@@ -30,6 +30,9 @@ class TTYdTerminalManager {
         
         // 绑定事件处理程序
         this.bindEvents();
+        
+        // Enhanced global focus management for mobile keyboard prevention
+        this.setupGlobalFocusManagement();
     }
 
     bindEvents() {
@@ -853,67 +856,212 @@ class TTYdTerminalManager {
         return null;
     }
 
-    // Continuous scrolling button binding
+    // Continuous scrolling button binding with enhanced mobile keyboard prevention
     bindScrollButton(buttonId, direction) {
         const button = document.getElementById(buttonId);
         if (!button) return;
 
-        // Mouse events
-        button.addEventListener('mousedown', (e) => {
+        // Enhanced focus prevention for mobile keyboards
+        const preventKeyboardPopup = (e) => {
+            // Immediately prevent default and blur to avoid any focus
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
+            
+            // Force blur immediately and repeatedly to ensure no focus
+            button.blur();
+            
+            // Additional blur with slight delay to catch any delayed focus
+            setTimeout(() => {
+                button.blur();
+                // Force any potentially focused element to blur
+                if (document.activeElement && document.activeElement !== document.body) {
+                    document.activeElement.blur();
+                }
+            }, 1);
+            
+            return false;
+        };
+
+        // Mouse events
+        button.addEventListener('mousedown', (e) => {
+            preventKeyboardPopup(e);
             this.startContinuousScroll(direction);
         });
 
         button.addEventListener('mouseup', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            preventKeyboardPopup(e);
             this.stopContinuousScroll();
         });
 
         button.addEventListener('mouseleave', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            preventKeyboardPopup(e);
             this.stopContinuousScroll();
         });
 
-        // Touch events for mobile devices
+        // Enhanced touch events for mobile devices with aggressive keyboard prevention
         button.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
+            preventKeyboardPopup(e);
             
-            // Immediately blur the button to prevent keyboard popup on mobile
-            button.blur();
+            // Additional mobile-specific prevention
+            if (e.target) {
+                e.target.blur();
+            }
             
             this.startContinuousScroll(direction);
-        });
+        }, { passive: false });
 
         button.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            preventKeyboardPopup(e);
             
-            // Ensure button loses focus after touch ends
-            button.blur();
+            // Additional mobile-specific prevention
+            if (e.target) {
+                e.target.blur();
+            }
             
             this.stopContinuousScroll();
-        });
+        }, { passive: false });
 
         button.addEventListener('touchcancel', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            preventKeyboardPopup(e);
             
-            // Ensure button loses focus after touch cancels
-            button.blur();
+            // Additional mobile-specific prevention
+            if (e.target) {
+                e.target.blur();
+            }
             
             this.stopContinuousScroll();
+        }, { passive: false });
+
+        // Prevent any focus-related events that might trigger keyboard
+        button.addEventListener('focus', (e) => {
+            preventKeyboardPopup(e);
+        });
+
+        button.addEventListener('focusin', (e) => {
+            preventKeyboardPopup(e);
         });
 
         // Prevent context menu on long press
         button.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
+            preventKeyboardPopup(e);
         });
+
+        // Prevent any click events that might cause focus
+        button.addEventListener('click', (e) => {
+            preventKeyboardPopup(e);
+        });
+
+        // Additional touch move prevention to avoid any accidental interactions
+        button.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, { passive: false });
+    }
+
+    // Global focus management to prevent mobile keyboard popup
+    setupGlobalFocusManagement() {
+        // Track if we're interacting with scroll buttons
+        let isScrollButtonInteraction = false;
+        
+        // Mark scroll button interactions
+        const scrollButtons = ['scroll-up', 'scroll-down'];
+        scrollButtons.forEach(buttonId => {
+            const button = document.getElementById(buttonId);
+            if (button) {
+                // Mark all interactions with scroll buttons
+                ['touchstart', 'touchend', 'touchcancel', 'mousedown', 'mouseup', 'click'].forEach(eventType => {
+                    button.addEventListener(eventType, () => {
+                        isScrollButtonInteraction = true;
+                        setTimeout(() => {
+                            isScrollButtonInteraction = false;
+                        }, 100);
+                    });
+                });
+            }
+        });
+        
+        // Global focus prevention for scroll buttons
+        document.addEventListener('focusin', (e) => {
+            const target = e.target;
+            
+            // If the focus target is a scroll button, immediately blur it
+            if (target && (target.id === 'scroll-up' || target.id === 'scroll-down')) {
+                e.preventDefault();
+                e.stopPropagation();
+                target.blur();
+                
+                // Force focus to body or a safe element
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                console.log('Prevented focus on scroll button:', target.id);
+                return false;
+            }
+            
+            // During scroll button interactions, prevent focus on any element
+            if (isScrollButtonInteraction) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (target && typeof target.blur === 'function') {
+                    target.blur();
+                }
+                
+                // Force focus to body
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                console.log('Prevented focus during scroll button interaction');
+                return false;
+            }
+        }, true);
+        
+        // Additional protection against focus events
+        document.addEventListener('focus', (e) => {
+            const target = e.target;
+            
+            // If the focus target is a scroll button, immediately blur it
+            if (target && (target.id === 'scroll-up' || target.id === 'scroll-down')) {
+                e.preventDefault();
+                e.stopPropagation();
+                target.blur();
+                
+                // Force focus to body
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                return false;
+            }
+        }, true);
+        
+        // Prevent any keyboard popup during touch interactions with scroll buttons
+        document.addEventListener('touchstart', (e) => {
+            const target = e.target;
+            
+            // If touching a scroll button, ensure no element has focus
+            if (target && (target.id === 'scroll-up' || target.id === 'scroll-down')) {
+                // Blur any currently focused element
+                if (document.activeElement && document.activeElement !== document.body) {
+                    document.activeElement.blur();
+                }
+                
+                // Force focus to body
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                // Mark interaction
+                isScrollButtonInteraction = true;
+                setTimeout(() => {
+                    isScrollButtonInteraction = false;
+                }, 200);
+            }
+        }, { passive: false });
+        
+        console.log('✅ Global focus management for scroll buttons initialized');
     }
 
     // Enhanced multi-level continuous scrolling with smooth acceleration

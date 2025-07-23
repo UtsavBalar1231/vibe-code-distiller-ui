@@ -181,10 +181,24 @@
                         
                         <!-- Terminal Scroll Controls -->
                         <div class="terminal-scroll-controls" id="terminal-scroll-controls" style="display: none;">
-                            <button class="scroll-btn scroll-up" id="scroll-up" title="Scroll Up (Line)" aria-label="Scroll up in terminal" tabindex="-1">
+                            <button class="scroll-btn scroll-up" id="scroll-up" 
+                                    title="Scroll Up (Line)" 
+                                    aria-label="Scroll up in terminal" 
+                                    tabindex="-1"
+                                    contenteditable="false"
+                                    readonly="readonly"
+                                    data-prevent-keyboard="true"
+                                    style="pointer-events: auto; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;">
                                 ↑
                             </button>
-                            <button class="scroll-btn scroll-down" id="scroll-down" title="Scroll Down (Line)" aria-label="Scroll down in terminal" tabindex="-1">
+                            <button class="scroll-btn scroll-down" id="scroll-down" 
+                                    title="Scroll Down (Line)" 
+                                    aria-label="Scroll down in terminal" 
+                                    tabindex="-1"
+                                    contenteditable="false"
+                                    readonly="readonly"
+                                    data-prevent-keyboard="true"
+                                    style="pointer-events: auto; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;">
                                 ↓
                             </button>
                         </div>

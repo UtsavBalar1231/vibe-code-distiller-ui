@@ -804,6 +804,16 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     user-select: none;
     -webkit-user-select: none;
+    /* Enhanced mobile keyboard prevention */
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-modify: read-only;
+    pointer-events: auto;
+    /* Force non-focusable behavior */
+    outline: none !important;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
 }
 
 .scroll-btn:hover {
