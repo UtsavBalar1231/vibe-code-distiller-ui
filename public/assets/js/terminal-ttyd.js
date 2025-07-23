@@ -653,6 +653,68 @@ class TTYdTerminalManager {
         this.hideScrollControls();
     }
 
+    showDisconnectionMessage() {
+        console.log('🔴 Showing connection lost message in terminal...');
+        const welcomeScreen = document.getElementById('welcome-screen');
+        if (welcomeScreen) {
+            welcomeScreen.style.display = 'flex';
+        }
+        
+        if (this.iframe) {
+            this.iframe.style.display = 'none';
+        }
+        
+        // Show disconnection message
+        const welcomeContent = document.querySelector('.welcome-content');
+        if (welcomeContent) {
+            welcomeContent.innerHTML = `
+                <h2>🔴 Connection Lost</h2>
+                <p>Connection lost, reconnecting automatically...</p>
+                <div class="loading-spinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #dc3545; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+        }
+
+        // Hide scroll controls during disconnection
+        this.hideScrollControls();
+    }
+
+    showReconnectionMessage() {
+        console.log('🟢 Showing reconnection success message in terminal...');
+        const welcomeScreen = document.getElementById('welcome-screen');
+        if (welcomeScreen) {
+            welcomeScreen.style.display = 'flex';
+        }
+        
+        if (this.iframe) {
+            this.iframe.style.display = 'none';
+        }
+        
+        // Show reconnection success message
+        const welcomeContent = document.querySelector('.welcome-content');
+        if (welcomeContent) {
+            welcomeContent.innerHTML = `
+                <h2>🟢 Reconnected Successfully</h2>
+                <p>Reconnected successfully, refreshing page...</p>
+                <div class="loading-spinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #28a745; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+        }
+
+        // Hide scroll controls during reconnection
+        this.hideScrollControls();
+    }
+
 
     showRestartingStatus() {
         console.log('🔄 Showing TTYd restarting status...');
