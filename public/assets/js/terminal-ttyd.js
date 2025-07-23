@@ -873,18 +873,30 @@ class TTYdTerminalManager {
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
+            
+            // Immediately blur the button to prevent keyboard popup on mobile
+            button.blur();
+            
             this.startContinuousScroll(direction);
         });
 
         button.addEventListener('touchend', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Ensure button loses focus after touch ends
+            button.blur();
+            
             this.stopContinuousScroll();
         });
 
         button.addEventListener('touchcancel', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Ensure button loses focus after touch cancels
+            button.blur();
+            
             this.stopContinuousScroll();
         });
 
