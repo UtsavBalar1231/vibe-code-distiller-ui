@@ -818,8 +818,10 @@
 }
 
 .scroll-btn:focus {
-    outline: 2px solid var(--accent-color, #007acc);
-    outline-offset: 2px;
+    /* Disable focus outline to prevent mobile keyboard popup */
+    outline: none;
+    /* Add subtle visual feedback instead */
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 /* Specific button styling */
@@ -868,6 +870,13 @@
         font-size: 22px;
     }
     
+    /* Prevent focus and keyboard popup on mobile */
+    .scroll-btn:focus {
+        outline: none !important;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+    
     /* Prevent touch scroll on buttons */
     .terminal-scroll-controls {
         touch-action: manipulation;
@@ -880,6 +889,13 @@
         width: 52px;
         height: 52px;
         font-size: 22px;
+    }
+    
+    /* Prevent focus and keyboard popup on mobile devices */
+    .scroll-btn:focus {
+        outline: none !important;
+        -webkit-user-select: none;
+        user-select: none;
     }
     
     .terminal-scroll-controls {
