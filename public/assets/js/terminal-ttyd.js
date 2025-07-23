@@ -10,16 +10,29 @@ class TTYdTerminalManager {
         this._isSwitchingSession = false; // 标记是否正在切换session
         this.isInCopyMode = false; // Track if currently in copy mode
         
-        // Continuous scrolling variables
+        // Enhanced multi-level continuous scrolling system
         this.scrollInterval = null;
         this.scrollDirection = null;
-        this.initialScrollDelay = 300; // Initial delay before continuous scrolling starts
-        this.continuousScrollSpeed = 150; // Interval between scrolls in ms
-        this.fastScrollSpeed = 100; // Faster speed after acceleration
-        this.accelerationDelay = 2000; // Time before acceleration kicks in
+        this.scrollStartTime = null;
+        this.currentScrollLevel = 0;
+        
+        // Multi-level acceleration settings for smooth user experience
+        this.scrollLevels = [
+            { delay: 0,    interval: 80,  mode: 'line', description: 'Initial - Precise control' },    // 12.5 lines/sec
+            { delay: 300,  interval: 60,  mode: 'line', description: 'Level 1 - Faster' },           // 16.7 lines/sec  
+            { delay: 800,  interval: 40,  mode: 'line', description: 'Level 2 - Quick' },            // 25 lines/sec
+            { delay: 1500, interval: 30,  mode: 'line', description: 'Level 3 - Rapid' },            // 33 lines/sec
+            { delay: 2500, interval: 25,  mode: 'line', description: 'Level 4 - Very fast' },        // 40 lines/sec
+            { delay: 4000, interval: 20,  mode: 'line', description: 'Level 5 - Ultra fast' }        // 50 lines/sec
+        ];
+        
+        this.initialScrollDelay = 50; // Quick initial response
         
         // 绑定事件处理程序
         this.bindEvents();
+        
+        // Enhanced global focus management for mobile keyboard prevention
+        this.setupGlobalFocusManagement();
     }
 
     bindEvents() {
@@ -149,7 +162,7 @@ class TTYdTerminalManager {
         // 监听session切换事件
         window.socket.onTerminalSessionSwitched((data) => {
             console.log('🔄 Session switched event received:', data);
-            this.showNotification(`Switched to session: ${data.sessionName}`);
+            // 成功切换时不显示通知，只更新UI状态
             
             // 更新活跃session
             this.activeSessionName = data.sessionName;
@@ -640,6 +653,68 @@ class TTYdTerminalManager {
         this.hideScrollControls();
     }
 
+    showDisconnectionMessage() {
+        console.log('🔴 Showing connection lost message in terminal...');
+        const welcomeScreen = document.getElementById('welcome-screen');
+        if (welcomeScreen) {
+            welcomeScreen.style.display = 'flex';
+        }
+        
+        if (this.iframe) {
+            this.iframe.style.display = 'none';
+        }
+        
+        // Show disconnection message
+        const welcomeContent = document.querySelector('.welcome-content');
+        if (welcomeContent) {
+            welcomeContent.innerHTML = `
+                <h2>🔴 Connection Lost</h2>
+                <p>Connection lost, reconnecting automatically...</p>
+                <div class="loading-spinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #dc3545; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+        }
+
+        // Hide scroll controls during disconnection
+        this.hideScrollControls();
+    }
+
+    showReconnectionMessage() {
+        console.log('🟢 Showing reconnection success message in terminal...');
+        const welcomeScreen = document.getElementById('welcome-screen');
+        if (welcomeScreen) {
+            welcomeScreen.style.display = 'flex';
+        }
+        
+        if (this.iframe) {
+            this.iframe.style.display = 'none';
+        }
+        
+        // Show reconnection success message
+        const welcomeContent = document.querySelector('.welcome-content');
+        if (welcomeContent) {
+            welcomeContent.innerHTML = `
+                <h2>🟢 Reconnected Successfully</h2>
+                <p>Reconnected successfully, refreshing page...</p>
+                <div class="loading-spinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #28a745; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+        }
+
+        // Hide scroll controls during reconnection
+        this.hideScrollControls();
+    }
+
 
     showRestartingStatus() {
         console.log('🔄 Showing TTYd restarting status...');
@@ -843,102 +918,294 @@ class TTYdTerminalManager {
         return null;
     }
 
-    // Continuous scrolling button binding
+    // Continuous scrolling button binding with enhanced mobile keyboard prevention
     bindScrollButton(buttonId, direction) {
         const button = document.getElementById(buttonId);
         if (!button) return;
 
-        // Mouse events
-        button.addEventListener('mousedown', (e) => {
+        // Enhanced focus prevention for mobile keyboards
+        const preventKeyboardPopup = (e) => {
+            // Immediately prevent default and blur to avoid any focus
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
+            
+            // Force blur immediately and repeatedly to ensure no focus
+            button.blur();
+            
+            // Additional blur with slight delay to catch any delayed focus
+            setTimeout(() => {
+                button.blur();
+                // Force any potentially focused element to blur
+                if (document.activeElement && document.activeElement !== document.body) {
+                    document.activeElement.blur();
+                }
+            }, 1);
+            
+            return false;
+        };
+
+        // Mouse events
+        button.addEventListener('mousedown', (e) => {
+            preventKeyboardPopup(e);
             this.startContinuousScroll(direction);
         });
 
         button.addEventListener('mouseup', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            preventKeyboardPopup(e);
             this.stopContinuousScroll();
         });
 
         button.addEventListener('mouseleave', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            preventKeyboardPopup(e);
             this.stopContinuousScroll();
         });
 
-        // Touch events for mobile devices
+        // Enhanced touch events for mobile devices with aggressive keyboard prevention
         button.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
+            preventKeyboardPopup(e);
+            
+            // Additional mobile-specific prevention
+            if (e.target) {
+                e.target.blur();
+            }
+            
             this.startContinuousScroll(direction);
-        });
+        }, { passive: false });
 
         button.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            preventKeyboardPopup(e);
+            
+            // Additional mobile-specific prevention
+            if (e.target) {
+                e.target.blur();
+            }
+            
             this.stopContinuousScroll();
-        });
+        }, { passive: false });
 
         button.addEventListener('touchcancel', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            preventKeyboardPopup(e);
+            
+            // Additional mobile-specific prevention
+            if (e.target) {
+                e.target.blur();
+            }
+            
             this.stopContinuousScroll();
+        }, { passive: false });
+
+        // Prevent any focus-related events that might trigger keyboard
+        button.addEventListener('focus', (e) => {
+            preventKeyboardPopup(e);
+        });
+
+        button.addEventListener('focusin', (e) => {
+            preventKeyboardPopup(e);
         });
 
         // Prevent context menu on long press
         button.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
+            preventKeyboardPopup(e);
         });
+
+        // Prevent any click events that might cause focus
+        button.addEventListener('click', (e) => {
+            preventKeyboardPopup(e);
+        });
+
+        // Additional touch move prevention to avoid any accidental interactions
+        button.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, { passive: false });
     }
 
-    // Start continuous scrolling
+    // Global focus management to prevent mobile keyboard popup
+    setupGlobalFocusManagement() {
+        // Track if we're interacting with scroll buttons
+        let isScrollButtonInteraction = false;
+        
+        // Mark scroll button interactions
+        const scrollButtons = ['scroll-up', 'scroll-down'];
+        scrollButtons.forEach(buttonId => {
+            const button = document.getElementById(buttonId);
+            if (button) {
+                // Mark all interactions with scroll buttons
+                ['touchstart', 'touchend', 'touchcancel', 'mousedown', 'mouseup', 'click'].forEach(eventType => {
+                    button.addEventListener(eventType, () => {
+                        isScrollButtonInteraction = true;
+                        setTimeout(() => {
+                            isScrollButtonInteraction = false;
+                        }, 100);
+                    });
+                });
+            }
+        });
+        
+        // Global focus prevention for scroll buttons
+        document.addEventListener('focusin', (e) => {
+            const target = e.target;
+            
+            // If the focus target is a scroll button, immediately blur it
+            if (target && (target.id === 'scroll-up' || target.id === 'scroll-down')) {
+                e.preventDefault();
+                e.stopPropagation();
+                target.blur();
+                
+                // Force focus to body or a safe element
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                console.log('Prevented focus on scroll button:', target.id);
+                return false;
+            }
+            
+            // During scroll button interactions, prevent focus on any element
+            if (isScrollButtonInteraction) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (target && typeof target.blur === 'function') {
+                    target.blur();
+                }
+                
+                // Force focus to body
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                console.log('Prevented focus during scroll button interaction');
+                return false;
+            }
+        }, true);
+        
+        // Additional protection against focus events
+        document.addEventListener('focus', (e) => {
+            const target = e.target;
+            
+            // If the focus target is a scroll button, immediately blur it
+            if (target && (target.id === 'scroll-up' || target.id === 'scroll-down')) {
+                e.preventDefault();
+                e.stopPropagation();
+                target.blur();
+                
+                // Force focus to body
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                return false;
+            }
+        }, true);
+        
+        // Prevent any keyboard popup during touch interactions with scroll buttons
+        document.addEventListener('touchstart', (e) => {
+            const target = e.target;
+            
+            // If touching a scroll button, ensure no element has focus
+            if (target && (target.id === 'scroll-up' || target.id === 'scroll-down')) {
+                // Blur any currently focused element
+                if (document.activeElement && document.activeElement !== document.body) {
+                    document.activeElement.blur();
+                }
+                
+                // Force focus to body
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                // Mark interaction
+                isScrollButtonInteraction = true;
+                setTimeout(() => {
+                    isScrollButtonInteraction = false;
+                }, 200);
+            }
+        }, { passive: false });
+        
+        console.log('✅ Global focus management for scroll buttons initialized');
+    }
+
+    // Enhanced multi-level continuous scrolling with smooth acceleration
     startContinuousScroll(direction) {
-        // Prevent multiple intervals
+        // Prevent multiple intervals and reset state
         this.stopContinuousScroll();
         
         this.scrollDirection = direction;
+        this.scrollStartTime = Date.now();
+        this.currentScrollLevel = 0;
         
-        // Immediate first scroll
-        this.scrollTerminal(direction, 'line');
+        console.log(`🚀 Starting enhanced scroll ${direction} - Multi-level acceleration enabled`);
         
-        // Start continuous scrolling after initial delay
+        // Immediate first scroll for instant feedback
+        this.scrollTerminalWithRetry(direction, this.scrollLevels[0].mode);
+        
+        // Start with first level after minimal delay for instant response  
         setTimeout(() => {
-            if (this.scrollDirection === direction) { // Check if still holding
-                this.scrollInterval = setInterval(() => {
-                    if (this.scrollDirection === direction) {
-                        this.scrollTerminal(direction, 'line');
-                    } else {
-                        this.stopContinuousScroll();
-                    }
-                }, this.continuousScrollSpeed);
-                
-                // Accelerate scrolling after acceleration delay
-                setTimeout(() => {
-                    if (this.scrollDirection === direction && this.scrollInterval) {
-                        clearInterval(this.scrollInterval);
-                        this.scrollInterval = setInterval(() => {
-                            if (this.scrollDirection === direction) {
-                                this.scrollTerminal(direction, 'line');
-                            } else {
-                                this.stopContinuousScroll();
-                            }
-                        }, this.fastScrollSpeed);
-                    }
-                }, this.accelerationDelay);
+            if (this.scrollDirection === direction) {
+                this.startScrollLevel(direction, 0);
+                // Schedule all acceleration levels
+                this.scheduleAccelerationLevels(direction);
             }
         }, this.initialScrollDelay);
     }
+    
+    // Start scrolling at specific level
+    startScrollLevel(direction, level) {
+        if (level >= this.scrollLevels.length || this.scrollDirection !== direction) {
+            return;
+        }
+        
+        // Clear existing interval
+        if (this.scrollInterval) {
+            clearInterval(this.scrollInterval);
+        }
+        
+        const scrollConfig = this.scrollLevels[level];
+        this.currentScrollLevel = level;
+        
+        console.log(`⚡ Scroll level ${level}: ${scrollConfig.description} (${scrollConfig.interval}ms = ${(1000/scrollConfig.interval).toFixed(1)} lines/sec)`);
+        
+        // Start scrolling at current level
+        this.scrollInterval = setInterval(() => {
+            if (this.scrollDirection === direction) {
+                this.scrollTerminalWithRetry(direction, scrollConfig.mode);
+            } else {
+                this.stopContinuousScroll();
+            }
+        }, scrollConfig.interval);
+    }
+    
+    // Schedule all acceleration levels
+    scheduleAccelerationLevels(direction) {
+        // Schedule each level upgrade
+        for (let i = 1; i < this.scrollLevels.length; i++) {
+            const level = this.scrollLevels[i];
+            setTimeout(() => {
+                if (this.scrollDirection === direction) {
+                    this.startScrollLevel(direction, i);
+                }
+            }, level.delay);
+        }
+    }
 
-    // Stop continuous scrolling
+    // Stop continuous scrolling and reset state
     stopContinuousScroll() {
         if (this.scrollInterval) {
             clearInterval(this.scrollInterval);
             this.scrollInterval = null;
         }
+        
+        // Log final performance stats
+        if (this.scrollStartTime && this.scrollDirection) {
+            const duration = Date.now() - this.scrollStartTime;
+            console.log(`🏁 Scroll ${this.scrollDirection} stopped after ${duration}ms at level ${this.currentScrollLevel}`);
+        }
+        
+        // Reset scroll state
         this.scrollDirection = null;
+        this.scrollStartTime = null;
+        this.currentScrollLevel = 0;
     }
 
     // Handle WebSocket scroll result
@@ -964,6 +1231,15 @@ class TTYdTerminalManager {
             if (window.notifications) {
                 window.notifications.error(`Scroll failed: ${data.message || 'Unknown error'}`);
             }
+        }
+    }
+
+    // Simplified scroll method - same logic for both directions
+    async scrollTerminalWithRetry(direction, mode = 'line') {
+        try {
+            await this.scrollTerminal(direction, mode);
+        } catch (error) {
+            console.warn(`❌ Scroll ${direction} failed:`, error);
         }
     }
 

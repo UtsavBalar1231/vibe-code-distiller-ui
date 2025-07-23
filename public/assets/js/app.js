@@ -5,6 +5,7 @@ class ClaudeCodeWebManager extends EventEmitter {
         super();
         this.isInitialized = false;
         this.systemStats = {};
+        this.isHealthCheckOk = true; // Track health check status
         
         this.init();
     }
@@ -206,11 +207,41 @@ class ClaudeCodeWebManager extends EventEmitter {
             const response = await HTTP.get('/api/system/status');
             
             if (response.success) {
+                // Health check succeeded
+                if (!this.isHealthCheckOk) {
+                    // Health check recovered - show reconnection message and refresh page
+                    console.log('🟢 Health check recovered, showing reconnection message and refreshing page');
+                    this.isHealthCheckOk = true;
+                    
+                    // Show reconnection message in terminal
+                    if (window.terminalManager && typeof window.terminalManager.showReconnectionMessage === 'function') {
+                        window.terminalManager.showReconnectionMessage();
+                    }
+                    
+                    // Refresh the page after a brief delay to show the message
+                    setTimeout(() => {
+                        console.log('🔄 Refreshing page after health check recovery');
+                        window.location.reload();
+                    }, 2000);
+                }
+                
                 this.systemStats = response.system;
                 this.updateSystemUI();
             }
         } catch (error) {
             console.warn('Failed to get system status:', error);
+            
+            // Health check failed
+            if (this.isHealthCheckOk) {
+                // Health check just failed - show disconnection message in terminal
+                console.log('🔴 Health check failed, showing disconnection message in terminal');
+                this.isHealthCheckOk = false;
+                
+                // Show disconnection message in terminal
+                if (window.terminalManager && typeof window.terminalManager.showDisconnectionMessage === 'function') {
+                    window.terminalManager.showDisconnectionMessage();
+                }
+            }
         }
     }
     

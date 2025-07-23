@@ -221,7 +221,9 @@ const setupTmuxConfig = () => {
     // Required tmux configuration lines
     const requiredConfig = [
       'set -g mouse on',
-      'set -g history-limit 10000'
+      'set -g history-limit 10000',
+      'set-hook -g client-attached \'refresh-client -S\'',
+      'unbind-key -T root MouseDown3Pane'
     ];
     
     let configContent = '';

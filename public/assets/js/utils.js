@@ -385,14 +385,117 @@ class NotificationManager {
         this.updateVisibility();
         Storage.set('notifications-enabled', this.isEnabled);
         
-        // Clear all current notifications when disabled
         if (!this.isEnabled) {
+            // Clear all current notifications when disabled
             this.clear();
             this.pendingNotifications = [];
+        } else {
+            // When enabling notifications, test browser notification capability
+            this.testBrowserNotifications();
         }
         
         // Sync with settings modal checkbox
         this.syncSettingsCheckbox();
+    }
+    
+    testBrowserNotifications() {
+        // Test browser notification capability when notifications are enabled
+        if (typeof window.socket !== 'undefined' && window.socket.showBrowserNotification) {
+            const testResult = window.socket.showBrowserNotification(
+                'Claude Code Notifications Enabled', 
+                'Notifications are now active. You will receive alerts for important Claude Code events.',
+                'System Test'
+            );
+            
+            if (testResult.success) {
+                // Browser notification test succeeded
+                this.success('Browser notifications are working correctly!', {
+                    title: 'Notification Test',
+                    duration: 3000
+                });
+            } else {
+                // Browser notification test failed, handle based on error type
+                switch (testResult.error) {
+                    case 'PERMISSION_REQUIRED':
+                        // Request permission for browser notifications
+                        this.handleBrowserPermissionRequest();
+                        break;
+                        
+                    case 'PERMISSION_DENIED':
+                        this.warning(
+                            'Browser notifications are blocked. You may miss important Claude Code notifications. Please enable them in browser settings.', 
+                            {
+                                title: 'Browser Notifications Blocked',
+                                duration: 0 // Persistent until manually closed
+                            }
+                        );
+                        break;
+                        
+                    case 'UNSUPPORTED':
+                        this.warning(
+                            'Browser notifications are not supported. You will only see in-app notifications for Claude Code events.',
+                            {
+                                title: 'Browser Notifications Unavailable',
+                                duration: 8000
+                            }
+                        );
+                        break;
+                        
+                    case 'CREATE_FAILED':
+                    default:
+                        this.error(
+                            `Browser notification test failed: ${testResult.message}. You may miss Claude Code notifications if this issue is not resolved.`,
+                            {
+                                title: 'Browser Notification Error',
+                                duration: 0 // Persistent until manually closed
+                            }
+                        );
+                        break;
+                }
+            }
+        } else {
+            // Socket client not available, show basic success message
+            this.success('In-app notifications are now enabled!', {
+                title: 'Notifications Enabled',
+                duration: 3000
+            });
+        }
+    }
+    
+    handleBrowserPermissionRequest() {
+        // Request browser notification permission through socket client
+        if (typeof window.socket !== 'undefined' && window.socket.requestNotificationPermission) {
+            this.info('Requesting browser notification permission...', {
+                title: 'Permission Request',
+                duration: 3000
+            });
+            
+            // Use the existing permission request method
+            window.socket.requestNotificationPermission();
+        } else {
+            // Fallback: manual permission request
+            if ('Notification' in window) {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        this.success('Browser notifications enabled successfully!', {
+                            title: 'Permission Granted',
+                            duration: 3000
+                        });
+                        
+                        // Test again after permission granted
+                        setTimeout(() => this.testBrowserNotifications(), 1000);
+                    } else {
+                        this.warning(
+                            'Browser notification permission was denied. You will miss important Claude Code notifications unless you enable them manually in browser settings.',
+                            {
+                                title: 'Permission Denied',
+                                duration: 0
+                            }
+                        );
+                    }
+                });
+            }
+        }
     }
     
     updateVisibility() {

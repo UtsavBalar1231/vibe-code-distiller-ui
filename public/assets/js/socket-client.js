@@ -289,16 +289,114 @@ class SocketClient extends EventEmitter {
     handleClaudeNotification(notification) {
         const { sessionId, projectName, message, title, timestamp } = notification;
         
-        // Show in-app notification (controlled by in-app notification settings)
-        if (notifications.isNotificationEnabled()) {
-            notifications.warning(message, { 
-                title: title, 
-                duration: 0 // Persistent notification
-            });
+        // Only process if in-app notifications are enabled
+        if (!notifications.isNotificationEnabled()) {
+            return;
         }
         
-        // Show browser notification (independent of in-app notification settings)
-        this.showBrowserNotification(title, message, projectName);
+        // Attempt to show browser notification first
+        const browserResult = this.showBrowserNotification(title, message, projectName);
+        
+        if (browserResult.success) {
+            // Browser notification succeeded, show brief in-app notification
+            notifications.warning(message, { 
+                title: title, 
+                duration: 5000 // Auto-dismiss after 5 seconds
+            });
+        } else {
+            // Browser notification failed, handle based on error type
+            switch (browserResult.error) {
+                case 'PERMISSION_REQUIRED':
+                    // Try to request permission and retry
+                    this.handlePermissionRequiredForClaude(title, message, projectName);
+                    break;
+                    
+                case 'PERMISSION_DENIED':
+                    // Show persistent warning about missed notifications
+                    notifications.warning(
+                        `${message}\n\nBrowser notifications are blocked. You may miss important Claude Code notifications. Please enable them in browser settings.`, 
+                        { 
+                            title: title,
+                            duration: 0 // Persistent until manually closed
+                        }
+                    );
+                    break;
+                    
+                case 'UNSUPPORTED':
+                case 'CREATE_FAILED':
+                default:
+                    // Show persistent error with technical details
+                    notifications.error(
+                        `${message}\n\nBrowser notification failed: ${browserResult.message}. You may miss Claude Code notifications if this issue is not resolved.`, 
+                        { 
+                            title: title,
+                            duration: 0 // Persistent until manually closed
+                        }
+                    );
+                    break;
+            }
+        }
+    }
+    
+    handlePermissionRequiredForClaude(title, message, projectName) {
+        // Request notification permission specifically for Claude notifications
+        if ('Notification' in window) {
+            Notification.requestPermission().then(permission => {
+                this.notificationPermission = permission;
+                
+                if (permission === 'granted') {
+                    // Permission granted, retry browser notification
+                    const retryResult = this.showBrowserNotification(title, message, projectName);
+                    
+                    if (retryResult.success) {
+                        // Success after permission grant, show brief in-app notification
+                        notifications.success(
+                            `${message}\n\nBrowser notifications are now enabled for Claude Code.`, 
+                            { 
+                                title: title,
+                                duration: 5000
+                            }
+                        );
+                    } else {
+                        // Still failed even with permission, show persistent error
+                        notifications.error(
+                            `${message}\n\nBrowser notification still failed: ${retryResult.message}. Please check your browser settings.`, 
+                            { 
+                                title: title,
+                                duration: 0
+                            }
+                        );
+                    }
+                } else {
+                    // Permission denied or dismissed, show persistent warning
+                    notifications.warning(
+                        `${message}\n\nBrowser notification permission was denied. You will miss important Claude Code notifications unless you enable them manually in browser settings.`, 
+                        { 
+                            title: title,
+                            duration: 0 // Persistent until manually closed
+                        }
+                    );
+                }
+            }).catch(error => {
+                // Permission request failed
+                notifications.error(
+                    `${message}\n\nFailed to request browser notification permission: ${error.message}. You may miss Claude Code notifications.`, 
+                    { 
+                        title: title,
+                        duration: 0
+                    }
+                );
+            });
+        } else {
+            // Notification API not supported
+            notifications.error(
+                `${message}\n\nBrowser notifications are not supported. You may miss important Claude Code notifications.`, 
+                { 
+                    title: title,
+                    duration: 0
+                }
+            );
+        }
     }
     
     checkNotificationPermission() {
@@ -351,8 +449,36 @@ class SocketClient extends EventEmitter {
     
     showBrowserNotification(title, message, projectName) {
         // Browser notifications are independent of in-app notification settings
-        // Only check browser permission
-        if ('Notification' in window && this.notificationPermission === 'granted') {
+        // Return object with success status and error details
+        
+        try {
+            // Check if Notification API is supported
+            if (!('Notification' in window)) {
+                return {
+                    success: false,
+                    error: 'UNSUPPORTED',
+                    message: 'Browser notifications are not supported in this browser'
+                };
+            }
+            
+            // Check permission status
+            if (this.notificationPermission === 'denied') {
+                return {
+                    success: false,
+                    error: 'PERMISSION_DENIED',
+                    message: 'Browser notifications are blocked. Please enable them in browser settings'
+                };
+            }
+            
+            if (this.notificationPermission !== 'granted') {
+                return {
+                    success: false,
+                    error: 'PERMISSION_REQUIRED',
+                    message: 'Browser notification permission is required'
+                };
+            }
+            
+            // Attempt to create notification
             const notificationTitle = title;
             const notificationOptions = {
                 body: message,
@@ -365,16 +491,33 @@ class SocketClient extends EventEmitter {
             
             const notification = new Notification(notificationTitle, notificationOptions);
             
+            // Handle notification events
             notification.onclick = () => {
-                // Focus the window
                 window.focus();
                 notification.close();
+            };
+            
+            notification.onerror = (error) => {
+                console.error('Browser notification error:', error);
             };
             
             // Auto-close after 10 seconds
             setTimeout(() => {
                 notification.close();
             }, 10000);
+            
+            return {
+                success: true,
+                notification: notification
+            };
+            
+        } catch (error) {
+            console.error('Failed to create browser notification:', error);
+            return {
+                success: false,
+                error: 'CREATE_FAILED',
+                message: `Failed to create browser notification: ${error.message}`
+            };
         }
     }
     

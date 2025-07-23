@@ -986,19 +986,37 @@ kbd {
     }
     
     .notification-container {
-        left: var(--spacing-sm);
+        top: var(--spacing-sm);
         right: var(--spacing-sm);
-        max-width: none;
-        bottom: var(--spacing-md);
-        top: auto;
+        left: auto;
+        bottom: auto;
+        max-width: 280px; /* Smaller max-width for mobile */
+        width: calc(100vw - 2 * var(--spacing-sm)); /* Responsive width with margins */
+        max-width: min(280px, calc(100vw - 2 * var(--spacing-sm))); /* Ensure it fits on screen */
     }
     
     .notification {
-        transform: translateY(100%);
+        transform: translateX(100%); /* Slide in from right instead of bottom */
+        font-size: var(--font-size-xs); /* Smaller font for mobile */
+        padding: var(--spacing-sm); /* Smaller padding */
     }
     
     .notification.show {
-        transform: translateY(0);
+        transform: translateX(0);
+    }
+    
+    .notification-title {
+        font-size: var(--font-size-xs);
+        margin-bottom: var(--spacing-xs);
+    }
+    
+    .notification-message {
+        font-size: var(--font-size-xs);
+        line-height: 1.3;
+    }
+    
+    .notification-icon {
+        font-size: var(--font-size-sm);
     }
     
     .form-row {
