@@ -256,14 +256,30 @@ class TmuxUtils {
     }
   }
 
-  // Combined method: enter copy mode and scroll (frontend manages auto-exit)
+  // Check if session is in copy mode
+  static async isInCopyMode(sessionName) {
+    try {
+      const { stdout } = await execAsync(`tmux display-message -t "${sessionName}" -p '#{pane_in_mode}'`);
+      return stdout.trim() === '1';
+    } catch (error) {
+      logger.error(`Failed to check copy mode status: ${error.message}`);
+      return false;
+    }
+  }
+
+  // Enhanced method: intelligently manage copy mode and scroll with better down scrolling support
   static async scrollInCopyMode(sessionName, direction, lines = 'line') {
     try {
-      // First enter copy mode
-      await this.enterCopyMode(sessionName);
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Check if already in copy mode to avoid unnecessary mode entry
+      const alreadyInCopyMode = await this.isInCopyMode(sessionName);
       
-      // Execute scroll
+      if (!alreadyInCopyMode) {
+        await this.enterCopyMode(sessionName);
+        // Longer delay to ensure copy mode is fully active
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+      
+      // Execute scroll based on direction - use same simple logic for both directions
       if (direction === 'up') {
         await this.scrollUp(sessionName, lines);
       } else {
@@ -276,6 +292,7 @@ class TmuxUtils {
       return false;
     }
   }
+
 
   // Go to bottom in copy mode and exit
   static async goToBottomAndExit(sessionName) {

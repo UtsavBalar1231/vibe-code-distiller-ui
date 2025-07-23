@@ -10,13 +10,23 @@ class TTYdTerminalManager {
         this._isSwitchingSession = false; // 标记是否正在切换session
         this.isInCopyMode = false; // Track if currently in copy mode
         
-        // Continuous scrolling variables
+        // Enhanced multi-level continuous scrolling system
         this.scrollInterval = null;
         this.scrollDirection = null;
-        this.initialScrollDelay = 300; // Initial delay before continuous scrolling starts
-        this.continuousScrollSpeed = 150; // Interval between scrolls in ms
-        this.fastScrollSpeed = 100; // Faster speed after acceleration
-        this.accelerationDelay = 2000; // Time before acceleration kicks in
+        this.scrollStartTime = null;
+        this.currentScrollLevel = 0;
+        
+        // Multi-level acceleration settings for smooth user experience
+        this.scrollLevels = [
+            { delay: 0,    interval: 80,  mode: 'line', description: 'Initial - Precise control' },    // 12.5 lines/sec
+            { delay: 300,  interval: 60,  mode: 'line', description: 'Level 1 - Faster' },           // 16.7 lines/sec  
+            { delay: 800,  interval: 40,  mode: 'line', description: 'Level 2 - Quick' },            // 25 lines/sec
+            { delay: 1500, interval: 30,  mode: 'line', description: 'Level 3 - Rapid' },            // 33 lines/sec
+            { delay: 2500, interval: 25,  mode: 'line', description: 'Level 4 - Very fast' },        // 40 lines/sec
+            { delay: 4000, interval: 20,  mode: 'line', description: 'Level 5 - Ultra fast' }        // 50 lines/sec
+        ];
+        
+        this.initialScrollDelay = 50; // Quick initial response
         
         // 绑定事件处理程序
         this.bindEvents();
@@ -906,51 +916,86 @@ class TTYdTerminalManager {
         });
     }
 
-    // Start continuous scrolling
+    // Enhanced multi-level continuous scrolling with smooth acceleration
     startContinuousScroll(direction) {
-        // Prevent multiple intervals
+        // Prevent multiple intervals and reset state
         this.stopContinuousScroll();
         
         this.scrollDirection = direction;
+        this.scrollStartTime = Date.now();
+        this.currentScrollLevel = 0;
         
-        // Immediate first scroll
-        this.scrollTerminal(direction, 'line');
+        console.log(`🚀 Starting enhanced scroll ${direction} - Multi-level acceleration enabled`);
         
-        // Start continuous scrolling after initial delay
+        // Immediate first scroll for instant feedback
+        this.scrollTerminalWithRetry(direction, this.scrollLevels[0].mode);
+        
+        // Start with first level after minimal delay for instant response  
         setTimeout(() => {
-            if (this.scrollDirection === direction) { // Check if still holding
-                this.scrollInterval = setInterval(() => {
-                    if (this.scrollDirection === direction) {
-                        this.scrollTerminal(direction, 'line');
-                    } else {
-                        this.stopContinuousScroll();
-                    }
-                }, this.continuousScrollSpeed);
-                
-                // Accelerate scrolling after acceleration delay
-                setTimeout(() => {
-                    if (this.scrollDirection === direction && this.scrollInterval) {
-                        clearInterval(this.scrollInterval);
-                        this.scrollInterval = setInterval(() => {
-                            if (this.scrollDirection === direction) {
-                                this.scrollTerminal(direction, 'line');
-                            } else {
-                                this.stopContinuousScroll();
-                            }
-                        }, this.fastScrollSpeed);
-                    }
-                }, this.accelerationDelay);
+            if (this.scrollDirection === direction) {
+                this.startScrollLevel(direction, 0);
+                // Schedule all acceleration levels
+                this.scheduleAccelerationLevels(direction);
             }
         }, this.initialScrollDelay);
     }
+    
+    // Start scrolling at specific level
+    startScrollLevel(direction, level) {
+        if (level >= this.scrollLevels.length || this.scrollDirection !== direction) {
+            return;
+        }
+        
+        // Clear existing interval
+        if (this.scrollInterval) {
+            clearInterval(this.scrollInterval);
+        }
+        
+        const scrollConfig = this.scrollLevels[level];
+        this.currentScrollLevel = level;
+        
+        console.log(`⚡ Scroll level ${level}: ${scrollConfig.description} (${scrollConfig.interval}ms = ${(1000/scrollConfig.interval).toFixed(1)} lines/sec)`);
+        
+        // Start scrolling at current level
+        this.scrollInterval = setInterval(() => {
+            if (this.scrollDirection === direction) {
+                this.scrollTerminalWithRetry(direction, scrollConfig.mode);
+            } else {
+                this.stopContinuousScroll();
+            }
+        }, scrollConfig.interval);
+    }
+    
+    // Schedule all acceleration levels
+    scheduleAccelerationLevels(direction) {
+        // Schedule each level upgrade
+        for (let i = 1; i < this.scrollLevels.length; i++) {
+            const level = this.scrollLevels[i];
+            setTimeout(() => {
+                if (this.scrollDirection === direction) {
+                    this.startScrollLevel(direction, i);
+                }
+            }, level.delay);
+        }
+    }
 
-    // Stop continuous scrolling
+    // Stop continuous scrolling and reset state
     stopContinuousScroll() {
         if (this.scrollInterval) {
             clearInterval(this.scrollInterval);
             this.scrollInterval = null;
         }
+        
+        // Log final performance stats
+        if (this.scrollStartTime && this.scrollDirection) {
+            const duration = Date.now() - this.scrollStartTime;
+            console.log(`🏁 Scroll ${this.scrollDirection} stopped after ${duration}ms at level ${this.currentScrollLevel}`);
+        }
+        
+        // Reset scroll state
         this.scrollDirection = null;
+        this.scrollStartTime = null;
+        this.currentScrollLevel = 0;
     }
 
     // Handle WebSocket scroll result
@@ -976,6 +1021,15 @@ class TTYdTerminalManager {
             if (window.notifications) {
                 window.notifications.error(`Scroll failed: ${data.message || 'Unknown error'}`);
             }
+        }
+    }
+
+    // Simplified scroll method - same logic for both directions
+    async scrollTerminalWithRetry(direction, mode = 'line') {
+        try {
+            await this.scrollTerminal(direction, mode);
+        } catch (error) {
+            console.warn(`❌ Scroll ${direction} failed:`, error);
         }
     }
 
