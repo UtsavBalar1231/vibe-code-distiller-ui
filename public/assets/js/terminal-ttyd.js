@@ -162,7 +162,7 @@ class TTYdTerminalManager {
         // 监听session切换事件
         window.socket.onTerminalSessionSwitched((data) => {
             console.log('🔄 Session switched event received:', data);
-            this.showNotification(`Switched to session: ${data.sessionName}`);
+            // 成功切换时不显示通知，只更新UI状态
             
             // 更新活跃session
             this.activeSessionName = data.sessionName;
