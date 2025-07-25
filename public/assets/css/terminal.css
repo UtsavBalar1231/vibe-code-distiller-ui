@@ -1060,8 +1060,19 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     pointer-events: auto;
-    user-select: none;
-    -webkit-user-select: none;
+    /* Enhanced mobile keyboard prevention for container */
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-user-modify: read-only !important;
+    -khtml-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    /* Prevent any focus on container */
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    /* Ensure container doesn't interfere with touch events */
+    touch-action: manipulation !important;
 }
 
 .mobile-key-btn {
@@ -1083,9 +1094,26 @@
     justify-content: center;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
+    /* Enhanced mobile keyboard prevention */
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-user-modify: read-only !important;
+    -khtml-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    pointer-events: auto !important;
+    /* Force non-focusable behavior */
+    outline: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    /* Prevent any form-like behavior */
+    -webkit-writing-mode: horizontal-tb !important;
+    writing-mode: horizontal-tb !important;
+    /* Prevent text input capabilities */
+    -webkit-text-size-adjust: none !important;
+    text-size-adjust: none !important;
 }
 
 /* Different color themes for different button types */
@@ -1125,8 +1153,17 @@
     transition: all 0.1s ease;
 }
 
-.mobile-key-btn:focus {
-    outline: none;
+.mobile-key-btn:focus,
+.mobile-key-btn:focus-within,
+.mobile-key-btn:focus-visible {
+    outline: none !important;
+    /* Enhanced mobile keyboard prevention on focus */
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important;
+    /* Force blur any focused state */
+    filter: none !important;
+    box-shadow: none !important;
 }
 
 /* Show mobile controls only on mobile devices */
