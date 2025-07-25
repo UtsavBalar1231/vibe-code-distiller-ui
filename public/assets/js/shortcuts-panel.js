@@ -398,7 +398,10 @@ class ShortcutsPanel {
 
     // Check if panel is enabled
     isEnabled() {
-        return Storage.get('shortcuts-panel-enabled', true);
+        // Default to false on mobile devices, true on desktop
+        const isMobile = window.innerWidth <= 768;
+        const defaultValue = !isMobile;
+        return Storage.get('shortcuts-panel-enabled', defaultValue);
     }
 
     // Cleanup method
