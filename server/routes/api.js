@@ -61,7 +61,12 @@ router.get('/version', (req, res) => {
         'GET /api/system/status',
         'GET /api/system/logs',
         'GET /api/sessions',
-        'DELETE /api/sessions/:sessionName'
+        'DELETE /api/sessions/:sessionName',
+        'POST /api/terminal/send-input',
+        'POST /api/terminal/send-key',
+        'POST /api/terminal/scroll',
+        'POST /api/terminal/exit-copy-mode',
+        'POST /api/terminal/go-to-bottom-and-exit'
       ]
     }
   });
@@ -588,6 +593,102 @@ router.post('/terminal/go-to-bottom-and-exit', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Internal server error',
+      details: error.message
+    });
+  }
+});
+
+// Send special key to terminal session
+router.post('/terminal/send-key', async (req, res) => {
+  try {
+    const { sessionName, key, modifiers = {} } = req.body;
+    
+    // Validate required parameters
+    if (!sessionName || !key) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters',
+        details: 'Both sessionName and key are required'
+      });
+    }
+    
+    // Prevent sending to base-session
+    if (sessionName === 'base-session') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot send key to base session',
+        details: 'base-session is a system session and should not receive input'
+      });
+    }
+    
+    // Validate session name format
+    if (!sessionName.startsWith('claude-web-')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid session name format',
+        details: 'Session name must start with claude-web-'
+      });
+    }
+    
+    // Check if session exists
+    const sessionExists = await TmuxUtils.hasSession(sessionName);
+    if (!sessionExists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found',
+        details: `Terminal session '${sessionName}' does not exist`
+      });
+    }
+    
+    // Build tmux key code
+    let tmuxKey = key;
+    if (modifiers.ctrl) tmuxKey = `C-${key.toLowerCase()}`;
+    if (modifiers.shift) tmuxKey = `S-${key.toLowerCase()}`;
+    if (modifiers.alt) tmuxKey = `M-${key.toLowerCase()}`;
+    
+    // Validate key format
+    const validKeys = [
+      'Enter', 'Escape', 'Up', 'Down', 'Left', 'Right',
+      'PPage', 'NPage', 'Home', 'End', 'Tab', 'Space',
+      'Backspace', 'Delete', 'F1', 'F2', 'F3', 'F4',
+      'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
+    ];
+    
+    const baseKey = key.replace(/^[CSM]-/, ''); // Remove modifier prefixes for validation
+    if (!validKeys.includes(baseKey) && !modifiers.ctrl && !modifiers.shift && !modifiers.alt) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid key',
+        details: `Key '${key}' is not supported. Valid keys: ${validKeys.join(', ')}`
+      });
+    }
+    
+    // Send key to terminal using tmux
+    const command = `tmux send-keys -t "${sessionName}" '${tmuxKey}'`;
+    logger.info('Sending key to terminal:', { sessionName, key, tmuxKey });
+    
+    await execAsync(command);
+    
+    logger.info('Key sent successfully to terminal:', { sessionName, key: tmuxKey });
+    
+    res.json({
+      success: true,
+      message: 'Key sent to terminal successfully',
+      sessionName,
+      key: tmuxKey
+    });
+    
+  } catch (error) {
+    logger.error('Error sending key to terminal:', {
+      sessionName: req.body.sessionName,
+      key: req.body.key,
+      error: error.message,
+      stack: error.stack
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send key to terminal',
       details: error.message
     });
   }

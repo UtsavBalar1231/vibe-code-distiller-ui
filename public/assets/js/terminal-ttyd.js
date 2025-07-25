@@ -55,6 +55,9 @@ class TTYdTerminalManager {
         this.bindScrollButton('scroll-up', 'up');
         this.bindScrollButton('scroll-down', 'down');
 
+        // Mobile terminal controls
+        this.bindMobileTerminalControls();
+
         // Copy mode exit button (unchanged)
         document.getElementById('copy-mode-exit-button')?.addEventListener('click', (e) => {
             e.preventDefault();
@@ -1020,6 +1023,154 @@ class TTYdTerminalManager {
             e.stopPropagation();
         }, { passive: false });
     }
+
+    // Bind mobile terminal control buttons
+    bindMobileTerminalControls() {
+        console.log('🔧 Binding mobile terminal controls...');
+        const controlsContainer = document.getElementById('mobile-terminal-controls');
+        if (!controlsContainer) {
+            console.error('❌ Mobile terminal controls container not found');
+            return;
+        }
+        console.log('✅ Mobile terminal controls container found:', controlsContainer);
+
+        // Add click event listener to the container (event delegation)
+        controlsContainer.addEventListener('click', (e) => {
+            console.log('📱 Mobile control click detected:', e.target);
+            if (e.target.classList.contains('mobile-key-btn')) {
+                console.log('🔑 Mobile key button clicked:', e.target.dataset.key);
+                
+                // Different handling for different button types
+                if (e.target.classList.contains('page-up-btn')) {
+                    // Single scroll up for click
+                    this.scrollTerminalWithRetry('up', 'page');
+                } else if (e.target.classList.contains('page-down-btn')) {
+                    // Single scroll down for click
+                    this.scrollTerminalWithRetry('down', 'page');
+                } else {
+                    // Use API for arrow keys, enter, escape
+                    this.handleMobileKeyPress(e.target);
+                }
+            }
+        });
+
+        // Add touchstart/touchend events for better mobile responsiveness
+        controlsContainer.addEventListener('touchstart', (e) => {
+            console.log('👆 Mobile control touchstart detected:', e.target);
+            if (e.target.classList.contains('mobile-key-btn')) {
+                console.log('🔑 Mobile key button touched:', e.target.dataset.key);
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Prevent keyboard popup
+                e.target.blur();
+                
+                // Visual feedback
+                this.showMobileKeyPressEffect(e.target);
+                
+                // Different handling for different button types
+                if (e.target.classList.contains('page-up-btn')) {
+                    // Use WebSocket continuous scroll for page up
+                    this.startContinuousScroll('up');
+                } else if (e.target.classList.contains('page-down-btn')) {
+                    // Use WebSocket continuous scroll for page down
+                    this.startContinuousScroll('down');
+                } else {
+                    // Use API for arrow keys, enter, escape
+                    this.handleMobileKeyPress(e.target);
+                }
+            }
+        }, { passive: false });
+
+        controlsContainer.addEventListener('touchend', (e) => {
+            if (e.target.classList.contains('mobile-key-btn')) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Stop continuous scrolling for page buttons only
+                if (e.target.classList.contains('page-up-btn') || 
+                    e.target.classList.contains('page-down-btn')) {
+                    this.stopContinuousScroll();
+                }
+            }
+        }, { passive: false });
+
+        controlsContainer.addEventListener('touchcancel', (e) => {
+            if (e.target.classList.contains('mobile-key-btn')) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Stop continuous scrolling for page buttons only
+                if (e.target.classList.contains('page-up-btn') || 
+                    e.target.classList.contains('page-down-btn')) {
+                    this.stopContinuousScroll();
+                }
+            }
+        }, { passive: false });
+
+        // Prevent focus events that might trigger keyboard
+        controlsContainer.addEventListener('focusin', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.target) {
+                e.target.blur();
+            }
+        }, true);
+    }
+
+    // Handle mobile key press for arrow keys, enter, and escape
+    // Note: Page up/down buttons use WebSocket scrolling, not this method
+    async handleMobileKeyPress(button) {
+        const key = button.dataset.key;
+        console.log('🚀 Handling mobile key press via API:', key);
+        
+        const activeSession = this.getActiveSession();
+        console.log('🖥️ Active session:', activeSession);
+        
+        if (!activeSession) {
+            console.warn('⚠️ No active terminal session');
+            this.showNotification('No active terminal session', 'warning');
+            return;
+        }
+        
+        try {
+            console.log('📡 Sending key to API:', { sessionName: activeSession.name, key });
+            
+            // Send key to terminal using the new API
+            const response = await fetch('/api/terminal/send-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    sessionName: activeSession.name, 
+                    key: key 
+                })
+            });
+            
+            console.log('📥 API response status:', response.status);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ API error response:', errorText);
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            console.log('✅ Mobile key sent successfully:', result);
+            
+        } catch (error) {
+            console.error('❌ Failed to send mobile key:', error);
+            this.showNotification(`Failed to send key: ${error.message}`, 'error');
+        }
+    }
+
+    // Show visual feedback for button press
+    showMobileKeyPressEffect(button) {
+        button.classList.add('pressed');
+        setTimeout(() => {
+            button.classList.remove('pressed');
+        }, 150);
+    }
+
 
     // Global focus management to prevent mobile keyboard popup
     setupGlobalFocusManagement() {
