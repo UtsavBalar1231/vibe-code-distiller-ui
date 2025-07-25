@@ -1037,6 +1037,37 @@ class TTYdTerminalManager {
             return;
         }
 
+        // Initialize collapsed/expanded state from localStorage
+        this.initMobileControlsState();
+
+        // Add toggle button event listener
+        const toggleBtn = document.getElementById('mobile-controls-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                this.toggleMobileControls();
+            });
+
+            // Add touchstart for mobile responsiveness
+            toggleBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                // AGGRESSIVE KEYBOARD HIDING - Force hide keyboard immediately
+                this.forceHideKeyboard();
+                
+                // Enhanced keyboard popup prevention
+                if (e.target && typeof e.target.blur === 'function') {
+                    e.target.blur();
+                }
+                
+                this.toggleMobileControls();
+            });
+        }
+
         // Add click event listener to the container (event delegation)
         controlsContainer.addEventListener('click', (e) => {
             if (e.target.classList.contains('mobile-key-btn')) {
@@ -1939,6 +1970,56 @@ class TTYdTerminalManager {
         this.lastTerminalInteraction = null;
         this.isKeyboardOpen = false;
         this.initialViewportHeight = null;
+    }
+
+    // Initialize mobile controls collapsed/expanded state
+    initMobileControlsState() {
+        const controlsContainer = document.getElementById('mobile-terminal-controls');
+        if (!controlsContainer) return;
+
+        // Get saved state from localStorage (default to expanded)
+        const savedState = localStorage.getItem('mobileControlsState');
+        const isExpanded = savedState === null ? true : savedState === 'expanded';
+        
+        if (isExpanded) {
+            controlsContainer.classList.remove('collapsed');
+            controlsContainer.classList.add('expanded');
+            this.updateToggleIcon(true);
+        } else {
+            controlsContainer.classList.remove('expanded');
+            controlsContainer.classList.add('collapsed');
+            this.updateToggleIcon(false);
+        }
+    }
+
+    // Toggle mobile controls collapsed/expanded state
+    toggleMobileControls() {
+        const controlsContainer = document.getElementById('mobile-terminal-controls');
+        if (!controlsContainer) return;
+
+        const isCurrentlyExpanded = controlsContainer.classList.contains('expanded');
+        
+        if (isCurrentlyExpanded) {
+            // Collapse
+            controlsContainer.classList.remove('expanded');
+            controlsContainer.classList.add('collapsed');
+            localStorage.setItem('mobileControlsState', 'collapsed');
+            this.updateToggleIcon(false);
+        } else {
+            // Expand
+            controlsContainer.classList.remove('collapsed');
+            controlsContainer.classList.add('expanded');
+            localStorage.setItem('mobileControlsState', 'expanded');
+            this.updateToggleIcon(true);
+        }
+    }
+
+    // Update toggle icon based on state
+    updateToggleIcon(isExpanded) {
+        const toggleIcon = document.querySelector('.mobile-controls-toggle-icon');
+        if (toggleIcon) {
+            toggleIcon.textContent = isExpanded ? '◀' : '▶';
+        }
     }
 }
 

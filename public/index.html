@@ -212,18 +212,25 @@
                         </div>
                         
                         <!-- Mobile Terminal Controls -->
-                        <div class="mobile-terminal-controls" id="mobile-terminal-controls">
-                            <button class="mobile-key-btn page-up-btn" data-key="PPage" 
-                                    title="Page Up" 
-                                    aria-label="Page up in terminal"
-                                    tabindex="-1"
-                                    readonly="readonly"
-                                    contenteditable="false"
-                                    inputmode="none"
-                                    autocomplete="off"
-                                    data-prevent-keyboard="true">
-                                ⇈
-                            </button>
+                        <div class="mobile-terminal-controls expanded" id="mobile-terminal-controls">
+                            <!-- Toggle Button -->
+                            <div class="mobile-controls-toggle" id="mobile-controls-toggle">
+                                <span class="mobile-controls-toggle-icon">◀</span>
+                            </div>
+                            
+                            <!-- Controls Content -->
+                            <div class="mobile-controls-content">
+                                <button class="mobile-key-btn page-up-btn" data-key="PPage" 
+                                        title="Page Up" 
+                                        aria-label="Page up in terminal"
+                                        tabindex="-1"
+                                        readonly="readonly"
+                                        contenteditable="false"
+                                        inputmode="none"
+                                        autocomplete="off"
+                                        data-prevent-keyboard="true">
+                                    ⇈
+                                </button>
                             <button class="mobile-key-btn arrow-up-btn" data-key="Up" 
                                     title="Up Arrow" 
                                     aria-label="Up arrow key"
@@ -279,6 +286,7 @@
                                     data-prevent-keyboard="true">
                                 ESC
                             </button>
+                            </div>
                         </div>
                     </div>
                 </div>
