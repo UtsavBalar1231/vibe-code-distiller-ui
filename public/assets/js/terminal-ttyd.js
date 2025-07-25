@@ -33,6 +33,12 @@ class TTYdTerminalManager {
         
         // Enhanced global focus management for mobile keyboard prevention
         this.setupGlobalFocusManagement();
+        
+        // Create hidden input for aggressive keyboard hiding
+        this.createHiddenKeyboardKiller();
+        
+        // Setup global keyboard detection and management
+        this.setupKeyboardDetection();
     }
 
     bindEvents() {
@@ -54,6 +60,9 @@ class TTYdTerminalManager {
         // Terminal scroll controls with continuous scrolling support
         this.bindScrollButton('scroll-up', 'up');
         this.bindScrollButton('scroll-down', 'down');
+
+        // Mobile terminal controls
+        this.bindMobileTerminalControls();
 
         // Copy mode exit button (unchanged)
         document.getElementById('copy-mode-exit-button')?.addEventListener('click', (e) => {
@@ -1021,6 +1030,301 @@ class TTYdTerminalManager {
         }, { passive: false });
     }
 
+    // Bind mobile terminal control buttons
+    bindMobileTerminalControls() {
+        const controlsContainer = document.getElementById('mobile-terminal-controls');
+        if (!controlsContainer) {
+            return;
+        }
+
+        // Initialize collapsed/expanded state from localStorage
+        this.initMobileControlsState();
+
+        // Add toggle button event listener
+        const toggleBtn = document.getElementById('mobile-controls-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                this.toggleMobileControls();
+            });
+
+            // Add touchstart for mobile responsiveness
+            toggleBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                // AGGRESSIVE KEYBOARD HIDING - Force hide keyboard immediately
+                this.forceHideKeyboard();
+                
+                // Enhanced keyboard popup prevention
+                if (e.target && typeof e.target.blur === 'function') {
+                    e.target.blur();
+                }
+                
+                this.toggleMobileControls();
+            });
+        }
+
+        // Add click event listener to the container (event delegation)
+        controlsContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('mobile-key-btn')) {
+                // Track interaction for keyboard detection system
+                this.trackMobileControlInteraction();
+                
+                // AGGRESSIVE KEYBOARD HIDING - Force hide keyboard immediately
+                this.forceHideKeyboard();
+                
+                // Prevent any focus or keyboard activation
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                // Enhanced keyboard popup prevention
+                if (e.target && typeof e.target.blur === 'function') {
+                    e.target.blur();
+                }
+                
+                // Different handling for different button types
+                if (e.target.classList.contains('page-up-btn')) {
+                    // Single scroll up for click
+                    this.scrollTerminalWithRetry('up', 'page');
+                } else if (e.target.classList.contains('page-down-btn')) {
+                    // Single scroll down for click
+                    this.scrollTerminalWithRetry('down', 'page');
+                } else {
+                    // Use API for arrow keys, enter, escape
+                    this.handleMobileKeyPress(e.target);
+                }
+            }
+        });
+
+        // Add touchstart/touchend events for better mobile responsiveness
+        controlsContainer.addEventListener('touchstart', (e) => {
+            if (e.target.classList.contains('mobile-key-btn')) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                // Track interaction for keyboard detection system
+                this.trackMobileControlInteraction();
+                
+                // AGGRESSIVE KEYBOARD HIDING - Force hide keyboard immediately
+                this.forceHideKeyboard();
+                
+                // Enhanced keyboard popup prevention (backup)
+                if (e.target && typeof e.target.blur === 'function') {
+                    e.target.blur();
+                    // Multiple blur attempts with slight delays
+                    setTimeout(() => {
+                        if (e.target && typeof e.target.blur === 'function') {
+                            e.target.blur();
+                        }
+                    }, 1);
+                    setTimeout(() => {
+                        if (e.target && typeof e.target.blur === 'function') {
+                            e.target.blur();
+                        }
+                    }, 10);
+                }
+                
+                // Force focus away from any input elements (backup)
+                if (document.activeElement && document.activeElement !== document.body) {
+                    document.activeElement.blur();
+                }
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                // Visual feedback
+                this.showMobileKeyPressEffect(e.target);
+                
+                // Different handling for different button types
+                if (e.target.classList.contains('page-up-btn')) {
+                    // Use WebSocket continuous scroll for page up
+                    this.startContinuousScroll('up');
+                } else if (e.target.classList.contains('page-down-btn')) {
+                    // Use WebSocket continuous scroll for page down
+                    this.startContinuousScroll('down');
+                } else {
+                    // Use API for arrow keys, enter, escape
+                    this.handleMobileKeyPress(e.target);
+                }
+            }
+        }, { passive: false });
+
+        controlsContainer.addEventListener('touchend', (e) => {
+            if (e.target.classList.contains('mobile-key-btn')) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                // Track interaction for keyboard detection system
+                this.trackMobileControlInteraction();
+                
+                // AGGRESSIVE KEYBOARD HIDING - Force hide keyboard immediately
+                this.forceHideKeyboard();
+                
+                // Enhanced keyboard popup prevention on touchend (backup)
+                if (e.target && typeof e.target.blur === 'function') {
+                    e.target.blur();
+                    setTimeout(() => {
+                        if (e.target && typeof e.target.blur === 'function') {
+                            e.target.blur();
+                        }
+                    }, 1);
+                }
+                
+                // Force focus away from any input elements
+                if (document.activeElement && document.activeElement !== document.body) {
+                    document.activeElement.blur();
+                }
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                // Stop continuous scrolling for page buttons only
+                if (e.target.classList.contains('page-up-btn') || 
+                    e.target.classList.contains('page-down-btn')) {
+                    this.stopContinuousScroll();
+                }
+            }
+        }, { passive: false });
+
+        controlsContainer.addEventListener('touchcancel', (e) => {
+            if (e.target.classList.contains('mobile-key-btn')) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                // Track interaction for keyboard detection system
+                this.trackMobileControlInteraction();
+                
+                // AGGRESSIVE KEYBOARD HIDING - Force hide keyboard immediately
+                this.forceHideKeyboard();
+                
+                // Enhanced keyboard popup prevention on touchcancel (backup)
+                if (e.target && typeof e.target.blur === 'function') {
+                    e.target.blur();
+                    setTimeout(() => {
+                        if (e.target && typeof e.target.blur === 'function') {
+                            e.target.blur();
+                        }
+                    }, 1);
+                }
+                
+                // Force focus away from any input elements
+                if (document.activeElement && document.activeElement !== document.body) {
+                    document.activeElement.blur();
+                }
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                // Stop continuous scrolling for page buttons only
+                if (e.target.classList.contains('page-up-btn') || 
+                    e.target.classList.contains('page-down-btn')) {
+                    this.stopContinuousScroll();
+                }
+            }
+        }, { passive: false });
+
+        // Enhanced focus prevention for mobile keyboard popup
+        const preventKeyboardEvents = ['focusin', 'focus', 'input', 'beforeinput', 'compositionstart', 'compositionupdate', 'compositionend'];
+        
+        preventKeyboardEvents.forEach(eventType => {
+            controlsContainer.addEventListener(eventType, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                if (e.target && typeof e.target.blur === 'function') {
+                    e.target.blur();
+                    // Force blur multiple times to ensure effectiveness
+                    setTimeout(() => {
+                        if (e.target && typeof e.target.blur === 'function') {
+                            e.target.blur();
+                        }
+                    }, 1);
+                }
+                
+                // Force focus to body or a safe element
+                if (document.body) {
+                    document.body.focus();
+                }
+                
+                return false;
+            }, true);
+        });
+    }
+
+    // Handle mobile key press for arrow keys, enter, escape, and key combinations
+    // Note: Page up/down buttons use WebSocket scrolling, not this method
+    async handleMobileKeyPress(button) {
+        const key = button.dataset.key;
+        console.log('🚀 Handling mobile key press via API:', key);
+        
+        const activeSession = this.getActiveSession();
+        console.log('🖥️ Active session:', activeSession);
+        
+        if (!activeSession) {
+            console.warn('⚠️ No active terminal session');
+            this.showNotification('No active terminal session', 'warning');
+            return;
+        }
+        
+        try {
+            // Handle Ctrl+C with modifiers parameter
+            let requestBody;
+            if (key === 'Ctrl+C') {
+                requestBody = {
+                    sessionName: activeSession.name,
+                    key: 'c',
+                    modifiers: { ctrl: true }
+                };
+                console.log('📡 Sending Ctrl+C combination with modifiers to API:', requestBody);
+            } else {
+                requestBody = {
+                    sessionName: activeSession.name,
+                    key: key
+                };
+                console.log('📡 Sending key to API:', requestBody);
+            }
+            
+            const response = await fetch('/api/terminal/send-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+            
+            console.log('📥 API response status:', response.status);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ API error response:', errorText);
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            console.log('✅ Mobile key sent successfully:', result);
+            
+        } catch (error) {
+            console.error('❌ Failed to send mobile key:', error);
+            this.showNotification(`Failed to send key: ${error.message}`, 'error');
+        }
+    }
+
+    // Show visual feedback for button press
+    showMobileKeyPressEffect(button) {
+        button.classList.add('pressed');
+        setTimeout(() => {
+            button.classList.remove('pressed');
+        }, 150);
+    }
+
+
     // Global focus management to prevent mobile keyboard popup
     setupGlobalFocusManagement() {
         // Track if we're interacting with scroll buttons
@@ -1125,6 +1429,222 @@ class TTYdTerminalManager {
         
         console.log('✅ Global focus management for scroll buttons initialized');
     }
+
+    // Create hidden input element for aggressive keyboard hiding
+    createHiddenKeyboardKiller() {
+        // Create a hidden input that we can use to "steal" focus and hide keyboard
+        this.hiddenKeyboardKiller = document.createElement('input');
+        this.hiddenKeyboardKiller.type = 'text';
+        this.hiddenKeyboardKiller.style.position = 'absolute';
+        this.hiddenKeyboardKiller.style.left = '-9999px';
+        this.hiddenKeyboardKiller.style.top = '-9999px';
+        this.hiddenKeyboardKiller.style.width = '1px';
+        this.hiddenKeyboardKiller.style.height = '1px';
+        this.hiddenKeyboardKiller.style.opacity = '0';
+        this.hiddenKeyboardKiller.style.pointerEvents = 'none';
+        this.hiddenKeyboardKiller.style.zIndex = '-1000';
+        this.hiddenKeyboardKiller.setAttribute('tabindex', '-1');
+        this.hiddenKeyboardKiller.setAttribute('readonly', 'readonly');
+        this.hiddenKeyboardKiller.setAttribute('aria-hidden', 'true');
+        
+        // Add to document body
+        document.body.appendChild(this.hiddenKeyboardKiller);
+    }
+
+    // Aggressively force hide mobile keyboard
+    forceHideKeyboard() {
+        try {
+            // Blur all currently focused elements
+            if (document.activeElement && document.activeElement !== document.body) {
+                document.activeElement.blur();
+            }
+            
+            // Find and blur all input elements that might have focus
+            const allInputs = document.querySelectorAll('input, textarea, select, [contenteditable="true"]');
+            allInputs.forEach(input => {
+                if (typeof input.blur === 'function') {
+                    input.blur();
+                }
+            });
+            
+            // Use our hidden input to "steal" focus and immediately blur it
+            if (this.hiddenKeyboardKiller) {
+                setTimeout(() => {
+                    try {
+                        this.hiddenKeyboardKiller.focus();
+                        setTimeout(() => {
+                            try {
+                                this.hiddenKeyboardKiller.blur();
+                                if (document.body) {
+                                    document.body.focus();
+                                }
+                            } catch (e) {
+                                // Silent fail
+                            }
+                        }, 10);
+                    } catch (e) {
+                        // Silent fail
+                    }
+                }, 50);
+            }
+            
+            // Multiple delayed blur attempts to ensure keyboard is hidden
+            const blurAttempts = [100, 200, 300, 500];
+            blurAttempts.forEach(delay => {
+                setTimeout(() => {
+                    if (document.activeElement && document.activeElement !== document.body) {
+                        document.activeElement.blur();
+                    }
+                    if (document.body) {
+                        document.body.focus();
+                    }
+                }, delay);
+            });
+            
+        } catch (error) {
+            // Silent fail
+        }
+    }
+
+    // Setup global keyboard detection and management system
+    setupKeyboardDetection() {
+        // Track initial viewport height
+        this.initialViewportHeight = window.innerHeight;
+        this.isKeyboardOpen = false;
+        
+        // Listen for viewport changes to detect keyboard
+        window.addEventListener('resize', () => {
+            const currentHeight = window.innerHeight;
+            const heightDifference = this.initialViewportHeight - currentHeight;
+            
+            // Consider keyboard open if viewport shrunk by more than 150px
+            const keyboardOpen = heightDifference > 150;
+            
+            if (keyboardOpen !== this.isKeyboardOpen) {
+                this.isKeyboardOpen = keyboardOpen;
+                
+                // Smart detection: Only hide keyboard if it's definitely not a legitimate terminal interaction
+                if (keyboardOpen && this.shouldHideKeyboard()) {
+                    setTimeout(() => {
+                        this.forceHideKeyboard();
+                    }, 100);
+                }
+            }
+        });
+        
+        // Listen for Visual Viewport API if available (more reliable on modern mobile browsers)
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                const keyboardOpen = window.visualViewport.height < window.innerHeight * 0.75;
+                
+                if (keyboardOpen !== this.isKeyboardOpen) {
+                    this.isKeyboardOpen = keyboardOpen;
+                    
+                    // Smart detection: Only hide keyboard if it's definitely not a legitimate terminal interaction
+                    if (keyboardOpen && this.shouldHideKeyboard()) {
+                        setTimeout(() => {
+                            this.forceHideKeyboard();
+                        }, 100);
+                    }
+                }
+            });
+        }
+        
+        // Additional focus monitoring for aggressive keyboard prevention
+        document.addEventListener('focusin', (e) => {
+            // Skip if this is terminal iframe focus (user wants to interact with terminal)
+            if (e.target && (e.target.closest('#ttyd-terminal') || 
+                            e.target.closest('iframe[title="Terminal"]'))) {
+                return;
+            }
+            
+            // Smart detection: Only hide keyboard if it's not a legitimate terminal interaction
+            if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || 
+                 e.target.contentEditable === 'true') && this.shouldHideKeyboard()) {
+                
+                setTimeout(() => {
+                    this.forceHideKeyboard();
+                }, 50);
+            }
+        }, true);
+        
+        // Track legitimate terminal interactions to prevent interference
+        this.setupTerminalInteractionTracking();
+    }
+
+    // Setup terminal area interaction tracking to distinguish legitimate terminal clicks
+    setupTerminalInteractionTracking() {
+        // Track when user clicks in terminal area (they want keyboard to show)
+        document.addEventListener('click', (e) => {
+            // Check if click is within terminal iframe or terminal container
+            if (e.target && (e.target.closest('#ttyd-terminal') || 
+                            e.target.closest('#terminal-content') ||
+                            e.target.closest('iframe[title="Terminal"]'))) {
+                
+                this.trackTerminalInteraction();
+                
+                // Clear mobile control interaction effect when user explicitly clicks terminal
+                if (this.lastMobileControlInteraction) {
+                    const timeSinceControl = Date.now() - this.lastMobileControlInteraction;
+                    if (timeSinceControl > 100) { // Give a small buffer for rapid interactions
+                        this.lastMobileControlInteraction = null;
+                    }
+                }
+            }
+        }, true);
+        
+        // Additional tracking for iframe load and focus events
+        const terminalIframe = document.getElementById('ttyd-terminal');
+        if (terminalIframe) {
+            terminalIframe.addEventListener('load', () => {
+                // Try to access iframe content (may be blocked by same-origin policy)
+                try {
+                    const iframeDoc = terminalIframe.contentDocument || terminalIframe.contentWindow?.document;
+                    if (iframeDoc) {
+                        iframeDoc.addEventListener('click', (e) => {
+                            this.trackTerminalInteraction();
+                            
+                            // Clear mobile control interaction when user clicks inside terminal
+                            if (this.lastMobileControlInteraction) {
+                                this.lastMobileControlInteraction = null;
+                            }
+                        });
+                    }
+                } catch (e) {
+                    // Cannot access iframe content due to same-origin policy
+                }
+            });
+        }
+    }
+
+    // Smart detection logic to determine if keyboard should be hidden
+    shouldHideKeyboard() {
+        const now = Date.now();
+        
+        // If user recently clicked terminal area, don't hide keyboard (they want to interact)
+        if (this.lastTerminalInteraction && (now - this.lastTerminalInteraction) < 1000) {
+            return false;
+        }
+        
+        // If user recently interacted with mobile controls, hide keyboard
+        if (this.lastMobileControlInteraction && (now - this.lastMobileControlInteraction) < 300) {
+            return true;
+        }
+        
+        // If no recent interactions of either type, don't interfere
+        return false;
+    }
+
+    // Track mobile control interactions for keyboard detection
+    trackMobileControlInteraction() {
+        this.lastMobileControlInteraction = Date.now();
+    }
+
+    // Track terminal area interactions
+    trackTerminalInteraction() {
+        this.lastTerminalInteraction = Date.now();
+    }
+
 
     // Enhanced multi-level continuous scrolling with smooth acceleration
     startContinuousScroll(direction) {
@@ -1426,7 +1946,6 @@ class TTYdTerminalManager {
 
     // 清理资源
     destroy() {
-        console.log('🧹 Destroying TTYd Terminal Manager...');
         
         // 清理定时器
         if (this.refreshInterval) {
@@ -1442,6 +1961,12 @@ class TTYdTerminalManager {
         if (tabsContainer) {
             tabsContainer.innerHTML = '';
         }
+        
+        // 清理隐藏的键盘killer元素
+        if (this.hiddenKeyboardKiller && this.hiddenKeyboardKiller.parentNode) {
+            this.hiddenKeyboardKiller.parentNode.removeChild(this.hiddenKeyboardKiller);
+            this.hiddenKeyboardKiller = null;
+        }
 
         // 清理数据
         this.sessions.clear();
@@ -1452,6 +1977,61 @@ class TTYdTerminalManager {
         this.isInCopyMode = false;
         this.scrollInterval = null;
         this.scrollDirection = null;
+        this.lastMobileControlInteraction = null;
+        this.lastTerminalInteraction = null;
+        this.isKeyboardOpen = false;
+        this.initialViewportHeight = null;
+    }
+
+    // Initialize mobile controls collapsed/expanded state
+    initMobileControlsState() {
+        const controlsContainer = document.getElementById('mobile-terminal-controls');
+        if (!controlsContainer) return;
+
+        // Get saved state from localStorage (default to expanded)
+        const savedState = localStorage.getItem('mobileControlsState');
+        const isExpanded = savedState === null ? true : savedState === 'expanded';
+        
+        if (isExpanded) {
+            controlsContainer.classList.remove('collapsed');
+            controlsContainer.classList.add('expanded');
+            this.updateToggleIcon(true);
+        } else {
+            controlsContainer.classList.remove('expanded');
+            controlsContainer.classList.add('collapsed');
+            this.updateToggleIcon(false);
+        }
+    }
+
+    // Toggle mobile controls collapsed/expanded state
+    toggleMobileControls() {
+        const controlsContainer = document.getElementById('mobile-terminal-controls');
+        if (!controlsContainer) return;
+
+        const isCurrentlyExpanded = controlsContainer.classList.contains('expanded');
+        
+        if (isCurrentlyExpanded) {
+            // Collapse
+            controlsContainer.classList.remove('expanded');
+            controlsContainer.classList.add('collapsed');
+            localStorage.setItem('mobileControlsState', 'collapsed');
+            this.updateToggleIcon(false);
+        } else {
+            // Expand
+            controlsContainer.classList.remove('collapsed');
+            controlsContainer.classList.add('expanded');
+            localStorage.setItem('mobileControlsState', 'expanded');
+            this.updateToggleIcon(true);
+        }
+    }
+
+    // Update toggle icon based on state
+    updateToggleIcon(isExpanded) {
+        const toggleIcon = document.querySelector('.mobile-controls-toggle-icon');
+        if (toggleIcon) {
+            // Correct logic: collapsed shows left arrow (expand action), expanded shows right arrow (collapse action)
+            toggleIcon.textContent = isExpanded ? '»' : '«';
+        }
     }
 }
 
