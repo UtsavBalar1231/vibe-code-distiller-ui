@@ -1260,7 +1260,7 @@ class TTYdTerminalManager {
         });
     }
 
-    // Handle mobile key press for arrow keys, enter, and escape
+    // Handle mobile key press for arrow keys, enter, escape, and key combinations
     // Note: Page up/down buttons use WebSocket scrolling, not this method
     async handleMobileKeyPress(button) {
         const key = button.dataset.key;
@@ -1276,16 +1276,27 @@ class TTYdTerminalManager {
         }
         
         try {
-            console.log('📡 Sending key to API:', { sessionName: activeSession.name, key });
+            // Handle Ctrl+C with modifiers parameter
+            let requestBody;
+            if (key === 'Ctrl+C') {
+                requestBody = {
+                    sessionName: activeSession.name,
+                    key: 'c',
+                    modifiers: { ctrl: true }
+                };
+                console.log('📡 Sending Ctrl+C combination with modifiers to API:', requestBody);
+            } else {
+                requestBody = {
+                    sessionName: activeSession.name,
+                    key: key
+                };
+                console.log('📡 Sending key to API:', requestBody);
+            }
             
-            // Send key to terminal using the new API
             const response = await fetch('/api/terminal/send-key', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    sessionName: activeSession.name, 
-                    key: key 
-                })
+                body: JSON.stringify(requestBody)
             });
             
             console.log('📥 API response status:', response.status);
@@ -2018,7 +2029,8 @@ class TTYdTerminalManager {
     updateToggleIcon(isExpanded) {
         const toggleIcon = document.querySelector('.mobile-controls-toggle-icon');
         if (toggleIcon) {
-            toggleIcon.textContent = isExpanded ? '◀' : '▶';
+            // Correct logic: collapsed shows left arrow (expand action), expanded shows right arrow (collapse action)
+            toggleIcon.textContent = isExpanded ? '»' : '«';
         }
     }
 }

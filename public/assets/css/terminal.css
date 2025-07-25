@@ -1064,21 +1064,27 @@
     user-select: none !important;
     -webkit-user-select: none !important;
     -webkit-touch-callout: none !important;
-    /* Smooth transition for collapse/expand */
-    transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    /* Smooth transition for collapse/expand - include all changing properties */
+    transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                width 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                padding 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                background-color 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                backdrop-filter 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                border 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                box-shadow 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
 }
 
 /* Collapsed state - show only toggle button */
 .mobile-terminal-controls.collapsed {
     /* Position only the toggle button area */
-    width: 35px;
+    width: 28px;
     padding: 0;
     background: transparent;
     border: none;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     box-shadow: none;
-    transform: translateY(-50%) translateX(calc(100% - 35px));
+    transform: translateY(-50%) translateX(calc(100% - 28px));
 }
 
 .mobile-terminal-controls.collapsed .mobile-controls-content {
@@ -1090,7 +1096,7 @@
     left: auto;
     top: auto;
     transform: none;
-    width: 35px;
+    width: 28px;
     height: 50px;
     background: rgba(18, 18, 18, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1117,10 +1123,10 @@
 
 .mobile-terminal-controls.expanded .mobile-controls-toggle {
     position: absolute;
-    left: -35px;
+    left: -28px;
     top: 50%;
     transform: translateY(-50%);
-    width: 35px;
+    width: 28px;
     height: 50px;
     background: rgba(18, 18, 18, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1136,7 +1142,12 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                width 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                height 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                border 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                backdrop-filter 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                border-radius 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
     /* Prevent keyboard activation */
     user-select: none !important;
     -webkit-user-select: none !important;
@@ -1156,8 +1167,10 @@
 
 .mobile-controls-toggle-icon {
     color: #ffffff;
-    font-size: 14px;
-    transition: transform 0.3s ease;
+    font-size: 18px;
+    font-weight: bold;
+    transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1),
+                color 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
     user-select: none !important;
     -webkit-user-select: none !important;
 }
@@ -1244,6 +1257,13 @@
     font-weight: 600;
 }
 
+.mobile-key-btn.ctrl-c-btn {
+    background: rgba(245, 101, 101, 0.8); /* Light red - Control action */
+    border-color: rgba(245, 101, 101, 0.4);
+    font-size: 10px;
+    font-weight: 600;
+}
+
 /* Button interactions */
 .mobile-key-btn:hover {
     transform: scale(1.05);
@@ -1285,19 +1305,19 @@
     }
     
     .mobile-terminal-controls.collapsed {
-        width: 30px;
-        transform: translateY(-50%) translateX(calc(100% - 30px));
+        width: 24px;
+        transform: translateY(-50%) translateX(calc(100% - 24px));
     }
     
     .mobile-terminal-controls.collapsed .mobile-controls-toggle {
-        width: 30px;
+        width: 24px;
         height: 45px;
         border-radius: 6px;
     }
     
     .mobile-terminal-controls.expanded .mobile-controls-toggle {
-        left: -30px;
-        width: 30px;
+        left: -24px;
+        width: 24px;
         height: 45px;
         border-radius: 6px 0 0 6px;
     }
@@ -1331,19 +1351,19 @@
     }
     
     .mobile-terminal-controls.collapsed {
-        width: 38px;
-        transform: translateY(-50%) translateX(calc(100% - 38px));
+        width: 30px;
+        transform: translateY(-50%) translateX(calc(100% - 30px));
     }
     
     .mobile-terminal-controls.collapsed .mobile-controls-toggle {
-        width: 38px;
+        width: 30px;
         height: 55px;
     }
     
     .mobile-terminal-controls.expanded .mobile-controls-toggle {
-        width: 38px;
+        width: 30px;
         height: 55px;
-        left: -38px;
+        left: -30px;
     }
 }
 
