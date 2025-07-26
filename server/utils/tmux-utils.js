@@ -383,8 +383,8 @@ class TmuxUtils {
       for (const ttydClient of ttydClients) {
         try {
           // Method 1: Direct tmux command with specific client
-          await execAsync(`tmux switch-client -c ${ttydClient} -t ${sessionName} \\; send-keys End`);
-          logger.info(`Successfully switched TTYd client ${ttydClient} to ${sessionName} and scrolled to bottom`);
+          await execAsync(`tmux switch-client -c ${ttydClient} -t ${sessionName} \\; send-keys C-l`);
+          logger.info(`Successfully switched TTYd client ${ttydClient} to ${sessionName} and cleared screen`);
           success = true;
         } catch (error) {
           logger.warn(`Direct client switch failed for ${ttydClient}: ${error.message}, trying send-keys method`);
@@ -409,13 +409,13 @@ class TmuxUtils {
             // Send Enter to execute
             await execAsync(`tmux send-keys -t ${ttydClient} 'Enter'`);
             
-            // Small delay before sending End key to scroll to bottom
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Small delay before clearing screen to show fresh prompt
+            await new Promise(resolve => setTimeout(resolve, 200));
             
-            // Send End key to scroll to the bottom of the session
-            await execAsync(`tmux send-keys -t ${ttydClient} 'End'`);
+            // Clear screen to show fresh prompt and current session state
+            await execAsync(`tmux send-keys -t ${ttydClient} 'C-l'`);
             
-            logger.info(`Successfully sent switch command to TTYd client ${ttydClient} and scrolled to bottom`);
+            logger.info(`Successfully sent switch command to TTYd client ${ttydClient} and cleared screen`);
             success = true;
           } catch (sendKeysError) {
             logger.error(`Send-keys method failed for ${ttydClient}: ${sendKeysError.message}`);
