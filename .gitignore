@@ -177,3 +177,4 @@ development/
 bug_fix/.claude/settings.local.json
 .claude/settings.local.json
 CLAUDE.md
+.claude/agents/

@@ -123,6 +123,11 @@ class ClaudeCodeWebManager extends EventEmitter {
         });
         
         
+        // Documentation button
+        DOM.on('help-docs-btn', 'click', () => {
+            this.showDocumentation();
+        });
+        
         // Settings button
         DOM.on('settings-btn', 'click', () => {
             this.showSettings();
@@ -272,6 +277,127 @@ class ClaudeCodeWebManager extends EventEmitter {
         console.log('📊 System status update:', data);
     }
     
+    async showDocumentation() {
+        try {
+            const docsModal = DOM.get('docs-modal');
+            const docsContent = DOM.get('docs-content');
+            
+            if (!docsModal || !docsContent) {
+                notifications.error('Documentation modal not found');
+                return;
+            }
+            
+            // Show loading state
+            docsContent.innerHTML = `
+                <div class="loading-placeholder">
+                    <div class="loading-spinner"></div>
+                    <span>Loading documentation...</span>
+                </div>
+            `;
+            
+            // Open modal first to show loading state
+            modals.open('docs-modal');
+            
+            // Fetch documentation content
+            const response = await HTTP.get('/api/documentation');
+            
+            if (response.success) {
+                // Convert markdown to HTML (simple conversion for now)
+                const htmlContent = this.markdownToHtml(response.content);
+                
+                docsContent.innerHTML = `
+                    <div class="markdown-content">
+                        ${htmlContent}
+                    </div>
+                `;
+            } else {
+                docsContent.innerHTML = `
+                    <div class="error-message">
+                        <h3>❌ Failed to Load Documentation</h3>
+                        <p>${response.error || 'Unknown error occurred'}</p>
+                    </div>
+                `;
+            }
+            
+        } catch (error) {
+            console.error('Failed to load documentation:', error);
+            const docsContent = DOM.get('docs-content');
+            if (docsContent) {
+                docsContent.innerHTML = `
+                    <div class="error-message">
+                        <h3>❌ Error Loading Documentation</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+            notifications.error('Failed to load documentation: ' + error.message);
+        }
+    }
+
+    // Simple markdown to HTML converter
+    markdownToHtml(markdown) {
+        if (!markdown) return '';
+        
+        let html = markdown
+            // Headers
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+            // Bold
+            .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+            // Italic
+            .replace(/\*(.*)\*/gim, '<em>$1</em>')
+            // Code blocks
+            .replace(/```([^`]+)```/gim, '<pre><code>$1</code></pre>')
+            // Inline code
+            .replace(/`([^`]+)`/gim, '<code>$1</code>')
+            // Images - convert relative paths to API endpoints
+            .replace(/!\[([^\]]*)\]\(([^)]+)\)/gim, (match, alt, src) => {
+                // If it's a relative path (no http/https), convert to API endpoint
+                if (!src.startsWith('http://') && !src.startsWith('https://')) {
+                    src = `/api/documentation/images/${src}`;
+                }
+                return `<img src="${src}" alt="${alt}" class="markdown-image">`;
+            })
+            // Links
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank">$1</a>')
+            // Tables - enhanced table support
+            .replace(/^\|(.+)\|$/gim, (match, content) => {
+                const cells = content.split('|').map(cell => cell.trim());
+                const cellTags = cells.map(cell => `<td>${cell}</td>`).join('');
+                return `<tr>${cellTags}</tr>`;
+            })
+            // Lists
+            .replace(/^\* (.*$)/gim, '<li>$1</li>')
+            .replace(/^\- (.*$)/gim, '<li>$1</li>')
+            // Line breaks
+            .replace(/\n\n/gim, '</p><p>')
+            .replace(/\n/gim, '<br>');
+        
+        // Wrap tables in table tags
+        html = html.replace(/(<tr>.*<\/tr>)/gis, '<table>$1</table>');
+        
+        // Wrap lists in ul tags
+        html = html.replace(/(<li>.*<\/li>)/gis, '<ul>$1</ul>');
+        
+        // Wrap content in paragraphs
+        html = '<p>' + html + '</p>';
+        
+        // Clean up empty paragraphs and fix nested elements
+        html = html.replace(/<p><\/p>/gim, '')
+                  .replace(/<p>(<h[1-6]>)/gim, '$1')
+                  .replace(/(<\/h[1-6]>)<\/p>/gim, '$1')
+                  .replace(/<p>(<pre>)/gim, '$1')
+                  .replace(/(<\/pre>)<\/p>/gim, '$1')
+                  .replace(/<p>(<ul>)/gim, '$1')
+                  .replace(/(<\/ul>)<\/p>/gim, '$1')
+                  .replace(/<p>(<table>)/gim, '$1')
+                  .replace(/(<\/table>)<\/p>/gim, '$1')
+                  .replace(/<p>(<img[^>]*>)<\/p>/gim, '$1');
+        
+        return html;
+    }
+
     async showSettings(defaultTab = 'general') {
         const settingsModal = DOM.get('settings-modal');
         const settingsContent = settingsModal?.querySelector('.settings-content');
