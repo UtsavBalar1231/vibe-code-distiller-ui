@@ -381,20 +381,23 @@ class TTYdTerminalManager {
         
         tab.innerHTML = `
             <span class="tab-title">${displayName}</span>
-            <button class="tab-close" title="Close Terminal">×</button>
+            <button class="close-btn" title="Close Terminal">×</button>
         `;
 
         // 添加点击事件 - 切换session
         tab.addEventListener('click', (e) => {
-            if (!e.target.matches('.tab-close')) {
+            if (!e.target.matches('.close-btn')) {
+                // Set flag to prevent project auto-selection when user manually clicks tab
+                this._skipProjectAutoSelect = true;
                 this.switchToSession(session.name);
+                this._skipProjectAutoSelect = false;
             }
         });
 
         // 添加关闭事件
-        tab.querySelector('.tab-close').addEventListener('click', (e) => {
+        tab.querySelector('.close-btn').addEventListener('click', (e) => {
             e.stopPropagation();
-            this.closeSession(session.name);
+            this.confirmCloseSession(session.name);
         });
 
         tabsContainer.appendChild(tab);
@@ -486,6 +489,29 @@ class TTYdTerminalManager {
         }
     }
 
+    // Confirm before closing session to prevent accidental deletion
+    confirmCloseSession(sessionName) {
+        if (!this.sessions.has(sessionName)) {
+            console.error('❌ Session not found:', sessionName);
+            return;
+        }
+
+        const session = this.sessions.get(sessionName);
+        const displayName = this.getDisplayName(sessionName);
+        
+        // Show confirmation dialog
+        const confirmed = confirm(
+            `Are you sure you want to close terminal "${displayName}"?\n\n` +
+            `This will permanently delete the terminal session and cannot be undone.`
+        );
+        
+        if (confirmed) {
+            console.log('✅ User confirmed closing session:', sessionName);
+            this.closeSession(sessionName);
+        } else {
+            console.log('❌ User cancelled closing session:', sessionName);
+        }
+    }
 
     closeSession(sessionName) {
         if (!this.sessions.has(sessionName)) {

@@ -723,6 +723,14 @@ body {
     white-space: nowrap;
 }
 
+.terminal-tab .tab-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: var(--spacing-xs);
+}
+
 .terminal-tab:hover {
     background-color: var(--bg-hover);
     color: var(--text-primary);
@@ -943,6 +951,10 @@ body {
         min-width: 100px;
         max-width: 150px;
         flex-shrink: 0;
+    }
+    
+    .terminal-tab .tab-title {
+        margin-right: calc(var(--spacing-xs) / 2);
     }
     
     /* Enhanced mobile scrollbar visibility */
