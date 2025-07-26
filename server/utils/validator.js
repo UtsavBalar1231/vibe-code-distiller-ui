@@ -22,13 +22,6 @@ const projectSchemas = {
       .optional()
       .allow(''),
     
-    type: Joi.string()
-      .valid('web', 'api', 'cli', 'mobile', 'desktop', 'data', 'ai', 'other')
-      .optional(),
-    
-    language: Joi.string()
-      .valid('javascript', 'typescript', 'python', 'java', 'cpp', 'go', 'rust', 'php', 'ruby', 'other')
-      .optional(),
     
     framework: Joi.string()
       .max(50)

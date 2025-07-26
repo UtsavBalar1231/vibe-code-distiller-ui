@@ -381,20 +381,23 @@ class TTYdTerminalManager {
         
         tab.innerHTML = `
             <span class="tab-title">${displayName}</span>
-            <button class="tab-close" title="Close Terminal">×</button>
+            <button class="close-btn" title="Close Terminal">×</button>
         `;
 
         // 添加点击事件 - 切换session
         tab.addEventListener('click', (e) => {
-            if (!e.target.matches('.tab-close')) {
+            if (!e.target.matches('.close-btn')) {
+                // Set flag to prevent project auto-selection when user manually clicks tab
+                this._skipProjectAutoSelect = true;
                 this.switchToSession(session.name);
+                this._skipProjectAutoSelect = false;
             }
         });
 
         // 添加关闭事件
-        tab.querySelector('.tab-close').addEventListener('click', (e) => {
+        tab.querySelector('.close-btn').addEventListener('click', (e) => {
             e.stopPropagation();
-            this.closeSession(session.name);
+            this.confirmCloseSession(session.name);
         });
 
         tabsContainer.appendChild(tab);
@@ -486,6 +489,29 @@ class TTYdTerminalManager {
         }
     }
 
+    // Confirm before closing session to prevent accidental deletion
+    confirmCloseSession(sessionName) {
+        if (!this.sessions.has(sessionName)) {
+            console.error('❌ Session not found:', sessionName);
+            return;
+        }
+
+        const session = this.sessions.get(sessionName);
+        const displayName = this.getDisplayName(sessionName);
+        
+        // Show confirmation dialog
+        const confirmed = confirm(
+            `Are you sure you want to close terminal "${displayName}"?\n\n` +
+            `This will permanently delete the terminal session and cannot be undone.`
+        );
+        
+        if (confirmed) {
+            console.log('✅ User confirmed closing session:', sessionName);
+            this.closeSession(sessionName);
+        } else {
+            console.log('❌ User cancelled closing session:', sessionName);
+        }
+    }
 
     closeSession(sessionName) {
         if (!this.sessions.has(sessionName)) {
@@ -505,13 +531,47 @@ class TTYdTerminalManager {
 
     updateTabStyles() {
         const tabs = document.querySelectorAll('.terminal-tab');
+        let activeTab = null;
+        
         tabs.forEach(tab => {
             if (tab.dataset.sessionName === this.activeSessionName) {
                 tab.classList.add('active');
+                activeTab = tab;
             } else {
                 tab.classList.remove('active');
             }
         });
+        
+        // Auto-scroll to active tab for better mobile UX
+        if (activeTab) {
+            this.scrollToActiveTab(activeTab);
+        }
+    }
+    
+    // Automatically scroll the tabs container to make the active tab visible
+    scrollToActiveTab(activeTab) {
+        const tabsContainer = document.getElementById('terminal-tabs');
+        if (!tabsContainer || !activeTab) return;
+        
+        // Calculate scroll position to center the active tab
+        const containerRect = tabsContainer.getBoundingClientRect();
+        const tabRect = activeTab.getBoundingClientRect();
+        
+        // Calculate the position of the tab relative to the container
+        const tabLeft = tabRect.left - containerRect.left + tabsContainer.scrollLeft;
+        const tabWidth = tabRect.width;
+        const containerWidth = containerRect.width;
+        
+        // Calculate scroll position to center the tab
+        const targetScrollLeft = tabLeft - (containerWidth / 2) + (tabWidth / 2);
+        
+        // Smooth scroll to the calculated position
+        tabsContainer.scrollTo({
+            left: Math.max(0, targetScrollLeft),
+            behavior: 'smooth'
+        });
+        
+        console.log('📜 Auto-scrolled to active tab:', activeTab.dataset.sessionName);
     }
 
     // 选择并激活指定的session tab (被project-manager.js调用)

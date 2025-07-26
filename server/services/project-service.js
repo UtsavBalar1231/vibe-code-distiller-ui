@@ -94,8 +94,6 @@ class ProjectService {
       let config = {
         name: projectId,
         description: '',
-        type: 'other',
-        language: 'other',
         framework: '',
         settings: {}
       };
@@ -110,16 +108,14 @@ class ProjectService {
         }
       }
 
-      // Detect project type and language from files
-      const detectedInfo = await this.detectProjectInfo(projectPath);
+      // Detect framework from files
+      const detectedFramework = await this.detectFramework(projectPath);
       
       const project = {
         id: projectId,
         name: config.name || projectId,
-        description: config.description || detectedInfo.description,
-        type: config.type || detectedInfo.type,
-        language: config.language || detectedInfo.language,
-        framework: config.framework || detectedInfo.framework,
+        description: config.description || '',
+        framework: config.framework || detectedFramework,
         path: projectPath,
         createdAt: stats.birthtime || stats.ctime,
         updatedAt: stats.mtime,
@@ -143,42 +139,25 @@ class ProjectService {
     }
   }
 
-  async detectProjectInfo(projectPath) {
-    const info = {
-      type: 'other',
-      language: 'other',
-      framework: '',
-      description: ''
-    };
+  async detectFramework(projectPath) {
+    let framework = '';
 
     try {
-      // Check for common configuration files
       const files = await fs.readdir(projectPath);
       
       // Package.json (Node.js/JavaScript)
       if (files.includes('package.json')) {
         try {
           const packageJson = await fs.readJson(path.join(projectPath, 'package.json'));
-          info.language = 'javascript';
-          info.description = packageJson.description || '';
           
           // Detect framework from dependencies
           const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
-          if (deps.react) info.framework = 'React';
-          else if (deps.vue) info.framework = 'Vue';
-          else if (deps.angular) info.framework = 'Angular';
-          else if (deps.express) info.framework = 'Express';
-          else if (deps.next) info.framework = 'Next.js';
-          else if (deps.nuxt) info.framework = 'Nuxt.js';
-          
-          // Detect project type
-          if (deps.react || deps.vue || deps.angular || deps.next || deps.nuxt) {
-            info.type = 'web';
-          } else if (deps.express || deps.fastify || deps.koa) {
-            info.type = 'api';
-          } else if (packageJson.bin) {
-            info.type = 'cli';
-          }
+          if (deps.react) framework = 'React';
+          else if (deps.vue) framework = 'Vue';
+          else if (deps.angular) framework = 'Angular';
+          else if (deps.express) framework = 'Express';
+          else if (deps.next) framework = 'Next.js';
+          else if (deps.nuxt) framework = 'Nuxt.js';
         } catch (e) {
           logger.warn('Failed to parse package.json:', { projectPath });
         }
@@ -186,49 +165,21 @@ class ProjectService {
       
       // Python projects
       else if (files.includes('requirements.txt') || files.includes('pyproject.toml') || files.includes('setup.py')) {
-        info.language = 'python';
-        if (files.includes('manage.py')) info.framework = 'Django';
-        else if (files.includes('app.py') || files.includes('main.py')) info.framework = 'Flask';
-      }
-      
-      // Go projects
-      else if (files.includes('go.mod')) {
-        info.language = 'go';
-        info.type = 'api';
-      }
-      
-      // Rust projects
-      else if (files.includes('Cargo.toml')) {
-        info.language = 'rust';
+        if (files.includes('manage.py')) framework = 'Django';
+        else if (files.includes('app.py') || files.includes('main.py')) framework = 'Flask';
       }
       
       // Java projects
       else if (files.includes('pom.xml') || files.includes('build.gradle')) {
-        info.language = 'java';
-        if (files.includes('pom.xml')) info.framework = 'Maven';
-        else info.framework = 'Gradle';
-      }
-      
-      // TypeScript
-      if (files.includes('tsconfig.json')) {
-        info.language = 'typescript';
-      }
-      
-      // Check for common web files
-      if (files.includes('index.html') || files.includes('index.htm')) {
-        info.type = 'web';
-      }
-      
-      // Check for Dockerfile
-      if (files.includes('Dockerfile')) {
-        info.type = info.type === 'other' ? 'api' : info.type;
+        if (files.includes('pom.xml')) framework = 'Maven';
+        else framework = 'Gradle';
       }
 
     } catch (error) {
-      logger.warn('Failed to detect project info:', { projectPath, error: error.message });
+      logger.warn('Failed to detect framework:', { projectPath, error: error.message });
     }
 
-    return info;
+    return framework;
   }
 
   async getClaudeConfig(projectPath) {
