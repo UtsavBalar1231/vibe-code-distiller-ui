@@ -505,13 +505,47 @@ class TTYdTerminalManager {
 
     updateTabStyles() {
         const tabs = document.querySelectorAll('.terminal-tab');
+        let activeTab = null;
+        
         tabs.forEach(tab => {
             if (tab.dataset.sessionName === this.activeSessionName) {
                 tab.classList.add('active');
+                activeTab = tab;
             } else {
                 tab.classList.remove('active');
             }
         });
+        
+        // Auto-scroll to active tab for better mobile UX
+        if (activeTab) {
+            this.scrollToActiveTab(activeTab);
+        }
+    }
+    
+    // Automatically scroll the tabs container to make the active tab visible
+    scrollToActiveTab(activeTab) {
+        const tabsContainer = document.getElementById('terminal-tabs');
+        if (!tabsContainer || !activeTab) return;
+        
+        // Calculate scroll position to center the active tab
+        const containerRect = tabsContainer.getBoundingClientRect();
+        const tabRect = activeTab.getBoundingClientRect();
+        
+        // Calculate the position of the tab relative to the container
+        const tabLeft = tabRect.left - containerRect.left + tabsContainer.scrollLeft;
+        const tabWidth = tabRect.width;
+        const containerWidth = containerRect.width;
+        
+        // Calculate scroll position to center the tab
+        const targetScrollLeft = tabLeft - (containerWidth / 2) + (tabWidth / 2);
+        
+        // Smooth scroll to the calculated position
+        tabsContainer.scrollTo({
+            left: Math.max(0, targetScrollLeft),
+            behavior: 'smooth'
+        });
+        
+        console.log('📜 Auto-scrolled to active tab:', activeTab.dataset.sessionName);
     }
 
     // 选择并激活指定的session tab (被project-manager.js调用)

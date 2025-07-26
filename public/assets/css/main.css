@@ -693,6 +693,15 @@ body {
     align-items: center;
     gap: 2px;
     flex: 1;
+    /* Mobile terminal tabs horizontal scrolling support */
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    /* Hide scrollbar on desktop while keeping functionality */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
 }
 
 .terminal-tab {
@@ -707,7 +716,11 @@ body {
     cursor: pointer;
     font-size: var(--font-size-xs);
     transition: all var(--transition-fast);
+    /* Prevent tab shrinking and ensure minimum readable width */
+    min-width: 120px;
     max-width: 200px;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .terminal-tab:hover {
@@ -741,6 +754,26 @@ body {
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
+}
+
+/* Terminal tabs scrollbar styling for Webkit browsers */
+.terminal-tabs::-webkit-scrollbar {
+    height: 4px;
+}
+
+.terminal-tabs::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.terminal-tabs::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 2px;
+    opacity: 0.6;
+}
+
+.terminal-tabs::-webkit-scrollbar-thumb:hover {
+    background: var(--border-hover);
+    opacity: 0.8;
 }
 
 .terminal-content {
@@ -906,6 +939,20 @@ body {
     .terminal-tab {
         padding: var(--spacing-xs) var(--spacing-xs);
         font-size: var(--font-size-xs);
+        /* Mobile horizontal scrolling optimizations */
+        min-width: 100px;
+        max-width: 150px;
+        flex-shrink: 0;
+    }
+    
+    /* Enhanced mobile scrollbar visibility */
+    .terminal-tabs::-webkit-scrollbar {
+        height: 6px;
+    }
+    
+    .terminal-tabs::-webkit-scrollbar-thumb {
+        background: var(--accent-primary);
+        opacity: 0.8;
     }
     
     /* Larger touch targets */
