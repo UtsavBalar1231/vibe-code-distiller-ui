@@ -135,23 +135,11 @@ class ProjectManager extends EventEmitter {
             className: 'project-meta'
         });
         
-        const projectType = DOM.create('span', {
-            className: 'project-type',
-            text: project.type
-        });
-        
-        const projectLanguage = DOM.create('span', {
-            className: 'project-language',
-            text: project.language
-        });
-        
         const projectDate = DOM.create('span', {
             className: 'project-date',
             text: Utils.formatDate(project.updatedAt)
         });
         
-        projectMeta.appendChild(projectType);
-        projectMeta.appendChild(projectLanguage);
         projectMeta.appendChild(projectDate);
         
         projectContent.appendChild(projectName);
@@ -345,14 +333,6 @@ class ProjectManager extends EventEmitter {
                         <div class="detail-item">
                             <span class="label">Name:</span>
                             <span class="value">${project.name}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="label">Type:</span>
-                            <span class="value">${project.type}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="label">Language:</span>
-                            <span class="value">${project.language}</span>
                         </div>
                         ${project.framework ? `
                         <div class="detail-item">
@@ -635,8 +615,6 @@ class ProjectManager extends EventEmitter {
             const projectData = {
                 name: newName,
                 description: project.description,
-                type: project.type,
-                language: project.language,
                 framework: project.framework
             };
             
