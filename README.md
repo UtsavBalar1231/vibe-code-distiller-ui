@@ -1,4 +1,4 @@
-# Claude Code Web Manager
+# vibe-code-distiller-ui
 
 A personal web interface for managing Claude Code CLI on your Raspberry Pi. This lightweight application provides a browser-based terminal and project management interface, making it easy to interact with Claude Code from any device on your local network.
 
