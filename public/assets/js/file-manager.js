@@ -575,10 +575,47 @@ class FileManager {
             });
         });
         
-        // Position and show menu
+        // Position and show menu with boundary detection
         menu.style.display = 'block';
-        menu.style.left = event.pageX + 'px';
-        menu.style.top = event.pageY + 'px';
+        
+        // Get viewport dimensions
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Get menu dimensions - temporarily show it to measure
+        menu.style.visibility = 'hidden';
+        menu.style.opacity = '0';
+        menu.classList.add('active');
+        
+        const menuRect = menu.getBoundingClientRect();
+        const menuWidth = menuRect.width;
+        const menuHeight = menuRect.height;
+        
+        // Reset menu visibility
+        menu.style.visibility = 'visible';
+        menu.style.opacity = '';
+        menu.classList.remove('active');
+        
+        // Calculate optimal position
+        let leftPos = event.pageX;
+        let topPos = event.pageY;
+        
+        // Check right boundary - if menu would overflow, position it to the left of cursor
+        if (leftPos + menuWidth > viewportWidth) {
+            leftPos = Math.max(10, viewportWidth - menuWidth - 10);
+        }
+        
+        // Check bottom boundary - if menu would overflow, position it above cursor
+        if (topPos + menuHeight > viewportHeight) {
+            topPos = Math.max(10, event.pageY - menuHeight);
+        }
+        
+        // Ensure menu stays within viewport bounds
+        leftPos = Math.max(10, Math.min(leftPos, viewportWidth - menuWidth - 10));
+        topPos = Math.max(10, Math.min(topPos, viewportHeight - menuHeight - 10));
+        
+        menu.style.left = leftPos + 'px';
+        menu.style.top = topPos + 'px';
         menu.classList.add('active');
         
         // Hide menu when clicking outside
