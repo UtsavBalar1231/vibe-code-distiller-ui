@@ -4,6 +4,7 @@ const router = express.Router();
 const logger = require('../utils/logger');
 const { SUCCESS_MESSAGES } = require('../utils/constants');
 const path = require('path');
+const fs = require('fs').promises;
 const TmuxUtils = require('../utils/tmux-utils');
 const { exec } = require('child_process');
 const { promisify } = require('util');
@@ -689,6 +690,90 @@ router.post('/terminal/send-key', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to send key to terminal',
+      details: error.message
+    });
+  }
+});
+
+// Get documentation markdown content
+router.get('/documentation', async (req, res) => {
+  try {
+    // Define the markdown file to serve - DISTILLER.md from docs directory
+    const markdownFile = 'DISTILLER.md';
+    const filePath = path.join(__dirname, '../../docs/', markdownFile);
+    
+    // Check if file exists
+    try {
+      await fs.access(filePath);
+    } catch (error) {
+      return res.status(404).json({
+        success: false,
+        error: 'Documentation file not found',
+        details: `${markdownFile} does not exist`
+      });
+    }
+    
+    // Read the markdown content
+    const content = await fs.readFile(filePath, 'utf8');
+    
+    res.json({
+      success: true,
+      content,
+      filename: markdownFile,
+      path: filePath,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('Error reading documentation file:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to read documentation',
+      details: error.message
+    });
+  }
+});
+
+// Serve documentation images
+router.get('/documentation/images/:filename', async (req, res) => {
+  try {
+    const { filename } = req.params;
+    
+    // Security: Only allow specific image files to prevent directory traversal
+    const allowedImages = ['pin-out-info.png'];
+    if (!allowedImages.includes(filename)) {
+      return res.status(404).json({
+        success: false,
+        error: 'Image not found',
+        details: 'The requested image is not available'
+      });
+    }
+    
+    const imagePath = path.join(__dirname, '../../docs/', filename);
+    
+    // Check if file exists
+    try {
+      await fs.access(imagePath);
+    } catch (error) {
+      return res.status(404).json({
+        success: false,
+        error: 'Image file not found',
+        details: `${filename} does not exist`
+      });
+    }
+    
+    // Set appropriate headers for PNG images
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+    
+    // Send the file
+    res.sendFile(path.resolve(imagePath));
+    
+  } catch (error) {
+    logger.error('Error serving documentation image:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to serve image',
       details: error.message
     });
   }
