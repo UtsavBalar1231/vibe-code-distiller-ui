@@ -14,13 +14,14 @@ class FileManager {
 
     init() {
         this.setupEventListeners();
+        this.setupFileInput();
     }
 
     setupEventListeners() {
-        // Upload files button (disabled for filesystem mode)
+        // Upload files button
         const uploadBtn = document.getElementById('upload-files-btn');
         if (uploadBtn) {
-            uploadBtn.style.display = 'none'; // Hide upload in filesystem mode
+            uploadBtn.addEventListener('click', () => this.handleUploadClick());
         }
 
         // Create folder button (disabled for filesystem mode)
@@ -563,6 +564,95 @@ class FileManager {
         const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    setupFileInput() {
+        const fileInput = document.getElementById('file-input');
+        if (fileInput) {
+            fileInput.addEventListener('change', (event) => {
+                const files = Array.from(event.target.files);
+                if (files.length > 0) {
+                    this.uploadFiles(files);
+                }
+                // Clear the input
+                event.target.value = '';
+            });
+        }
+    }
+
+    handleUploadClick() {
+        const fileInput = document.getElementById('file-input');
+        if (fileInput) {
+            fileInput.click();
+        }
+    }
+
+    async uploadFiles(files) {
+        try {
+            console.log('🚀 Starting upload to path:', this.currentPath);
+            
+            const formData = new FormData();
+            
+            // Add files to FormData
+            files.forEach(file => {
+                formData.append('files', file);
+            });
+            
+            // Add target path as URL parameter
+            const uploadUrl = `/api/filesystem/upload?targetPath=${encodeURIComponent(this.currentPath)}`;
+            
+            const response = await fetch(uploadUrl, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                const successCount = data.files.filter(f => f.success).length;
+                console.log(`✅ Successfully uploaded ${successCount} file(s) to ${this.currentPath}`);
+                
+                // Show user notification
+                this.showUploadNotification(`Successfully uploaded ${successCount} file(s) to current directory`, 'success');
+                
+                this.loadFiles(); // Refresh file list
+            } else {
+                console.error('❌ Upload failed:', data.message || 'Failed to upload files');
+                this.showUploadNotification(data.message || 'Failed to upload files', 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error uploading files:', error);
+            this.showUploadNotification('Error uploading files', 'error');
+        }
+    }
+
+    showUploadNotification(message, type = 'info') {
+        // Use the existing notification system instead of creating custom notifications
+        if (window.notifications) {
+            const options = {
+                title: 'File Upload',
+                duration: 5000
+            };
+            
+            switch (type) {
+                case 'success':
+                    window.notifications.success(message, options);
+                    break;
+                case 'error':
+                    window.notifications.error(message, options);
+                    break;
+                case 'warning':
+                    window.notifications.warning(message, options);
+                    break;
+                default:
+                    window.notifications.info(message, options);
+                    break;
+            }
+        } else {
+            // Fallback to console if notification system is not available
+            console.log(`${type.toUpperCase()}: ${message}`);
+        }
     }
 }
 
