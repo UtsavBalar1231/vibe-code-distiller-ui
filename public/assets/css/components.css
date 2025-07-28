@@ -494,10 +494,10 @@ select {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: 8px 12px;
     color: var(--text-primary);
     cursor: pointer;
-    font-size: var(--font-size-sm);
+    font-size: 13px;
     transition: background-color var(--transition-fast);
     border: none;
     background: none;
@@ -1082,7 +1082,7 @@ kbd {
     }
     
     .context-menu-item {
-        padding: var(--spacing-md);
+        padding: 12px;
         min-height: 44px;
     }
     
@@ -1097,6 +1097,9 @@ kbd {
 /* ===== FILE BROWSER PANEL ===== */
 .file-browser {
     min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 .file-actions {
@@ -1108,12 +1111,13 @@ kbd {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: var(--spacing-xs);
+    gap: 2px;
     padding: var(--spacing-xs);
     background-color: var(--bg-secondary);
     border-radius: var(--border-radius-sm);
     margin-bottom: var(--spacing-sm);
     font-size: var(--font-size-sm);
+    flex-shrink: 0;
 }
 
 .breadcrumb-item {
@@ -1121,7 +1125,7 @@ kbd {
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
-    padding: 2px 4px;
+    padding: 1px 2px;
     border-radius: var(--border-radius-xs);
     transition: all var(--transition-fast);
 }
@@ -1145,6 +1149,9 @@ kbd {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
 }
 
 .file-item {
@@ -1181,9 +1188,36 @@ kbd {
     font-style: italic;
 }
 
+/* Parent directory special styling */
+.file-info.parent-directory {
+    background: linear-gradient(135deg, rgba(64, 153, 255, 0.1) 0%, rgba(100, 181, 246, 0.05) 100%);
+    border: 1px solid rgba(64, 153, 255, 0.2);
+    border-radius: var(--border-radius-sm);
+    padding: var(--spacing-xs);
+    margin: -2px 0;
+}
+
+.file-info.parent-directory .file-name {
+    color: #64b5f6;
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+}
+
+.file-info.parent-directory:hover {
+    background: linear-gradient(135deg, rgba(64, 153, 255, 0.15) 0%, rgba(100, 181, 246, 0.08) 100%);
+    border-color: rgba(64, 153, 255, 0.3);
+}
+
+.file-item:has(.parent-directory):hover {
+    background-color: transparent;
+    border-color: transparent;
+}
+
 
 .file-name {
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

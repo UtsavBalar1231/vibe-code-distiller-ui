@@ -460,6 +460,17 @@ body {
     text-overflow: ellipsis;
 }
 
+.project-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.project-date {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    font-weight: var(--font-weight-normal);
+}
 
 .project-options-container {
     position: relative;
@@ -524,7 +535,7 @@ body {
 .project-options-dropdown .dropdown-item {
     display: flex;
     align-items: center;
-    padding: 10px 16px;
+    padding: 8px 12px;
     cursor: pointer;
     transition: background-color var(--transition-fast);
     border-bottom: 1px solid var(--border-subtle);
@@ -544,8 +555,8 @@ body {
 }
 
 .project-options-dropdown .dropdown-item .text {
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 13px;
+    font-weight: 400;
 }
 
 

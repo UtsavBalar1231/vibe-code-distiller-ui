@@ -341,13 +341,8 @@ class ImageManager {
     }
 
     showNotification(message, type = 'info') {
-        // Use the app's notification system if available
-        if (window.NotificationManager) {
-            window.NotificationManager.show(message, type);
-        } else {
-            // Fallback to console
-            console.log(`[${type.toUpperCase()}] ${message}`);
-        }
+        // Only log to console, no UI notifications
+        console.log(`[${type.toUpperCase()}] ${message}`);
     }
 }
 

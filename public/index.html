@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>🔧 Claude Code Web Manager</title>
+    <title>vibe-code-distiller</title>
     
     <!-- CSS Files -->
     <link rel="stylesheet" href="/assets/css/main.css">
@@ -17,16 +17,23 @@
     <script src="/assets/libs/socket.io.min.js"></script>
     
     <!-- Icons and Metadata -->
-    <link rel="icon" href="/assets/icons/favicon.ico">
+    <link rel="icon" href="/assets/icons/favicon.ico" sizes="32x32">
+    <link rel="icon" href="/assets/icons/favicon-16x16.png" sizes="16x16" type="image/png">
+    <link rel="icon" href="/assets/icons/favicon-32x32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/assets/icons/site.webmanifest">
     <meta name="description" content="Professional web interface for managing Claude Code CLI projects on Raspberry Pi">
     <meta name="theme-color" content="#1e1e1e">
+    <meta name="msapplication-TileColor" content="#1e1e1e">
+    <meta name="apple-mobile-web-app-title" content="vibe-code-distiller">
+    <meta name="application-name" content="vibe-code-distiller">
 </head>
 <body class="theme-dark">
     <!-- Loading Screen -->
     <div id="loading-screen" class="loading-screen">
         <div class="loading-content">
             <div class="loading-spinner"></div>
-            <h2>🔧 Claude Code Web Manager</h2>
+            <h2>vibe-code-distiller</h2>
             <p>Initializing your development environment...</p>
         </div>
     </div>
@@ -40,8 +47,8 @@
                     <span class="icon">☰</span>
                 </button>
                 <h1 class="app-title">
-                    <span class="icon">🔧</span>
-                    <span class="title-text">Claude Code Manager</span>
+                    <img src="/assets/icons/favicon-32x32.png" alt="icon" style="width: 24px; height: 24px;" class="icon">
+                    <span class="title-text">vibe-code-distiller</span>
                 </h1>
                 <div class="breadcrumb" id="breadcrumb">
                     <span class="breadcrumb-item active">Dashboard</span>
@@ -162,7 +169,7 @@
                         <!-- Welcome Screen -->
                         <div class="welcome-screen" id="welcome-screen">
                             <div class="welcome-content">
-                                <h2>Welcome to Claude Code Web Manager</h2>
+                                <h2>Welcome to vibe-code-distiller</h2>
                                 <p>Create a new terminal session to get started with Claude Code CLI.</p>
                                 <div class="welcome-actions">
                                     <button class="btn btn-primary" id="welcome-new-terminal">Create New Terminal</button>
@@ -508,6 +515,7 @@
 
     <!-- JavaScript Files -->
     <script src="/assets/js/utils.js"></script>
+    <script src="/assets/js/dropdown-manager.js"></script>
     <script src="/assets/js/socket-client.js"></script>
     <script src="/assets/js/terminal-ttyd.js"></script>
     <script src="/assets/js/project-manager.js"></script>

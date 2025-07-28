@@ -87,7 +87,7 @@ class ProjectManager extends EventEmitter {
             }
         } catch (error) {
             console.error('Failed to load projects:', error);
-            notifications.error('Failed to load projects: ' + error.message);
+            console.error('Failed to load projects: ' + error.message);
         }
     }
     
@@ -180,8 +180,14 @@ class ProjectManager extends EventEmitter {
             } else if (action === 'download') {
                 this.downloadProject(project.id);
             }
-            // Hide dropdown after action
-            optionsDropdown.style.display = 'none';
+            // Hide dropdown after action using dropdown manager
+            const dropdownId = `project-options-${project.id}`;
+            if (window.dropdownManager) {
+                window.dropdownManager.hide(dropdownId);
+            } else {
+                // Fallback
+                optionsDropdown.style.display = 'none';
+            }
         });
         
         // Create New Terminal button
@@ -288,7 +294,7 @@ class ProjectManager extends EventEmitter {
             
         } catch (error) {
             console.error('Failed to select project:', error);
-            notifications.error('Failed to select project: ' + error.message);
+            console.error('Failed to select project: ' + error.message);
         }
     }
     
@@ -446,7 +452,7 @@ class ProjectManager extends EventEmitter {
             modal.addEventListener('click', handleBackdropClick);
         } else {
             console.error('Project modal element not found');
-            notifications.error('Failed to open project creation dialog');
+            console.error('Failed to open project creation dialog');
         }
     }
     
@@ -463,7 +469,7 @@ class ProjectManager extends EventEmitter {
     }
     
     showImportProjectModal() {
-        notifications.info('Import project functionality coming soon!');
+        console.log('Import project functionality coming soon!');
     }
     
     async handleProjectFormSubmit(form) {
@@ -483,7 +489,7 @@ class ProjectManager extends EventEmitter {
             const response = await HTTP.post('/api/projects', projectData);
             
             if (response.success) {
-                notifications.success('Project created successfully!');
+                console.log('Project created successfully!');
                 
                 // Always use our custom close method since we're using direct DOM manipulation
                 this.closeProjectModal();
@@ -504,9 +510,9 @@ class ProjectManager extends EventEmitter {
             
             // Show specific error message for conflict
             if (error.message.includes('409')) {
-                notifications.error('Project name already exists. Please choose a different name.');
+                console.error('Project name already exists. Please choose a different name.');
             } else {
-                notifications.error('Failed to create project: ' + error.message);
+                console.error('Failed to create project: ' + error.message);
             }
         } finally {
             // Always restore button state
@@ -576,16 +582,16 @@ class ProjectManager extends EventEmitter {
     async startClaude(projectId) {
         try {
             if (!socket.isConnected()) {
-                notifications.error('Not connected to server');
+                console.error('Not connected to server');
                 return;
             }
             
-            notifications.info('Starting Claude session...');
+            console.log('Starting Claude session...');
             socket.startClaude(projectId);
             
         } catch (error) {
             console.error('Failed to start Claude:', error);
-            notifications.error('Failed to start Claude: ' + error.message);
+            console.error('Failed to start Claude: ' + error.message);
         }
     }
     
@@ -596,12 +602,12 @@ class ProjectManager extends EventEmitter {
             
         } catch (error) {
             console.error('Failed to open terminal:', error);
-            notifications.error('Failed to open terminal: ' + error.message);
+            console.error('Failed to open terminal: ' + error.message);
         }
     }
     
     showProjectSettings(projectId) {
-        notifications.info('Project settings coming soon!');
+        console.log('Project settings coming soon!');
     }
     
     async duplicateProject(projectId) {
@@ -621,14 +627,14 @@ class ProjectManager extends EventEmitter {
             const response = await HTTP.post('/api/projects', projectData);
             
             if (response.success) {
-                notifications.success('Project duplicated successfully!');
+                console.log('Project duplicated successfully!');
                 this.projects.set(response.project.id, response.project);
                 this.renderProjectList();
             }
             
         } catch (error) {
             console.error('Failed to duplicate project:', error);
-            notifications.error('Failed to duplicate project: ' + error.message);
+            console.error('Failed to duplicate project: ' + error.message);
         }
     }
     
@@ -657,43 +663,43 @@ class ProjectManager extends EventEmitter {
             // Refresh project list
             this.renderProjectList();
             
-            notifications.success('Project deleted successfully');
+            console.log('Project deleted successfully');
             this.emit('project_deleted', projectId);
             
         } catch (error) {
             console.error('Failed to delete project:', error);
-            notifications.error('Failed to delete project: ' + error.message);
+            console.error('Failed to delete project: ' + error.message);
         }
     }
     
     toggleProjectOptions(event, project, dropdown) {
-        // Hide all other open dropdowns
-        document.querySelectorAll('.project-options-dropdown').forEach(d => {
-            if (d !== dropdown) d.style.display = 'none';
-        });
+        // Generate unique dropdown ID for this project
+        const dropdownId = `project-options-${project.id}`;
+        const triggerButton = event.target.closest('.project-options-btn');
         
-        // Toggle current dropdown
-        const isVisible = dropdown.style.display === 'block';
-        dropdown.style.display = isVisible ? 'none' : 'block';
-        
-        // Position dropdown relative to button
-        if (!isVisible) {
-            const rect = event.target.getBoundingClientRect();
-            dropdown.style.position = 'absolute';
-            dropdown.style.top = '100%';
-            dropdown.style.right = '0';
-            dropdown.style.zIndex = '1000';
+        // Register dropdown with dropdown manager
+        if (window.dropdownManager) {
+            window.dropdownManager.register(dropdownId, dropdown, triggerButton);
         }
         
-        // Close dropdown when clicking outside
-        if (!isVisible) {
-            const closeDropdown = (e) => {
-                if (!dropdown.contains(e.target) && !event.target.contains(e.target)) {
-                    dropdown.style.display = 'none';
-                    document.removeEventListener('click', closeDropdown);
-                }
-            };
-            setTimeout(() => document.addEventListener('click', closeDropdown), 0);
+        // Position dropdown relative to button
+        const rect = event.target.getBoundingClientRect();
+        dropdown.style.position = 'absolute';
+        dropdown.style.top = '100%';
+        dropdown.style.right = '0';
+        dropdown.style.zIndex = '1000';
+        
+        // Toggle dropdown using dropdown manager
+        if (window.dropdownManager) {
+            if (window.dropdownManager.isVisible(dropdownId)) {
+                window.dropdownManager.hide(dropdownId);
+            } else {
+                window.dropdownManager.show(dropdownId);
+            }
+        } else {
+            // Fallback for when dropdown manager is not available
+            const isVisible = dropdown.style.display === 'block';
+            dropdown.style.display = isVisible ? 'none' : 'block';
         }
     }
     
@@ -702,7 +708,7 @@ class ProjectManager extends EventEmitter {
             const project = this.projects.get(projectId);
             if (!project) return;
             
-            notifications.info(`Preparing download for "${project.name}"...`);
+            console.log(`Preparing download for "${project.name}"...`);
             
             // Create download request using native fetch for blob handling
             const response = await fetch(`/api/projects/${projectId}/download`);
@@ -738,11 +744,11 @@ class ProjectManager extends EventEmitter {
             // Clean up
             window.URL.revokeObjectURL(downloadUrl);
             
-            notifications.success(`"${project.name}" downloaded successfully`);
+            console.log(`"${project.name}" downloaded successfully`);
             
         } catch (error) {
             console.error('Failed to download project:', error);
-            notifications.error('Failed to download project: ' + error.message);
+            console.error('Failed to download project: ' + error.message);
         }
     }
     
@@ -754,14 +760,14 @@ class ProjectManager extends EventEmitter {
             const confirmed = confirm(`Restart terminal for "${project.name}"? This will close the current session and create a new one.`);
             if (!confirmed) return;
             
-            notifications.info(`Restarting terminal for "${project.name}"...`);
+            console.log(`Restarting terminal for "${project.name}"...`);
             
             // Send restart terminal command to the socket
             socket.restartTerminal(projectId);
             
         } catch (error) {
             console.error('Failed to restart terminal:', error);
-            notifications.error('Failed to restart terminal: ' + error.message);
+            console.error('Failed to restart terminal: ' + error.message);
         }
     }
     
@@ -769,7 +775,7 @@ class ProjectManager extends EventEmitter {
         try {
             const project = this.projects.get(projectId);
             if (!project) {
-                notifications.error('Project not found');
+                console.error('Project not found');
                 return;
             }
             
@@ -777,13 +783,13 @@ class ProjectManager extends EventEmitter {
             
             // Check socket connection with enhanced error handling
             if (!socket || !socket.isConnected()) {
-                notifications.error('Connection lost. Please refresh the page.');
+                console.error('Connection lost. Please refresh the page.');
                 console.error('❌ Cannot create terminal: Not connected to server');
                 return;
             }
             
             // Show creating notification
-            notifications.info(`Creating new terminal for "${project.name}"...`);
+            console.log(`Creating new terminal for "${project.name}"...`);
             
             // Get calculated terminal dimensions or use defaults
             let dimensions = { cols: 80, rows: 24 }; // fallback
@@ -810,14 +816,14 @@ class ProjectManager extends EventEmitter {
                     
                     if (projectSessions.length === 0) {
                         console.warn('⚠️ No terminal sessions found after creation timeout for project:', project.name);
-                        notifications.warning(`Terminal creation may have failed for "${project.name}". Please try again.`);
+                        console.warn(`Terminal creation may have failed for "${project.name}". Please try again.`);
                     }
                 }
             }, 8000); // 8 second timeout
             
         } catch (error) {
             console.error('❌ Failed to create new terminal:', error);
-            notifications.error('Failed to create new terminal: ' + error.message);
+            console.error('Failed to create new terminal: ' + error.message);
         }
     }
     
@@ -826,19 +832,19 @@ class ProjectManager extends EventEmitter {
         
         switch (status) {
             case 'claude_started':
-                notifications.success('Claude session started');
+                console.log('Claude session started');
                 break;
             case 'claude_stopped':
-                notifications.info('Claude session stopped');
+                console.log('Claude session stopped');
                 break;
             case 'terminal_created':
-                notifications.success('Terminal session created');
+                console.log('Terminal session created');
                 break;
             case 'terminal_destroyed':
-                notifications.info('Terminal session destroyed');
+                console.log('Terminal session destroyed');
                 break;
             case 'terminal_restarted':
-                notifications.success('Terminal session restarted successfully');
+                console.log('Terminal session restarted successfully');
                 break;
         }
         
@@ -901,7 +907,7 @@ class ProjectManager extends EventEmitter {
     handleProjectSessionCreated(data) {
         const { sessionName, projectName, sequenceNumber } = data;
         
-        notifications.success(`New terminal session created for "${projectName}": ${sessionName}`);
+        console.log(`New terminal session created for "${projectName}": ${sessionName}`);
         
         // The terminal manager will handle the actual connection
         // This is just for project-level notifications
@@ -930,7 +936,7 @@ class ProjectManager extends EventEmitter {
         
         // Show notification if this is the current project
         if (this.currentProject === projectId) {
-            notifications.warning(`Project ${projectId} disconnected`, { duration: 3000 });
+            console.warn(`Project ${projectId} disconnected`);
         }
     }
     

@@ -42,7 +42,10 @@ class ClaudeCodeWebManager extends EventEmitter {
             this.isInitialized = true;
             this.emit('app_initialized');
             
-            console.log('🚀 Claude Code Web Manager initialized successfully');
+            // Ensure document title is set correctly
+            document.title = 'vibe-code-distiller';
+            
+            console.log('🚀 vibe-code-distiller initialized successfully');
             
         } catch (error) {
             console.error('❌ Failed to initialize application:', error);
@@ -387,7 +390,7 @@ class ClaudeCodeWebManager extends EventEmitter {
             const fontSize = parseInt(DOM.get('terminal-font-size').value);
             
             if (isNaN(fontSize) || fontSize < 8 || fontSize > 32) {
-                notifications.error('Font size must be between 8 and 32 pixels');
+                console.error('Font size must be between 8 and 32 pixels');
                 return;
             }
             
@@ -398,7 +401,7 @@ class ClaudeCodeWebManager extends EventEmitter {
                 const response = await HTTP.post('/api/ttyd/config', { fontSize });
                 
                 if (response.success) {
-                    notifications.success('Font size updated! TTYd service has been restarted.');
+                    console.log('Font size updated! TTYd service has been restarted.');
                     // Update TTYd status after configuration change
                     this.updateTTYdStatus();
                     // Reload the terminal iframe to reflect changes
@@ -408,10 +411,10 @@ class ClaudeCodeWebManager extends EventEmitter {
                         }, 2000);
                     }
                 } else {
-                    notifications.error(`Failed to update font size: ${response.error}`);
+                    console.error(`Failed to update font size: ${response.error}`);
                 }
             } catch (error) {
-                notifications.error(`Error updating font size: ${error.message}`);
+                console.error(`Error updating font size: ${error.message}`);
             } finally {
                 e.target.disabled = false;
                 e.target.textContent = 'Apply';
@@ -463,7 +466,7 @@ class ClaudeCodeWebManager extends EventEmitter {
         DOM.on('reset-shortcuts-position', 'click', () => {
             if (window.shortcutsPanel && typeof window.shortcutsPanel.resetPosition === 'function') {
                 window.shortcutsPanel.resetPosition();
-                notifications.success('Shortcuts panel position reset to default');
+                console.log('Shortcuts panel position reset to default');
             }
         });
         
@@ -544,7 +547,7 @@ class ClaudeCodeWebManager extends EventEmitter {
         };
         
         console.log('🔧 Debug Info:', debugInfo);
-        notifications.info('Debug information logged to console');
+        console.log('Debug information logged to console');
     }
     
     
@@ -677,10 +680,7 @@ class ClaudeCodeWebManager extends EventEmitter {
                         }
                     } else if (Notification.permission === 'denied') {
                         // Show instructions to enable in browser settings
-                        notifications.warning('Notification permission denied. Please click the lock icon in the browser address bar and enable notifications.', {
-                            title: 'How to Enable Notifications',
-                            duration: 8000
-                        });
+                        console.warn('Notification permission denied. Please click the lock icon in the browser address bar and enable notifications.');
                     } else if (Notification.permission === 'granted') {
                         // Show test notification
                         if (socket && socket.showBrowserNotification) {
@@ -688,10 +688,7 @@ class ClaudeCodeWebManager extends EventEmitter {
                         }
                     }
                 } else {
-                    notifications.error('Your browser does not support notifications', {
-                        title: 'Feature Not Supported',
-                        duration: 3000
-                    });
+                    console.error('Your browser does not support notifications');
                 }
             });
         }
@@ -781,12 +778,12 @@ document.addEventListener('visibilitychange', () => {
 // Global error handling
 window.addEventListener('error', (event) => {
     console.error('❌ Global error:', event.error);
-    notifications.error('An unexpected error occurred');
+    console.error('An unexpected error occurred');
 });
 
 window.addEventListener('unhandledrejection', (event) => {
     console.error('❌ Unhandled promise rejection:', event.reason);
-    notifications.error('An unexpected error occurred');
+    console.error('An unexpected error occurred');
 });
 
 console.log('🚀 Claude Code Web Manager loading...');

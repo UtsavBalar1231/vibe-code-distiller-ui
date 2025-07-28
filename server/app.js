@@ -36,8 +36,8 @@ const projectRoutes = require('./routes/projects');
 const systemRoutes = require('./routes/system');
 const claudeRoutes = require('./routes/claude');
 const imageRoutes = require('./routes/images');
-const fileRoutes = require('./routes/files');
 const ttydRoutes = require('./routes/ttyd');
+const filesystemRoutes = require('./routes/filesystem');
 
 // Import socket handler
 const socketHandler = require('./socket-handler');
@@ -185,8 +185,8 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/claude', claudeRoutes);
 app.use('/api/images', imageRoutes);
-app.use('/api/files', fileRoutes);
 app.use('/api/ttyd', ttydRoutes);
+app.use('/api/filesystem', filesystemRoutes);
 
 // Serve main application
 app.get('/', (req, res) => {
