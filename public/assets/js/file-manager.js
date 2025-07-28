@@ -502,9 +502,6 @@ class FileManager {
                 <div class="context-menu-item" data-action="preview">
                     <span class="menu-text">Preview</span>
                 </div>
-                <div class="context-menu-item" data-action="send-to-terminal">
-                    <span class="menu-text">Send to Terminal</span>
-                </div>
             `;
         }
         
@@ -530,9 +527,6 @@ class FileManager {
                         } else {
                             this.previewFile(filePath);
                         }
-                        break;
-                    case 'send-to-terminal':
-                        this.sendToTerminal(filePath);
                         break;
                 }
             });
