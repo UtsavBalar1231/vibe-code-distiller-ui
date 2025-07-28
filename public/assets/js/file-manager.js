@@ -512,6 +512,15 @@ class FileManager {
         
         if (!menu || !menuItems) return;
         
+        // Register menu with dropdown manager
+        const menuId = 'file-context-menu';
+        const triggerElement = event.target.closest('.file-menu-btn');
+        
+        // Register with dropdown manager (will replace existing registration)
+        if (window.dropdownManager) {
+            window.dropdownManager.register(menuId, menu, triggerElement);
+        }
+        
         // Clear existing menu items
         menuItems.innerHTML = '';
         
@@ -551,8 +560,15 @@ class FileManager {
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const action = item.getAttribute('data-action');
-                menu.classList.remove('active');
-                menu.style.display = 'none';
+                
+                // Hide menu using dropdown manager
+                if (window.dropdownManager) {
+                    window.dropdownManager.hide(menuId);
+                } else {
+                    // Fallback
+                    menu.classList.remove('active');
+                    menu.style.display = 'none';
+                }
                 
                 switch (action) {
                     case 'download':
@@ -575,14 +591,13 @@ class FileManager {
             });
         });
         
-        // Position and show menu with boundary detection
-        menu.style.display = 'block';
-        
+        // Position menu with boundary detection
         // Get viewport dimensions
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
         
         // Get menu dimensions - temporarily show it to measure
+        menu.style.display = 'block';
         menu.style.visibility = 'hidden';
         menu.style.opacity = '0';
         menu.classList.add('active');
@@ -591,10 +606,11 @@ class FileManager {
         const menuWidth = menuRect.width;
         const menuHeight = menuRect.height;
         
-        // Reset menu visibility
+        // Reset menu visibility for positioning
         menu.style.visibility = 'visible';
         menu.style.opacity = '';
         menu.classList.remove('active');
+        menu.style.display = 'none';
         
         // Calculate optimal position
         let leftPos = event.pageX;
@@ -616,20 +632,15 @@ class FileManager {
         
         menu.style.left = leftPos + 'px';
         menu.style.top = topPos + 'px';
-        menu.classList.add('active');
         
-        // Hide menu when clicking outside
-        const hideMenu = (e) => {
-            if (!menu.contains(e.target)) {
-                menu.classList.remove('active');
-                menu.style.display = 'none';
-                document.removeEventListener('click', hideMenu);
-            }
-        };
-        
-        setTimeout(() => {
-            document.addEventListener('click', hideMenu);
-        }, 0);
+        // Show menu using dropdown manager
+        if (window.dropdownManager) {
+            window.dropdownManager.show(menuId);
+        } else {
+            // Fallback
+            menu.style.display = 'block';
+            menu.classList.add('active');
+        }
     }
 
     formatFileSize(bytes) {

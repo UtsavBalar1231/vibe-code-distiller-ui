@@ -180,8 +180,14 @@ class ProjectManager extends EventEmitter {
             } else if (action === 'download') {
                 this.downloadProject(project.id);
             }
-            // Hide dropdown after action
-            optionsDropdown.style.display = 'none';
+            // Hide dropdown after action using dropdown manager
+            const dropdownId = `project-options-${project.id}`;
+            if (window.dropdownManager) {
+                window.dropdownManager.hide(dropdownId);
+            } else {
+                // Fallback
+                optionsDropdown.style.display = 'none';
+            }
         });
         
         // Create New Terminal button
@@ -667,33 +673,33 @@ class ProjectManager extends EventEmitter {
     }
     
     toggleProjectOptions(event, project, dropdown) {
-        // Hide all other open dropdowns
-        document.querySelectorAll('.project-options-dropdown').forEach(d => {
-            if (d !== dropdown) d.style.display = 'none';
-        });
+        // Generate unique dropdown ID for this project
+        const dropdownId = `project-options-${project.id}`;
+        const triggerButton = event.target.closest('.project-options-btn');
         
-        // Toggle current dropdown
-        const isVisible = dropdown.style.display === 'block';
-        dropdown.style.display = isVisible ? 'none' : 'block';
-        
-        // Position dropdown relative to button
-        if (!isVisible) {
-            const rect = event.target.getBoundingClientRect();
-            dropdown.style.position = 'absolute';
-            dropdown.style.top = '100%';
-            dropdown.style.right = '0';
-            dropdown.style.zIndex = '1000';
+        // Register dropdown with dropdown manager
+        if (window.dropdownManager) {
+            window.dropdownManager.register(dropdownId, dropdown, triggerButton);
         }
         
-        // Close dropdown when clicking outside
-        if (!isVisible) {
-            const closeDropdown = (e) => {
-                if (!dropdown.contains(e.target) && !event.target.contains(e.target)) {
-                    dropdown.style.display = 'none';
-                    document.removeEventListener('click', closeDropdown);
-                }
-            };
-            setTimeout(() => document.addEventListener('click', closeDropdown), 0);
+        // Position dropdown relative to button
+        const rect = event.target.getBoundingClientRect();
+        dropdown.style.position = 'absolute';
+        dropdown.style.top = '100%';
+        dropdown.style.right = '0';
+        dropdown.style.zIndex = '1000';
+        
+        // Toggle dropdown using dropdown manager
+        if (window.dropdownManager) {
+            if (window.dropdownManager.isVisible(dropdownId)) {
+                window.dropdownManager.hide(dropdownId);
+            } else {
+                window.dropdownManager.show(dropdownId);
+            }
+        } else {
+            // Fallback for when dropdown manager is not available
+            const isVisible = dropdown.style.display === 'block';
+            dropdown.style.display = isVisible ? 'none' : 'block';
         }
     }
     
