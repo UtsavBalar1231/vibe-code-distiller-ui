@@ -5,6 +5,7 @@ const fs = require('fs').promises;
 const multer = require('multer');
 const { AppError } = require('../middleware/error-handler');
 const { ERROR_CODES } = require('../utils/constants');
+const fileService = require('../services/file-service');
 
 /**
  * Filesystem Routes - Support for absolute path browsing
@@ -372,6 +373,47 @@ router.post('/upload', upload.array('files', 10), async (req, res, next) => {
             message: `Successfully uploaded ${results.filter(r => r.success).length} file(s)`,
             files: results,
             targetPath: targetPath
+        });
+        
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Delete file or directory from absolute path
+ * DELETE /api/filesystem/delete?path=/absolute/path/to/file-or-directory
+ */
+router.delete('/delete', async (req, res, next) => {
+    try {
+        const requestedPath = req.query.path;
+        
+        if (!requestedPath) {
+            throw new AppError('File path is required', 400, ERROR_CODES.VALIDATION_ERROR);
+        }
+        
+        // Security validation
+        if (!isPathAllowed(requestedPath)) {
+            throw new AppError('Access denied to this path', 403, ERROR_CODES.ACCESS_DENIED);
+        }
+        
+        const fullPath = path.resolve(requestedPath);
+        
+        // Check if file/directory exists
+        try {
+            await fs.stat(fullPath);
+        } catch (error) {
+            throw new AppError('File or directory not found', 404, ERROR_CODES.NOT_FOUND);
+        }
+        
+        // Use FileService to delete the file/directory
+        const result = await fileService.deleteFile(fullPath);
+        
+        res.json({
+            success: true,
+            message: 'File or directory deleted successfully',
+            path: fullPath,
+            timestamp: new Date().toISOString()
         });
         
     } catch (error) {

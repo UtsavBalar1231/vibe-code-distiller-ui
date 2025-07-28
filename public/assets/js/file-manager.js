@@ -415,6 +415,38 @@ class FileManager {
         }
     }
 
+    async deleteFileOrFolder(filePath, fileType) {
+        const itemType = fileType === 'directory' ? 'directory' : 'file';
+        const itemName = filePath.split('/').pop();
+        
+        // Show confirmation dialog
+        const confirmed = confirm(`Are you sure you want to delete this ${itemType}?\n\n${itemName}\n\nThis action cannot be undone.`);
+        
+        if (!confirmed) {
+            return;
+        }
+        
+        try {
+            const apiUrl = `/api/filesystem/delete?path=${encodeURIComponent(filePath)}`;
+            const response = await fetch(apiUrl, {
+                method: 'DELETE'
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.message || 'Failed to delete item');
+            }
+            
+            // Refresh the current directory to reflect the changes
+            this.loadFiles();
+            
+        } catch (error) {
+            console.error('Error deleting item:', error);
+            alert(`Failed to delete ${itemType}: ${error.message}`);
+        }
+    }
+
     async sendToTerminal(filePath) {
         const terminalManager = window.terminalManager;
         
@@ -492,6 +524,10 @@ class FileManager {
                 <div class="context-menu-item" data-action="download-dir">
                     <span class="menu-text">Download Folder</span>
                 </div>
+                <div class="context-menu-item context-menu-separator"></div>
+                <div class="context-menu-item" data-action="delete">
+                    <span class="menu-text">Delete Directory</span>
+                </div>
             `;
         } else {
             // File menu items
@@ -501,6 +537,10 @@ class FileManager {
                 </div>
                 <div class="context-menu-item" data-action="preview">
                     <span class="menu-text">Preview</span>
+                </div>
+                <div class="context-menu-item context-menu-separator"></div>
+                <div class="context-menu-item" data-action="delete">
+                    <span class="menu-text">Delete File</span>
                 </div>
             `;
         }
@@ -527,6 +567,9 @@ class FileManager {
                         } else {
                             this.previewFile(filePath);
                         }
+                        break;
+                    case 'delete':
+                        this.deleteFileOrFolder(filePath, fileType);
                         break;
                 }
             });
