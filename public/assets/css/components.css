@@ -1188,6 +1188,31 @@ kbd {
     font-style: italic;
 }
 
+/* Parent directory special styling */
+.file-info.parent-directory {
+    background: linear-gradient(135deg, rgba(64, 153, 255, 0.1) 0%, rgba(100, 181, 246, 0.05) 100%);
+    border: 1px solid rgba(64, 153, 255, 0.2);
+    border-radius: var(--border-radius-sm);
+    padding: var(--spacing-xs);
+    margin: -2px 0;
+}
+
+.file-info.parent-directory .file-name {
+    color: #64b5f6;
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+}
+
+.file-info.parent-directory:hover {
+    background: linear-gradient(135deg, rgba(64, 153, 255, 0.15) 0%, rgba(100, 181, 246, 0.08) 100%);
+    border-color: rgba(64, 153, 255, 0.3);
+}
+
+.file-item:has(.parent-directory):hover {
+    background-color: transparent;
+    border-color: transparent;
+}
+
 
 .file-name {
     font-weight: var(--font-weight-medium);

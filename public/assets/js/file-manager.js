@@ -139,10 +139,14 @@ class FileManager {
         const size = file.type === 'file' ? this.formatFileSize(file.size) : '';
         const modified = file.modified ? new Date(file.modified).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) : '';
         const hiddenClass = file.isHidden ? 'hidden-file' : '';
+        const parentClass = file.isParent ? 'parent-directory' : '';
+        
+        // Use user-friendly name for parent directory with icon
+        const displayName = file.isParent ? '↑ Back to parent' : file.name;
 
         item.innerHTML = `
-            <div class="file-info ${hiddenClass}">
-                <span class="file-name">${file.name}</span>
+            <div class="file-info ${hiddenClass} ${parentClass}">
+                <span class="file-name">${displayName}</span>
                 <span class="file-size">${size}</span>
                 <span class="file-date">${modified}</span>
             </div>
