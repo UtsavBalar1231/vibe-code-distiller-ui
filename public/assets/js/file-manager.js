@@ -1,12 +1,11 @@
 /**
- * File Manager - Enhanced file browser with support for all file types
- * Replaces the image-specific functionality with comprehensive file management
+ * File Manager - Absolute path file browser
+ * Supports filesystem browsing starting from root (/)
  */
 
 class FileManager {
     constructor() {
-        this.currentProjectId = null;
-        this.currentPath = '';
+        this.currentPath = '/';
         this.showHidden = true;
         this.fileCache = new Map();
         
@@ -15,109 +14,47 @@ class FileManager {
 
     init() {
         this.setupEventListeners();
-        this.setupFileInput();
-        this.setupNewFolderModal();
     }
 
     setupEventListeners() {
-        // Upload files button
+        // Upload files button (disabled for filesystem mode)
         const uploadBtn = document.getElementById('upload-files-btn');
         if (uploadBtn) {
-            uploadBtn.addEventListener('click', () => this.handleUploadClick());
+            uploadBtn.style.display = 'none'; // Hide upload in filesystem mode
         }
 
-        // Create folder button
+        // Create folder button (disabled for filesystem mode)
         const createFolderBtn = document.getElementById('create-folder-btn');
         if (createFolderBtn) {
-            createFolderBtn.addEventListener('click', () => this.handleCreateFolderClick());
+            createFolderBtn.style.display = 'none'; // Hide create folder in filesystem mode
         }
 
-        // Listen for project changes
+        // Listen for project changes - navigate to project directory
         document.addEventListener('projectChanged', (event) => {
-            this.currentProjectId = event.detail.projectId;
-            this.currentPath = '';
-            this.loadFiles();
+            const project = event.detail.project;
+            if (project && project.path) {
+                this.navigateToDirectory(project.path);
+            }
         });
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (event) => {
-            if (event.ctrlKey && event.key === 'u') {
+            if (event.ctrlKey && event.key === 'h') {
                 event.preventDefault();
-                this.handleUploadClick();
-            }
-            if (event.ctrlKey && event.shiftKey && event.key === 'N') {
-                event.preventDefault();
-                this.handleCreateFolderClick();
+                this.toggleHiddenFiles();
             }
         });
     }
 
-    setupFileInput() {
-        const fileInput = document.getElementById('file-input');
-        if (fileInput) {
-            fileInput.addEventListener('change', (event) => {
-                const files = Array.from(event.target.files);
-                if (files.length > 0) {
-                    this.uploadFiles(files);
-                }
-                // Clear the input
-                event.target.value = '';
-            });
-        }
-    }
-
-    setupNewFolderModal() {
-        const form = document.getElementById('new-folder-form');
-        if (form) {
-            form.addEventListener('submit', (event) => {
-                event.preventDefault();
-                this.createFolder();
-            });
-        }
-    }
-
-    handleUploadClick() {
-        if (!this.currentProjectId) {
-            console.warn('Please select a project first');
-            return;
-        }
-
-        const fileInput = document.getElementById('file-input');
-        if (fileInput) {
-            fileInput.click();
-        }
-    }
-
-    handleCreateFolderClick() {
-        if (!this.currentProjectId) {
-            console.warn('Please select a project first');
-            return;
-        }
-
-        this.showNewFolderModal();
-    }
-
-    showNewFolderModal() {
-        const modal = document.getElementById('new-folder-modal');
-        const folderPathInput = document.getElementById('folder-path');
-        const folderNameInput = document.getElementById('folder-name');
-
-        if (modal && folderPathInput && folderNameInput) {
-            folderPathInput.value = this.currentPath || '/';
-            folderNameInput.value = '';
-            folderNameInput.focus();
-            modal.style.display = 'block';
-        }
+    toggleHiddenFiles() {
+        this.showHidden = !this.showHidden;
+        this.loadFiles();
     }
 
     async loadFiles() {
-        if (!this.currentProjectId) {
-            this.renderEmptyState();
-            return;
-        }
-
         try {
-            const response = await fetch(`/api/files/${this.currentProjectId}/browse?path=${encodeURIComponent(this.currentPath)}&showHidden=${this.showHidden}`);
+            const apiUrl = `/api/filesystem/browse?path=${encodeURIComponent(this.currentPath)}&showHidden=${this.showHidden}`;
+            const response = await fetch(apiUrl);
             const data = await response.json();
 
             if (data.success) {
@@ -132,7 +69,6 @@ class FileManager {
             }
         } catch (error) {
             console.error('Error loading files:', error);
-            console.error('Error loading files');
             this.renderEmptyState();
         }
     }
@@ -155,7 +91,7 @@ class FileManager {
         fileList.innerHTML = '';
 
         // Add parent directory if not at root
-        if (this.currentPath) {
+        if (this.currentPath !== '/') {
             const parentItem = this.createFileItem({
                 name: '..',
                 type: 'directory',
@@ -176,7 +112,6 @@ class FileManager {
     }
 
     renderFile(file) {
-        // For now, just show file info - could be extended to show file content
         console.log(`File: ${file.name} (${this.formatFileSize(file.size)})`);
     }
 
@@ -224,7 +159,6 @@ class FileManager {
                 if (file.type === 'directory') {
                     this.navigateToDirectory(file.path);
                 }
-                // Removed file click handler - no action on file click
             });
         }
 
@@ -251,8 +185,6 @@ class FileManager {
     getFileIcon(file) {
         if (file.isParent) return '📁';
         if (file.type === 'directory') return '📁';
-        
-        // Remove emoji icons for better readability
         return '';
     }
 
@@ -262,25 +194,28 @@ class FileManager {
 
         breadcrumb.innerHTML = '';
 
-        // Add root
+        // Normalize path
+        const normalizedPath = path === '/' ? '/' : path.replace(/\/$/, '');
+        const segments = normalizedPath === '/' ? ['/'] : normalizedPath.split('/').filter(s => s);
+        
+        // Add root (/)
         const rootItem = document.createElement('button');
         rootItem.className = 'breadcrumb-item';
         rootItem.textContent = 'Root';
-        rootItem.dataset.path = '';
-        rootItem.addEventListener('click', () => this.navigateToDirectory(''));
+        rootItem.dataset.path = '/';
+        rootItem.addEventListener('click', () => this.navigateToDirectory('/'));
         breadcrumb.appendChild(rootItem);
-
-        // Add path segments
-        if (path) {
-            const segments = path.split('/').filter(s => s);
+        
+        if (segments.length > 1 || (segments.length === 1 && segments[0] !== '/')) {
             let currentPath = '';
-
-            segments.forEach((segment, index) => {
-                currentPath += (currentPath ? '/' : '') + segment;
+            const pathSegments = segments[0] === '/' ? segments.slice(1) : segments;
+            
+            pathSegments.forEach((segment, index) => {
+                currentPath += '/' + segment;
                 
                 const separator = document.createElement('span');
                 separator.className = 'breadcrumb-separator';
-                separator.textContent = ' / ';
+                separator.textContent = '/';
                 breadcrumb.appendChild(separator);
 
                 const item = document.createElement('button');
@@ -288,10 +223,19 @@ class FileManager {
                 item.textContent = segment;
                 item.dataset.path = currentPath;
                 
-                if (index === segments.length - 1) {
+                if (index === pathSegments.length - 1) {
                     item.classList.add('active');
                 } else {
-                    item.addEventListener('click', () => this.navigateToDirectory(currentPath));
+                    // Fix: Use the data-path attribute to avoid closure issues
+                    item.addEventListener('click', (event) => {
+                        const targetPath = event.target.dataset.path;
+                        console.log('🔍 Breadcrumb click debug:', {
+                            segment: segment,
+                            targetPath: targetPath,
+                            currentPath: this.currentPath
+                        });
+                        this.navigateToDirectory(targetPath);
+                    });
                 }
                 
                 breadcrumb.appendChild(item);
@@ -306,477 +250,20 @@ class FileManager {
         this.loadFiles();
     }
 
-    async uploadFiles(files) {
-        if (!this.currentProjectId) {
-            console.warn('Please select a project first');
-            return;
-        }
-
-        const formData = new FormData();
-        files.forEach(file => {
-            formData.append('files', file);
-        });
-        formData.append('targetPath', this.currentPath);
-
-        try {
-            const response = await fetch(`/api/files/${this.currentProjectId}/upload`, {
-                method: 'POST',
-                body: formData
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                console.log(`Successfully uploaded ${data.files.length} file(s)`);
-                this.loadFiles(); // Refresh file list
-            } else {
-                console.error(data.message || 'Failed to upload files');
-            }
-        } catch (error) {
-            console.error('Error uploading files:', error);
-            console.error('Error uploading files');
-        }
-    }
-
-    async createFolder() {
-        const folderName = document.getElementById('folder-name').value.trim();
-        if (!folderName) {
-            console.warn('Please enter a folder name');
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/files/${this.currentProjectId}/mkdir`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    path: this.currentPath,
-                    name: folderName
-                })
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                console.log(`Folder "${folderName}" created successfully`);
-                this.closeNewFolderModal();
-                this.loadFiles(); // Refresh file list
-            } else {
-                console.error(data.message || 'Failed to create folder');
-            }
-        } catch (error) {
-            console.error('Error creating folder:', error);
-            console.error('Error creating folder');
-        }
-    }
-
-    async deleteFile(filePath) {
-        if (!confirm('Are you sure you want to delete this file/folder?')) {
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/files/${this.currentProjectId}/remove?path=${encodeURIComponent(filePath)}`, {
-                method: 'DELETE'
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                console.log(data.message);
-                this.loadFiles(); // Refresh file list
-            } else {
-                console.error(data.message || 'Failed to delete file');
-            }
-        } catch (error) {
-            console.error('Error deleting file:', error);
-            console.error('Error deleting file');
-        }
-    }
-
-    async sendToTerminal(filePath) {
-        const terminalManager = window.terminalManager;
-        
-        if (!terminalManager) {
-            console.warn('Terminal system not available');
-            return;
-        }
-        
-        const activeSession = terminalManager.getActiveSession();
-        console.log('🔍 sendToTerminal debug:', {
-            activeSession: activeSession,
-            hasSessionName: activeSession && activeSession.name ? true : false,
-            filePath: filePath
-        });
-        
-        if (!activeSession || !activeSession.name) {
-            console.warn('No active terminal session. Please select a terminal tab first.');
-            return;
-        }
-        
-        // Only work with session-based terminals
-        if (!activeSession.name.startsWith('claude-web-')) {
-            console.warn('Invalid terminal session format');
-            console.warn('🚨 sendToTerminal: Invalid session name format', { activeSession });
-            return;
-        }
-        
-        // Construct the absolute path
-        const absolutePath = this.constructAbsolutePath(filePath);
-        
-        if (!absolutePath) {
-            console.warn('Failed to construct absolute file path');
-            console.error('❌ Failed to construct absolute path:', { filePath, currentProjectId: this.currentProjectId });
-            return;
-        }
-        
-        try {
-            // Send the absolute file path to the terminal via new API
-            console.log('📤 Sending file path to terminal:', { sessionName: activeSession.name, absolutePath });
-            
-            const response = await fetch('/api/terminal/send-input', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    sessionName: activeSession.name,
-                    text: absolutePath
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok && result.success) {
-                console.log(`File path sent to terminal: ${absolutePath}`);
-                console.log('✅ File path sent successfully:', { sessionName: activeSession.name, absolutePath });
-            } else {
-                throw new Error(result.details || result.error || 'Failed to send file path');
-            }
-            
-        } catch (error) {
-            console.error('❌ Failed to send file path to terminal:', error);
-            console.error(`Failed to send file path to terminal: ${error.message}`);
-        }
-    }
-
-    /**
-     * Construct absolute file path from relative path
-     * @param {string} relativePath - Relative file path from server
-     * @returns {string|null} - Absolute file path or null if construction fails
-     */
-    constructAbsolutePath(relativePath) {
-        try {
-            if (!this.currentProjectId) {
-                console.warn('No current project ID available for path construction');
-                return null;
-            }
-            
-            // Get project information to construct absolute path
-            const projectManager = window.projectManager;
-            if (!projectManager) {
-                console.warn('ProjectManager not available for path construction');
-                return null;
-            }
-            
-            const project = projectManager.getProject(this.currentProjectId);
-            if (!project) {
-                console.warn('Project not found for path construction:', this.currentProjectId);
-                return null;
-            }
-            
-            // The project.path should contain the absolute path to the project directory
-            // e.g., /home/lanpangzi/projects/my-project
-            const projectPath = project.path;
-            if (!projectPath) {
-                console.warn('Project path not available:', project);
-                return null;
-            }
-            
-            // Construct absolute path: projectPath + relativePath
-            // Handle both cases: relativePath starting with / or not
-            const cleanRelativePath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
-            const absolutePath = projectPath.endsWith('/') ? 
-                projectPath + cleanRelativePath : 
-                projectPath + '/' + cleanRelativePath;
-            
-            console.log('📁 Constructed absolute path:', {
-                projectId: this.currentProjectId,
-                projectPath: projectPath,
-                relativePath: relativePath,
-                absolutePath: absolutePath
-            });
-            
-            return absolutePath;
-            
-        } catch (error) {
-            console.error('Error constructing absolute path:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Adjust menu position to prevent overflow outside viewport
-     * @param {HTMLElement} menu - The menu element
-     * @param {number} x - Initial x position
-     * @param {number} y - Initial y position
-     * @returns {object} Adjusted position {x, y}
-     */
-    adjustMenuPosition(menu, x, y) {
-        // Force reflow to ensure menu dimensions are accurate
-        menu.offsetHeight;
-        
-        const menuRect = menu.getBoundingClientRect();
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-        const offset = 10;
-        
-        let adjustedX = x;
-        let adjustedY = y;
-        
-        // Check if we're on mobile (small screens)
-        const isMobile = viewportWidth <= 768;
-        
-        if (isMobile) {
-            // For mobile, find the file browser container to ensure menu is visible within it
-            const fileBrowser = document.getElementById('file-browser');
-            const panelContent = fileBrowser?.closest('.panel-content');
-            
-            if (panelContent) {
-                const panelRect = panelContent.getBoundingClientRect();
-                const containerBottom = panelRect.bottom;
-                const containerRight = panelRect.right;
-                const containerTop = panelRect.top;
-                const containerLeft = panelRect.left;
-                
-                // Adjust position to keep menu within the visible panel area
-                // Check right boundary within panel
-                if (x + menuRect.width > containerRight) {
-                    adjustedX = Math.max(containerLeft + offset, containerRight - menuRect.width - offset);
-                }
-                
-                // Check bottom boundary within panel  
-                if (y + menuRect.height > containerBottom) {
-                    adjustedY = Math.max(containerTop + offset, containerBottom - menuRect.height - offset);
-                }
-                
-                // Ensure menu doesn't go above the panel
-                if (adjustedY < containerTop + offset) {
-                    adjustedY = containerTop + offset;
-                }
-                
-                // Ensure menu doesn't go left of the panel
-                if (adjustedX < containerLeft + offset) {
-                    adjustedX = containerLeft + offset;
-                }
-                
-                return { x: adjustedX, y: adjustedY };
-            }
-        }
-        
-        // Fallback to viewport-based positioning for desktop or when panel not found
-        // Check right boundary
-        if (x + menuRect.width > viewportWidth) {
-            adjustedX = viewportWidth - menuRect.width - offset;
-        }
-        
-        // Check bottom boundary
-        if (y + menuRect.height > viewportHeight) {
-            adjustedY = viewportHeight - menuRect.height - offset;
-        }
-        
-        // Ensure menu doesn't go off left edge
-        if (adjustedX < offset) {
-            adjustedX = offset;
-        }
-        
-        // Ensure menu doesn't go off top edge
-        if (adjustedY < offset) {
-            adjustedY = offset;
-        }
-        
-        return { x: adjustedX, y: adjustedY };
-    }
-
-    showFileMenu(event, filePath, fileType) {
-        event.stopPropagation();
-        
-        const menu = document.getElementById('context-menu');
-        const menuItems = document.getElementById('context-menu-items');
-        
-        if (!menu || !menuItems) return;
-        
-        // Clear existing menu items
-        menuItems.innerHTML = '';
-        
-        if (fileType === 'directory') {
-            // Directory menu items
-            menuItems.innerHTML = `
-                <div class="context-menu-item" data-action="upload">
-                    <span class="menu-text">Upload Files</span>
-                </div>
-                <div class="context-menu-item" data-action="download-dir">
-                    <span class="menu-text">Download Folder</span>
-                </div>
-                <div class="context-menu-item context-menu-separator"></div>
-                <div class="context-menu-item context-menu-danger" data-action="delete">
-                    <span class="menu-text">Delete</span>
-                </div>
-            `;
-        } else {
-            // File menu items
-            menuItems.innerHTML = `
-                <div class="context-menu-item" data-action="download">
-                    <span class="menu-text">Download</span>
-                </div>
-                <div class="context-menu-item" data-action="preview">
-                    <span class="menu-text">Preview</span>
-                </div>
-                <div class="context-menu-item context-menu-separator"></div>
-                <div class="context-menu-item context-menu-danger" data-action="delete">
-                    <span class="menu-text">Delete</span>
-                </div>
-            `;
-        }
-        
-        // Add event listeners to menu items
-        const menuItemElements = menuItems.querySelectorAll('.context-menu-item[data-action]');
-        menuItemElements.forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const action = item.getAttribute('data-action');
-                menu.classList.remove('active');
-                menu.style.display = 'none';
-                
-                
-                switch (action) {
-                    case 'upload':
-                        this.uploadToDirectory(filePath);
-                        break;
-                    case 'download':
-                        this.downloadFile(filePath);
-                        break;
-                    case 'download-dir':
-                        this.downloadDirectory(filePath);
-                        break;
-                    case 'preview':
-                        this.previewFile(filePath);
-                        break;
-                    case 'delete':
-                        this.deleteFile(filePath);
-                        break;
-                }
-            });
-        });
-        
-        // Position and show menu with boundary checking
-        // First, make menu visible to get its dimensions
-        menu.style.display = 'block';
-        menu.style.visibility = 'hidden';
-        
-        // Calculate adjusted position to prevent overflow
-        const adjustedPosition = this.adjustMenuPosition(menu, event.pageX, event.pageY);
-        
-        // Apply the adjusted position
-        menu.style.left = adjustedPosition.x + 'px';
-        menu.style.top = adjustedPosition.y + 'px';
-        menu.style.visibility = 'visible';
-        menu.classList.add('active');
-        
-        // Hide menu when clicking outside
-        const hideMenu = (e) => {
-            if (!menu.contains(e.target)) {
-                menu.classList.remove('active');
-                menu.style.display = 'none';
-                document.removeEventListener('click', hideMenu);
-            }
-        };
-        
-        setTimeout(() => {
-            document.addEventListener('click', hideMenu);
-        }, 0);
-    }
-
-    uploadToDirectory(dirPath) {
-        this.currentPath = dirPath;
-        this.handleUploadClick();
-    }
-
-    async downloadFile(filePath) {
-        try {
-            const response = await fetch(`/api/files/${this.currentProjectId}/download?path=${encodeURIComponent(filePath)}`);
-            
-            if (!response.ok) {
-                throw new Error('Failed to download file');
-            }
-            
-            // Get filename from response headers or path
-            const filename = response.headers.get('content-disposition')
-                ? response.headers.get('content-disposition').split('filename=')[1].replace(/"/g, '')
-                : filePath.split('/').pop();
-            
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
-            console.log(`File downloaded: ${filename}`);
-        } catch (error) {
-            console.error('Error downloading file:', error);
-            console.error('Failed to download file');
-        }
-    }
-
-    async downloadDirectory(dirPath) {
-        try {
-            const response = await fetch(`/api/files/${this.currentProjectId}/download-zip?path=${encodeURIComponent(dirPath)}`);
-            
-            if (!response.ok) {
-                throw new Error('Failed to download directory');
-            }
-            
-            const filename = response.headers.get('content-disposition')
-                ? response.headers.get('content-disposition').split('filename=')[1].replace(/"/g, '')
-                : `${dirPath.split('/').pop() || 'folder'}.zip`;
-            
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
-            console.log(`Directory downloaded: ${filename}`);
-        } catch (error) {
-            console.error('Error downloading directory:', error);
-            console.error('Failed to download directory');
-        }
+    getParentPath(path) {
+        if (path === '/' || !path) return '/';
+        const parentPath = path.substring(0, path.lastIndexOf('/'));
+        return parentPath || '/';
     }
 
     async previewFile(filePath) {
-        if (!this.currentProjectId) {
-            console.error('Please select a project first');
-            return;
-        }
-        
         if (!filePath) {
             console.error('Invalid file path');
             return;
         }
         
         try {
-            const apiUrl = `/api/files/${this.currentProjectId}/preview?path=${encodeURIComponent(filePath)}`;
-            
+            const apiUrl = `/api/filesystem/preview?path=${encodeURIComponent(filePath)}`;
             const response = await fetch(apiUrl);
             
             if (!response.ok) {
@@ -791,8 +278,6 @@ class FileManager {
             
             this.showPreviewModal(data.file);
         } catch (error) {
-            
-            // More detailed error messages
             if (error.message.includes('404')) {
                 console.error('File not found');
             } else if (error.message.includes('403')) {
@@ -894,16 +379,178 @@ class FileManager {
         return div.innerHTML;
     }
 
-    closeNewFolderModal() {
-        const modal = document.getElementById('new-folder-modal');
-        if (modal) {
-            modal.style.display = 'none';
+    async downloadFile(filePath) {
+        try {
+            const apiUrl = `/api/filesystem/download?path=${encodeURIComponent(filePath)}`;
+            const response = await fetch(apiUrl);
+            
+            if (!response.ok) {
+                throw new Error('Failed to download file');
+            }
+            
+            // Get filename from response headers or path
+            const filename = response.headers.get('content-disposition')
+                ? response.headers.get('content-disposition').split('filename=')[1].replace(/"/g, '')
+                : filePath.split('/').pop();
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            console.log(`File downloaded: ${filename}`);
+        } catch (error) {
+            console.error('Error downloading file:', error);
+            console.error('Failed to download file');
         }
     }
 
-    getParentPath(path) {
-        const segments = path.split('/').filter(s => s);
-        return segments.slice(0, -1).join('/');
+    async sendToTerminal(filePath) {
+        const terminalManager = window.terminalManager;
+        
+        if (!terminalManager) {
+            console.warn('Terminal system not available');
+            return;
+        }
+        
+        const activeSession = terminalManager.getActiveSession();
+        console.log('🔍 sendToTerminal debug:', {
+            activeSession: activeSession,
+            hasSessionName: activeSession && activeSession.name ? true : false,
+            filePath: filePath
+        });
+        
+        if (!activeSession || !activeSession.name) {
+            console.warn('No active terminal session. Please select a terminal tab first.');
+            return;
+        }
+        
+        // Only work with session-based terminals
+        if (!activeSession.name.startsWith('claude-web-')) {
+            console.warn('Invalid terminal session format');
+            console.warn('🚨 sendToTerminal: Invalid session name format', { activeSession });
+            return;
+        }
+        
+        try {
+            // Send the absolute file path to the terminal
+            console.log('📤 Sending file path to terminal:', { sessionName: activeSession.name, filePath });
+            
+            const response = await fetch('/api/terminal/send-input', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    sessionName: activeSession.name,
+                    text: filePath
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                console.log(`File path sent to terminal: ${filePath}`);
+                console.log('✅ File path sent successfully:', { sessionName: activeSession.name, filePath });
+            } else {
+                throw new Error(result.details || result.error || 'Failed to send file path');
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to send file path to terminal:', error);
+            console.error(`Failed to send file path to terminal: ${error.message}`);
+        }
+    }
+
+    showFileMenu(event, filePath, fileType) {
+        event.stopPropagation();
+        
+        const menu = document.getElementById('context-menu');
+        const menuItems = document.getElementById('context-menu-items');
+        
+        if (!menu || !menuItems) return;
+        
+        // Clear existing menu items
+        menuItems.innerHTML = '';
+        
+        if (fileType === 'directory') {
+            // Directory menu items (simplified for filesystem mode)
+            menuItems.innerHTML = `
+                <div class="context-menu-item" data-action="preview">
+                    <span class="menu-text">Open Directory</span>
+                </div>
+                <div class="context-menu-item" data-action="download-dir">
+                    <span class="menu-text">Download Folder</span>
+                </div>
+            `;
+        } else {
+            // File menu items
+            menuItems.innerHTML = `
+                <div class="context-menu-item" data-action="download">
+                    <span class="menu-text">Download</span>
+                </div>
+                <div class="context-menu-item" data-action="preview">
+                    <span class="menu-text">Preview</span>
+                </div>
+                <div class="context-menu-item" data-action="send-to-terminal">
+                    <span class="menu-text">Send to Terminal</span>
+                </div>
+            `;
+        }
+        
+        // Add event listeners to menu items
+        const menuItemElements = menuItems.querySelectorAll('.context-menu-item[data-action]');
+        menuItemElements.forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const action = item.getAttribute('data-action');
+                menu.classList.remove('active');
+                menu.style.display = 'none';
+                
+                switch (action) {
+                    case 'download':
+                        this.downloadFile(filePath);
+                        break;
+                    case 'download-dir':
+                        console.warn('Directory download not implemented for filesystem mode');
+                        break;
+                    case 'preview':
+                        if (fileType === 'directory') {
+                            this.navigateToDirectory(filePath);
+                        } else {
+                            this.previewFile(filePath);
+                        }
+                        break;
+                    case 'send-to-terminal':
+                        this.sendToTerminal(filePath);
+                        break;
+                }
+            });
+        });
+        
+        // Position and show menu
+        menu.style.display = 'block';
+        menu.style.left = event.pageX + 'px';
+        menu.style.top = event.pageY + 'px';
+        menu.classList.add('active');
+        
+        // Hide menu when clicking outside
+        const hideMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.classList.remove('active');
+                menu.style.display = 'none';
+                document.removeEventListener('click', hideMenu);
+            }
+        };
+        
+        setTimeout(() => {
+            document.addEventListener('click', hideMenu);
+        }, 0);
     }
 
     formatFileSize(bytes) {
@@ -915,14 +562,9 @@ class FileManager {
     }
 }
 
-// Global functions for modal handling
-function closeNewFolderModal() {
-    if (window.fileManager) {
-        window.fileManager.closeNewFolderModal();
-    }
-}
-
 // Initialize file manager when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.fileManager = new FileManager();
+    // Load root directory by default
+    window.fileManager.loadFiles();
 });
