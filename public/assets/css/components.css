@@ -494,10 +494,10 @@ select {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: 8px 12px;
     color: var(--text-primary);
     cursor: pointer;
-    font-size: var(--font-size-sm);
+    font-size: 13px;
     transition: background-color var(--transition-fast);
     border: none;
     background: none;
@@ -1082,7 +1082,7 @@ kbd {
     }
     
     .context-menu-item {
-        padding: var(--spacing-md);
+        padding: 12px;
         min-height: 44px;
     }
     
