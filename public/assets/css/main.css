@@ -460,6 +460,17 @@ body {
     text-overflow: ellipsis;
 }
 
+.project-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.project-date {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    font-weight: var(--font-weight-normal);
+}
 
 .project-options-container {
     position: relative;
