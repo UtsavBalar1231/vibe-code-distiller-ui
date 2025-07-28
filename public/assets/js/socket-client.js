@@ -49,10 +49,6 @@ class SocketClient extends EventEmitter {
             this.emit('connected');
             
             console.log('🔌 Socket connected successfully, ID:', this.socket.id);
-            
-            if (notifications.isNotificationEnabled()) {
-                notifications.success('Connected to server', { duration: 2000 });
-            }
         });
         
         this.socket.on('disconnect', (reason) => {
@@ -74,10 +70,8 @@ class SocketClient extends EventEmitter {
             this.emit('connection_error', error);
             
             
-            if (this.reconnectAttempts >= this.maxReconnectAttempts && notifications.isNotificationEnabled()) {
-                notifications.error('Failed to connect to server. Please check your connection.', {
-                    duration: 0
-                });
+            if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+                console.error('Failed to connect to server. Please check your connection.');
             }
         });
         
@@ -86,10 +80,6 @@ class SocketClient extends EventEmitter {
             this.reconnectAttempts = 0;
             this.updateConnectionStatus();
             this.emit('reconnected', attemptNumber);
-            
-            if (notifications.isNotificationEnabled()) {
-                notifications.success('Reconnected to server', { duration: 2000 });
-            }
             
             // Rejoin current project if any with delay to ensure server is ready
             if (this.currentProject) {
@@ -110,9 +100,6 @@ class SocketClient extends EventEmitter {
         this.socket.on('reconnect_failed', () => {
             this.connectionStatus = 'failed';
             this.updateConnectionStatus();
-            if (notifications.isNotificationEnabled()) {
-                notifications.error('Unable to reconnect to server', { duration: 0 });
-            }
         });
         
         // Server events
@@ -145,17 +132,13 @@ class SocketClient extends EventEmitter {
                 // Log other errors
                 console.error('❌ Server error:', error);
                 if (notifications.isNotificationEnabled()) {
-                    notifications.error(error.message || 'Server error occurred');
+                    console.error(error.message || 'Server error occurred');
                 }
             }
             
             this.emit('server_error', error);
         });
         
-        this.socket.on('notification', (notification) => {
-            this.handleNotification(notification);
-            this.emit('notification', notification);
-        });
         
         this.socket.on('claude-notification', (notification) => {
             this.handleClaudeNotification(notification);
@@ -251,40 +234,6 @@ class SocketClient extends EventEmitter {
         }
     }
     
-    handleNotification(notification) {
-        // Check if notifications are enabled before showing
-        if (!notifications.isNotificationEnabled()) {
-            return;
-        }
-        
-        const { type, message, title } = notification;
-        
-        switch (type) {
-            case 'user_joined':
-                notifications.info(message, { title: 'User Activity' });
-                break;
-            case 'user_left':
-                notifications.info(message, { title: 'User Activity' });
-                break;
-            case 'file_changed':
-                notifications.info(message, { title: 'File Change', duration: 3000 });
-                break;
-            case 'file_added':
-                notifications.success(message, { title: 'File Added', duration: 3000 });
-                break;
-            case 'file_removed':
-                notifications.warning(message, { title: 'File Removed', duration: 3000 });
-                break;
-            case 'claude_session_ended':
-                notifications.warning(message, { title: 'Claude Session' });
-                break;
-            case 'terminal_session_ended':
-                notifications.warning(message, { title: 'Terminal Session' });
-                break;
-            default:
-                notifications.info(message, { title: title || 'Notification' });
-        }
-    }
     
     handleClaudeNotification(notification) {
         const { sessionId, projectName, message, title, timestamp } = notification;
@@ -854,23 +803,23 @@ class SocketErrorHandler {
         
         switch (code) {
             case 'UNAUTHORIZED':
-                notifications.error('Authentication required. Please login again.');
+                console.error('Authentication required. Please login again.');
                 // Redirect to login or show auth modal
                 break;
             case 'PROJECT_NOT_FOUND':
-                notifications.error('Project not found. It may have been deleted.');
+                console.error('Project not found. It may have been deleted.');
                 break;
             case 'CLAUDE_SESSION_FAILED':
-                notifications.error('Failed to start Claude session. Please try again.');
+                console.error('Failed to start Claude session. Please try again.');
                 break;
             case 'TERMINAL_CREATE_FAILED':
-                notifications.error('Failed to create terminal session.');
+                console.error('Failed to create terminal session.');
                 break;
             case 'SYSTEM_OVERLOAD':
-                notifications.warning('System is overloaded. Please wait and try again.');
+                console.warn('System is overloaded. Please wait and try again.');
                 break;
             default:
-                notifications.error(message || 'An error occurred on the server.');
+                console.error(message || 'An error occurred on the server.');
         }
     }
     
@@ -882,11 +831,11 @@ class SocketErrorHandler {
         }
         
         if (error.message.includes('ECONNREFUSED')) {
-            notifications.error('Cannot connect to server. Please check if the server is running.');
+            console.error('Cannot connect to server. Please check if the server is running.');
         } else if (error.message.includes('timeout')) {
-            notifications.warning('Connection timeout. Please check your internet connection.');
+            console.warn('Connection timeout. Please check your internet connection.');
         } else {
-            notifications.error('Connection error occurred. Trying to reconnect...');
+            console.error('Connection error occurred. Trying to reconnect...');
         }
     }
     
@@ -894,7 +843,7 @@ class SocketErrorHandler {
         console.error('Generic error:', error);
         // Only show notification for critical errors
         if ((error.message.includes('socket') || error.message.includes('connection')) && notifications.isNotificationEnabled()) {
-            notifications.error('A connection error occurred.');
+            console.error('A connection error occurred.');
         }
     }
 }

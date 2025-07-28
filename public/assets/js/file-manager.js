@@ -78,7 +78,7 @@ class FileManager {
 
     handleUploadClick() {
         if (!this.currentProjectId) {
-            notifications.warning('Please select a project first');
+            console.warn('Please select a project first');
             return;
         }
 
@@ -90,7 +90,7 @@ class FileManager {
 
     handleCreateFolderClick() {
         if (!this.currentProjectId) {
-            notifications.warning('Please select a project first');
+            console.warn('Please select a project first');
             return;
         }
 
@@ -127,12 +127,12 @@ class FileManager {
                     this.renderFile(data.file);
                 }
             } else {
-                notifications.error(data.message || 'Failed to load files');
+                console.error(data.message || 'Failed to load files');
                 this.renderEmptyState();
             }
         } catch (error) {
             console.error('Error loading files:', error);
-            notifications.error('Error loading files');
+            console.error('Error loading files');
             this.renderEmptyState();
         }
     }
@@ -177,7 +177,7 @@ class FileManager {
 
     renderFile(file) {
         // For now, just show file info - could be extended to show file content
-        notifications.info(`File: ${file.name} (${this.formatFileSize(file.size)})`);
+        console.log(`File: ${file.name} (${this.formatFileSize(file.size)})`);
     }
 
     renderEmptyState() {
@@ -308,7 +308,7 @@ class FileManager {
 
     async uploadFiles(files) {
         if (!this.currentProjectId) {
-            notifications.warning('Please select a project first');
+            console.warn('Please select a project first');
             return;
         }
 
@@ -327,21 +327,21 @@ class FileManager {
             const data = await response.json();
 
             if (data.success) {
-                notifications.success(`Successfully uploaded ${data.files.length} file(s)`);
+                console.log(`Successfully uploaded ${data.files.length} file(s)`);
                 this.loadFiles(); // Refresh file list
             } else {
-                notifications.error(data.message || 'Failed to upload files');
+                console.error(data.message || 'Failed to upload files');
             }
         } catch (error) {
             console.error('Error uploading files:', error);
-            notifications.error('Error uploading files');
+            console.error('Error uploading files');
         }
     }
 
     async createFolder() {
         const folderName = document.getElementById('folder-name').value.trim();
         if (!folderName) {
-            notifications.warning('Please enter a folder name');
+            console.warn('Please enter a folder name');
             return;
         }
 
@@ -360,15 +360,15 @@ class FileManager {
             const data = await response.json();
 
             if (data.success) {
-                notifications.success(`Folder "${folderName}" created successfully`);
+                console.log(`Folder "${folderName}" created successfully`);
                 this.closeNewFolderModal();
                 this.loadFiles(); // Refresh file list
             } else {
-                notifications.error(data.message || 'Failed to create folder');
+                console.error(data.message || 'Failed to create folder');
             }
         } catch (error) {
             console.error('Error creating folder:', error);
-            notifications.error('Error creating folder');
+            console.error('Error creating folder');
         }
     }
 
@@ -385,14 +385,14 @@ class FileManager {
             const data = await response.json();
 
             if (data.success) {
-                notifications.success(data.message);
+                console.log(data.message);
                 this.loadFiles(); // Refresh file list
             } else {
-                notifications.error(data.message || 'Failed to delete file');
+                console.error(data.message || 'Failed to delete file');
             }
         } catch (error) {
             console.error('Error deleting file:', error);
-            notifications.error('Error deleting file');
+            console.error('Error deleting file');
         }
     }
 
@@ -400,7 +400,7 @@ class FileManager {
         const terminalManager = window.terminalManager;
         
         if (!terminalManager) {
-            notifications.warning('Terminal system not available');
+            console.warn('Terminal system not available');
             return;
         }
         
@@ -412,13 +412,13 @@ class FileManager {
         });
         
         if (!activeSession || !activeSession.name) {
-            notifications.warning('No active terminal session. Please select a terminal tab first.');
+            console.warn('No active terminal session. Please select a terminal tab first.');
             return;
         }
         
         // Only work with session-based terminals
         if (!activeSession.name.startsWith('claude-web-')) {
-            notifications.warning('Invalid terminal session format');
+            console.warn('Invalid terminal session format');
             console.warn('🚨 sendToTerminal: Invalid session name format', { activeSession });
             return;
         }
@@ -427,7 +427,7 @@ class FileManager {
         const absolutePath = this.constructAbsolutePath(filePath);
         
         if (!absolutePath) {
-            notifications.warning('Failed to construct absolute file path');
+            console.warn('Failed to construct absolute file path');
             console.error('❌ Failed to construct absolute path:', { filePath, currentProjectId: this.currentProjectId });
             return;
         }
@@ -450,7 +450,7 @@ class FileManager {
             const result = await response.json();
             
             if (response.ok && result.success) {
-                notifications.info(`File path sent to terminal: ${absolutePath}`);
+                console.log(`File path sent to terminal: ${absolutePath}`);
                 console.log('✅ File path sent successfully:', { sessionName: activeSession.name, absolutePath });
             } else {
                 throw new Error(result.details || result.error || 'Failed to send file path');
@@ -458,7 +458,7 @@ class FileManager {
             
         } catch (error) {
             console.error('❌ Failed to send file path to terminal:', error);
-            notifications.error(`Failed to send file path to terminal: ${error.message}`);
+            console.error(`Failed to send file path to terminal: ${error.message}`);
         }
     }
 
@@ -727,10 +727,10 @@ class FileManager {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
             
-            notifications.success(`File downloaded: ${filename}`);
+            console.log(`File downloaded: ${filename}`);
         } catch (error) {
             console.error('Error downloading file:', error);
-            notifications.error('Failed to download file');
+            console.error('Failed to download file');
         }
     }
 
@@ -756,21 +756,21 @@ class FileManager {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
             
-            notifications.success(`Directory downloaded: ${filename}`);
+            console.log(`Directory downloaded: ${filename}`);
         } catch (error) {
             console.error('Error downloading directory:', error);
-            notifications.error('Failed to download directory');
+            console.error('Failed to download directory');
         }
     }
 
     async previewFile(filePath) {
         if (!this.currentProjectId) {
-            notifications.error('Please select a project first');
+            console.error('Please select a project first');
             return;
         }
         
         if (!filePath) {
-            notifications.error('Invalid file path');
+            console.error('Invalid file path');
             return;
         }
         
@@ -794,22 +794,22 @@ class FileManager {
             
             // More detailed error messages
             if (error.message.includes('404')) {
-                notifications.error('File not found');
+                console.error('File not found');
             } else if (error.message.includes('403')) {
-                notifications.error('Access denied to file');
+                console.error('Access denied to file');
             } else if (error.message.includes('413')) {
-                notifications.error('File too large for preview (max 5MB)');
+                console.error('File too large for preview (max 5MB)');
             } else if (error.message.includes('400') && error.message.includes('directory')) {
-                notifications.error('Cannot preview directories');
+                console.error('Cannot preview directories');
             } else {
-                notifications.error(`Failed to preview file: ${error.message}`);
+                console.error(`Failed to preview file: ${error.message}`);
             }
         }
     }
 
     showPreviewModal(fileData) {
         if (!fileData) {
-            notifications.error('No file data available for preview');
+            console.error('No file data available for preview');
             return;
         }
         
@@ -839,7 +839,7 @@ class FileManager {
         const contentElement = modal.querySelector('#preview-content');
         
         if (!titleElement || !contentElement) {
-            notifications.error('Modal structure error');
+            console.error('Modal structure error');
             return;
         }
         

@@ -153,7 +153,7 @@ class TTYdTerminalManager {
         // 监听session创建事件
         window.socket.onTerminalSessionCreated((data) => {
             console.log('🎉 Session created event received:', data);
-            this.showNotification(`Terminal session created: ${data.sessionName}`);
+            console.log(`Terminal session created: ${data.sessionName}`);
             
             // 创建新的终端后触发：更新session列表并自动激活新创建的session
             this.refreshSessionList(data.sessionName);
@@ -162,7 +162,7 @@ class TTYdTerminalManager {
         // 监听session删除事件
         window.socket.onTerminalSessionDeleted((data) => {
             console.log('🗑️ Session deleted event received:', data);
-            this.showNotification(`Terminal session deleted: ${data.sessionName}`);
+            console.log(`Terminal session deleted: ${data.sessionName}`);
             
             // 删除某个终端时触发：智能选择下一个要激活的session
             this.handleSessionDeleted(data.sessionName);
@@ -484,7 +484,7 @@ class TTYdTerminalManager {
             } else {
                 console.error('❌ Max retry attempts reached for session switch');
                 this._isSwitchingSession = false; // 切换失败时清除标记
-                this.showNotification('Failed to switch session after multiple attempts', 'error');
+                console.error('Failed to switch session after multiple attempts');
             }
         }
     }
@@ -626,7 +626,7 @@ class TTYdTerminalManager {
         
         if (success) {
             console.log('🎯 Terminal session creation request sent:', sessionName);
-            this.showNotification(`Creating terminal session: ${sessionName}`);
+            console.log(`Creating terminal session: ${sessionName}`);
             
             // 隐藏欢迎屏幕，显示loading状态等待新session创建完成
             this.hideWelcomeScreen();
@@ -905,18 +905,10 @@ class TTYdTerminalManager {
 
     showNotification(message) {
         console.log('📢 Notification:', message);
-        // 集成到现有的notification系统
-        if (window.notifications) {
-            window.notifications.success(message);
-        }
     }
 
     showError(message) {
         console.error('❌ Error:', message);
-        // 集成到现有的notification系统
-        if (window.notifications) {
-            window.notifications.error(message);
-        }
     }
 
     // 获取当前项目路径
@@ -1331,7 +1323,7 @@ class TTYdTerminalManager {
         
         if (!activeSession) {
             console.warn('⚠️ No active terminal session');
-            this.showNotification('No active terminal session', 'warning');
+            console.warn('No active terminal session');
             return;
         }
         
@@ -1372,7 +1364,7 @@ class TTYdTerminalManager {
             
         } catch (error) {
             console.error('❌ Failed to send mobile key:', error);
-            this.showNotification(`Failed to send key: ${error.message}`, 'error');
+            console.error(`Failed to send key: ${error.message}`);
         }
     }
 
@@ -1808,9 +1800,7 @@ class TTYdTerminalManager {
             }
         } else {
             console.error('❌ Terminal scroll via WebSocket failed:', data);
-            if (window.notifications) {
-                window.notifications.error(`Scroll failed: ${data.message || 'Unknown error'}`);
-            }
+            console.error(`Scroll failed: ${data.message || 'Unknown error'}`);
         }
     }
 
@@ -1881,9 +1871,7 @@ class TTYdTerminalManager {
             
         } catch (error) {
             console.error('❌ Failed to scroll terminal via HTTP:', error);
-            if (window.notifications) {
-                window.notifications.error(`Scroll failed: ${error.message}`);
-            }
+            console.error(`Scroll failed: ${error.message}`);
         }
     }
     
@@ -1949,9 +1937,7 @@ class TTYdTerminalManager {
             
         } catch (error) {
             console.error('❌ Failed to go to bottom and exit copy mode via HTTP:', error);
-            if (window.notifications) {
-                window.notifications.error(`Go to bottom failed: ${error.message}`);
-            }
+            console.error(`Go to bottom failed: ${error.message}`);
             
             // Try to at least exit copy mode manually if API fails
             try {
