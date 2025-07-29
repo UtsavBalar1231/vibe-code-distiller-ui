@@ -32,6 +32,31 @@ router.post('/',
   })
 );
 
+// Update notification settings for all projects (must be before /:id routes)
+router.put('/notification-settings',
+  asyncHandler(async (req, res) => {
+    const { enabled } = req.body;
+    
+    // Validate enabled parameter
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'enabled parameter must be a boolean',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    const results = await projectService.updateAllProjectsNotificationSettings(enabled);
+    
+    res.json({
+      success: true,
+      message: `Notification settings ${enabled ? 'enabled' : 'disabled'} for all projects`,
+      results,
+      timestamp: new Date().toISOString()
+    });
+  })
+);
+
 // Get project by ID
 router.get('/:id',
   middleware(schemas.project.id, 'params'),

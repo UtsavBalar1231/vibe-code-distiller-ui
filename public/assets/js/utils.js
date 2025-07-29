@@ -361,7 +361,7 @@ class NotificationManager {
         this.container = DOM.get('notification-container');
         this.notifications = new Map();
         this.nextId = 1;
-        this.isEnabled = Storage.get('notifications-enabled', true);
+        this.isEnabled = Storage.get('notifications-enabled', false);
         this.pendingNotifications = [];
         this.init();
     }
@@ -374,28 +374,57 @@ class NotificationManager {
     setupToggle() {
         const toggleBtn = DOM.get('notification-toggle');
         if (toggleBtn) {
-            DOM.on(toggleBtn, 'click', () => {
-                this.toggle();
+            DOM.on(toggleBtn, 'click', async () => {
+                await this.toggle();
             });
         }
     }
     
-    toggle() {
+    async toggle() {
+        const previousState = this.isEnabled;
         this.isEnabled = !this.isEnabled;
         this.updateVisibility();
         Storage.set('notifications-enabled', this.isEnabled);
         
-        if (!this.isEnabled) {
-            // Clear all current notifications when disabled
-            this.clear();
-            this.pendingNotifications = [];
-        } else {
-            // When enabling notifications, test browser notification capability
-            this.testBrowserNotifications();
+        try {
+            // Update all projects' notification settings
+            const response = await HTTP.put('/api/projects/notification-settings', {
+                enabled: this.isEnabled
+            });
+            
+            if (!response.success) {
+                throw new Error(response.message || 'Failed to update notification settings');
+            }
+            
+            if (!this.isEnabled) {
+                // Clear all current notifications when disabled
+                this.clear();
+                this.pendingNotifications = [];
+            } else {
+                // When enabling notifications, test browser notification capability
+                this.testBrowserNotifications();
+            }
+            
+            // Sync with settings modal checkbox
+            this.syncSettingsCheckbox();
+            
+        } catch (error) {
+            console.error('Failed to update notification settings:', error);
+            
+            // Revert state on error
+            this.isEnabled = previousState;
+            this.updateVisibility();
+            Storage.set('notifications-enabled', this.isEnabled);
+            
+            // Show error notification to user
+            this.add({
+                id: 'notification-settings-error',
+                title: 'Settings Error',
+                message: 'Failed to update notification settings. Please try again.',
+                type: 'error',
+                duration: 5000
+            });
         }
-        
-        // Sync with settings modal checkbox
-        this.syncSettingsCheckbox();
     }
     
     testBrowserNotifications() {
@@ -941,6 +970,12 @@ class KeyboardManager {
     setupEventListeners() {
         document.addEventListener('keydown', (e) => {
             const key = this.getKeyString(e);
+            
+            // Skip if key is null/undefined
+            if (!key) {
+                return;
+            }
+            
             const handler = this.shortcuts.get(key);
             
             if (handler) {
@@ -958,7 +993,14 @@ class KeyboardManager {
         if (event.shiftKey) parts.push('shift');
         if (event.metaKey) parts.push('meta');
         
-        parts.push(event.key.toLowerCase());
+        // Handle undefined or null key values
+        if (event.key && typeof event.key === 'string') {
+            parts.push(event.key.toLowerCase());
+        } else {
+            // Fallback for undefined keys
+            console.warn('⚠️ Undefined key in keyboard event:', event);
+            return null;
+        }
         
         return parts.join('+');
     }

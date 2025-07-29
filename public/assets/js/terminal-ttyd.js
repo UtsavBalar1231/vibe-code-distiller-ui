@@ -123,6 +123,9 @@ class TTYdTerminalManager {
         // 监听session事件
         this.setupSessionEventListeners();
 
+        // 监听项目管理器事件
+        this.setupProjectEventListeners();
+
         console.log('✅ TTYd Terminal Manager initialized');
     }
 
@@ -193,6 +196,40 @@ class TTYdTerminalManager {
         });
     }
 
+    setupProjectEventListeners() {
+        // Wait for project manager to be available
+        const waitForProjectManager = () => {
+            if (window.projectManager) {
+                // Listen for projects loaded event
+                window.projectManager.on('projects_loaded', (projects) => {
+                    console.log('📂 Projects loaded, checking terminal display state...');
+                    
+                    // If currently showing welcome screen but there are projects,
+                    // switch to empty content
+                    const welcomeScreen = document.getElementById('welcome-screen');
+                    if (welcomeScreen && welcomeScreen.style.display === 'flex') {
+                        if (this.sessions.size === 0 && this.hasProjects()) {
+                            console.log('🔄 Switching from welcome screen to terminal empty state (projects available)');
+                            this.showTerminalEmptyState();
+                        }
+                    }
+                });
+
+                // Listen for project created event to handle auto-terminal creation
+                window.projectManager.on('project_created', (project) => {
+                    console.log('🎉 New project created, terminal will be auto-created');
+                });
+
+                console.log('✅ Project event listeners setup complete');
+            } else {
+                // Retry after a short delay
+                setTimeout(waitForProjectManager, 100);
+            }
+        };
+        
+        waitForProjectManager();
+    }
+
     async refreshSessionList(sessionToActivate = null) {
         if (!window.socket) {
             console.warn('⚠️ Socket.IO not available, cannot refresh session list');
@@ -257,7 +294,7 @@ class TTYdTerminalManager {
             
             // 如果没有任何session，显示欢迎屏幕
             if (this.sessions.size === 0) {
-                this.showWelcomeScreen();
+                this.showWelcomeOrEmptyScreen();
                 // 如果在恢复模式下没有session，也要清除恢复模式
                 if (this._isRestoring) {
                     this._isRestoring = false;
@@ -304,7 +341,7 @@ class TTYdTerminalManager {
         // 如果没有其他session了，显示欢迎屏幕
         if (this.sessions.size === 0) {
             console.log('📋 No more sessions, showing welcome screen');
-            this.showWelcomeScreen();
+            this.showWelcomeOrEmptyScreen();
             return;
         }
         
@@ -648,6 +685,12 @@ class TTYdTerminalManager {
         if (welcomeScreen) {
             welcomeScreen.style.display = 'none';
         }
+        
+        // Also hide terminal empty state
+        this.hideTerminalEmptyState();
+        
+        // Remove keyboard listeners when hiding welcome screen
+        this.removeWelcomeKeyboardListeners();
     }
 
     showIframe() {
@@ -657,6 +700,56 @@ class TTYdTerminalManager {
         
         // Always show scroll controls when iframe is visible
         this.showScrollControls();
+    }
+
+    // Check if there are any projects available
+    hasProjects() {
+        return window.projectManager && window.projectManager.hasProjects();
+    }
+
+    // Show terminal empty state when there are projects but no sessions
+    showTerminalEmptyState() {
+        console.log('📋 Showing terminal empty state (projects available, no sessions)');
+        
+        // Hide welcome screen
+        const welcomeScreen = document.getElementById('welcome-screen');
+        if (welcomeScreen) {
+            welcomeScreen.style.display = 'none';
+        }
+        
+        // Hide iframe
+        if (this.iframe) {
+            this.iframe.style.display = 'none';
+        }
+        
+        // Show terminal empty state
+        const terminalEmptyState = document.getElementById('terminal-empty-state');
+        if (terminalEmptyState) {
+            terminalEmptyState.style.display = 'flex';
+        }
+        
+        this.activeSessionName = null;
+        // Hide scroll controls when showing empty state
+        this.hideScrollControls();
+    }
+
+    // Hide terminal empty state
+    hideTerminalEmptyState() {
+        const terminalEmptyState = document.getElementById('terminal-empty-state');
+        if (terminalEmptyState) {
+            terminalEmptyState.style.display = 'none';
+        }
+    }
+
+    // Smart welcome/empty screen decision
+    showWelcomeOrEmptyScreen() {
+        if (this.hasProjects()) {
+            // If there are projects, show terminal empty state (only in terminal area)
+            this.showTerminalEmptyState();
+        } else {
+            // If no projects, show traditional welcome screen (full page)
+            this.showWelcomeScreen();
+        }
     }
 
     showWelcomeScreen() {
@@ -675,19 +768,82 @@ class TTYdTerminalManager {
 
         // Hide scroll controls when showing welcome screen
         this.hideScrollControls();
+        
+        // Add keyboard shortcut support for welcome screen
+        this.addWelcomeKeyboardListeners();
     }
 
     resetWelcomeContent() {
         const welcomeContent = document.querySelector('.welcome-content');
         if (welcomeContent) {
             welcomeContent.innerHTML = `
-                <h2>Welcome to Claude Code Web Manager</h2>
-                <p>Create a new terminal session to get started with Claude Code CLI.</p>
-                <div class="welcome-actions">
-                    <button class="btn btn-primary" id="welcome-new-terminal">Create New Terminal</button>
-                    <button class="btn btn-secondary" id="welcome-new-project">Create New Project</button>
+                <!-- Brand Section -->
+                <div class="brand-section">
+                    <div class="logo-container">
+                        <img src="/assets/icons/android-chrome-512x512.png" 
+                             alt="Vibe Code Distiller" 
+                             class="brand-logo">
+                    </div>
+                    <h1 class="brand-title pixel-art-bw">VIBE CODE DISTILLER</h1>
+                    <p class="brand-subtitle">Enhancing Your Claude Code Experience</p>
+                </div>
+                
+                <!-- Primary Action -->
+                <div class="action-section">
+                    <button class="btn btn-primary pixel-button-bw" id="welcome-new-project">
+                        Create Your First Project
+                    </button>
                 </div>
             `;
+            
+            // Re-bind event handlers after content reset
+            this.bindWelcomeEvents();
+        }
+    }
+
+    bindWelcomeEvents(retryCount = 0) {
+        // Bind welcome project creation button
+        const welcomeNewProjectBtn = document.getElementById('welcome-new-project');
+        if (welcomeNewProjectBtn) {
+            if (window.projectManager) {
+                welcomeNewProjectBtn.addEventListener('click', () => {
+                    window.projectManager.showCreateProjectModal();
+                });
+            } else if (retryCount < 10) {
+                // Retry after a short delay in case projectManager is not yet initialized
+                setTimeout(() => {
+                    this.bindWelcomeEvents(retryCount + 1);
+                }, 100);
+            } else {
+                console.error('❌ ProjectManager not available after 10 retries, cannot bind welcome events');
+            }
+        } else {
+            console.warn('⚠️ Welcome new project button not found, cannot bind events');
+        }
+    }
+
+    addWelcomeKeyboardListeners() {
+        // Remove any existing listeners first
+        this.removeWelcomeKeyboardListeners();
+        
+        // Add keyboard event listener for welcome screen
+        this.welcomeKeyboardHandler = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const createProjectBtn = document.getElementById('welcome-new-project');
+                if (createProjectBtn) {
+                    createProjectBtn.click();
+                }
+            }
+        };
+        
+        document.addEventListener('keydown', this.welcomeKeyboardHandler);
+    }
+
+    removeWelcomeKeyboardListeners() {
+        if (this.welcomeKeyboardHandler) {
+            document.removeEventListener('keydown', this.welcomeKeyboardHandler);
+            this.welcomeKeyboardHandler = null;
         }
     }
 
@@ -880,7 +1036,7 @@ class TTYdTerminalManager {
                             } else {
                                 // 没有session可恢复，显示欢迎屏幕
                                 console.log('📋 No sessions to restore, showing welcome screen');
-                                this.showWelcomeScreen();
+                                this.showWelcomeOrEmptyScreen();
                                 this._isRestoring = false;
                             }
                         }
