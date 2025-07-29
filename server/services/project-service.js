@@ -345,31 +345,13 @@ class ProjectService {
       const configPath = path.join(configDir, PROJECT.CONFIG_FILE);
       await fs.writeJson(configPath, config, { spaces: 2 });
       
-      // Create Claude Code hook configuration for notifications  
-      const serverConfig = require('config');
-      const serverPort = process.env.PORT || serverConfig.get('server.port') || 3000;
+      // Create Claude Code hook configuration for notifications (empty by default)
       const hookConfig = {
         hooks: {
           Notification: [
             {
               matcher: "",
-              hooks: [
-                {
-                  type: "command",
-                  command: `curl -X POST http://localhost:${serverPort}/api/notification -H 'Content-Type: application/json' -d @-`
-                }
-              ]
-            }
-          ],
-          Stop: [
-            {
-              matcher: "",
-              hooks: [
-                {
-                  type: "command",
-                  command: `curl -X POST http://localhost:${serverPort}/api/notification -H 'Content-Type: application/json' -d '{"session_id": "stop-event", "message": "Claude Code session has ended", "title": "Claude Code", "transcript_path": ""}'`
-                }
-              ]
+              hooks: []
             }
           ]
         }
@@ -736,6 +718,105 @@ class ProjectService {
       }
     } catch (error) {
       // Ignore errors in file analysis
+    }
+  }
+
+  async updateAllProjectsNotificationSettings(enabled) {
+    try {
+      logger.info('Updating notification settings for all projects:', { enabled });
+      
+      // Get current server port
+      const serverConfig = require('config');
+      const serverPort = process.env.PORT || serverConfig.get('server.port') || 3000;
+      
+      // Get all projects
+      const projects = await this.getAllProjects();
+      const results = {
+        success: [],
+        failed: []
+      };
+      
+      // Process each project
+      for (const project of projects) {
+        try {
+          const settingsPath = path.join(project.path, PROJECT.CONFIG_DIR, 'settings.local.json');
+          
+          // Read existing settings or create default structure
+          let settings = {};
+          if (await fs.pathExists(settingsPath)) {
+            settings = await fs.readJson(settingsPath);
+          }
+          
+          // Ensure hooks structure exists
+          if (!settings.hooks) {
+            settings.hooks = {};
+          }
+          if (!settings.hooks.Notification) {
+            settings.hooks.Notification = [];
+          }
+          
+          // Find existing notification matcher (empty matcher)
+          let notificationMatcher = settings.hooks.Notification.find(item => item.matcher === "");
+          
+          if (!notificationMatcher) {
+            // Create new matcher if not exists
+            notificationMatcher = {
+              matcher: "",
+              hooks: []
+            };
+            settings.hooks.Notification.push(notificationMatcher);
+          }
+          
+          if (enabled) {
+            // Add curl command if not already present
+            const curlCommand = `curl -X POST http://localhost:${serverPort}/api/notification -H 'Content-Type: application/json' -d @-`;
+            const existingCurlHook = notificationMatcher.hooks.find(hook => 
+              hook.type === "command" && hook.command === curlCommand
+            );
+            
+            if (!existingCurlHook) {
+              notificationMatcher.hooks.push({
+                type: "command",
+                command: curlCommand
+              });
+            }
+          } else {
+            // Remove auto-added curl commands (only those matching our pattern)
+            const curlCommandPattern = new RegExp(`curl -X POST http://localhost:\\d+/api/notification -H 'Content-Type: application/json' -d @-`);
+            notificationMatcher.hooks = notificationMatcher.hooks.filter(hook => 
+              !(hook.type === "command" && curlCommandPattern.test(hook.command))
+            );
+          }
+          
+          // Write back to file
+          await fs.writeJson(settingsPath, settings, { spaces: 2 });
+          results.success.push(project.id);
+          
+        } catch (error) {
+          logger.error(`Failed to update notification settings for project ${project.id}:`, error);
+          results.failed.push({
+            projectId: project.id,
+            error: error.message
+          });
+        }
+      }
+      
+      logger.info('Notification settings update completed:', {
+        total: projects.length,
+        success: results.success.length,
+        failed: results.failed.length
+      });
+      
+      return results;
+      
+    } catch (error) {
+      logger.error('Failed to update notification settings for all projects:', error);
+      throw new AppError(
+        'Failed to update notification settings',
+        500,
+        ERROR_CODES.PROJECT_UPDATE_FAILED,
+        error.message
+      );
     }
   }
 }
