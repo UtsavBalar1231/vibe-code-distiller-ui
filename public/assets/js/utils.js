@@ -970,6 +970,12 @@ class KeyboardManager {
     setupEventListeners() {
         document.addEventListener('keydown', (e) => {
             const key = this.getKeyString(e);
+            
+            // Skip if key is null/undefined
+            if (!key) {
+                return;
+            }
+            
             const handler = this.shortcuts.get(key);
             
             if (handler) {
@@ -987,7 +993,14 @@ class KeyboardManager {
         if (event.shiftKey) parts.push('shift');
         if (event.metaKey) parts.push('meta');
         
-        parts.push(event.key.toLowerCase());
+        // Handle undefined or null key values
+        if (event.key && typeof event.key === 'string') {
+            parts.push(event.key.toLowerCase());
+        } else {
+            // Fallback for undefined keys
+            console.warn('⚠️ Undefined key in keyboard event:', event);
+            return null;
+        }
         
         return parts.join('+');
     }

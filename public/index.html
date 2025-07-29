@@ -169,12 +169,32 @@
                         <!-- Welcome Screen -->
                         <div class="welcome-screen" id="welcome-screen">
                             <div class="welcome-content">
-                                <h2>Welcome to vibe-code-distiller</h2>
-                                <p>Create a new terminal session to get started with Claude Code CLI.</p>
-                                <div class="welcome-actions">
-                                    <button class="btn btn-primary" id="welcome-new-terminal">Create New Terminal</button>
-                                    <button class="btn btn-secondary" id="welcome-new-project">Create New Project</button>
+                                <!-- Brand Section -->
+                                <div class="brand-section">
+                                    <div class="logo-container">
+                                        <img src="/assets/icons/android-chrome-512x512.png" 
+                                             alt="Vibe Code Distiller" 
+                                             class="brand-logo">
+                                    </div>
+                                    <h1 class="brand-title pixel-art-bw">VIBE CODE DISTILLER</h1>
+                                    <p class="brand-subtitle">Enhancing Your Claude Code Experience</p>
                                 </div>
+                                
+                                <!-- Primary Action -->
+                                <div class="action-section">
+                                    <button class="btn btn-primary pixel-button-bw" id="welcome-new-project">
+                                        Create Your First Project
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Terminal Empty State -->
+                        <div class="terminal-empty-state" id="terminal-empty-state" style="display: none;">
+                            <div class="terminal-empty-content">
+                                <div class="terminal-empty-icon">📋</div>
+                                <h2 class="terminal-empty-title">Ready to Code</h2>
+                                <p class="terminal-empty-description">Your projects are loaded. Create a new terminal session to get started.</p>
                             </div>
                         </div>
                         
@@ -445,7 +465,7 @@
                 <div class="modal-body">
                     <div class="help-content">
                         <h4>Getting Started</h4>
-                        <p>Welcome to Claude Code Web Manager! This interface allows you to manage Claude Code projects through your web browser.</p>
+                        <p>Welcome to Vibe Code Distiller! This interface allows you to manage Claude Code projects through your web browser.</p>
                         
                         <h4>Keyboard Shortcuts</h4>
                         <div class="shortcuts-list">

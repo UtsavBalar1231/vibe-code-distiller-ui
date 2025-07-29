@@ -379,7 +379,7 @@ class SocketClient extends EventEmitter {
                         }
                         
                         // Test browser notification (independent of in-app notification settings)
-                        this.showBrowserNotification('Claude Code Web Manager', 'Browser notifications enabled!', 'System');
+                        this.showBrowserNotification('Vibe Code Distiller', 'Browser notifications enabled!', 'System');
                     } else if (permission === 'denied') {
                         // Show in-app message about browser notification denial (if in-app notifications enabled)
                         if (notifications.isNotificationEnabled()) {

@@ -80,7 +80,7 @@ class ClaudeCodeWebManager extends EventEmitter {
                 <div class="loading-content">
                     <div class="error-icon">❌</div>
                     <h2>Failed to Initialize</h2>
-                    <p>Claude Code Web Manager failed to start:</p>
+                    <p>Vibe Code Distiller failed to start:</p>
                     <p class="error-message">${error.message}</p>
                     <button class="btn btn-primary" onclick="location.reload()">Retry</button>
                 </div>
@@ -732,7 +732,7 @@ class ClaudeCodeWebManager extends EventEmitter {
                     } else if (Notification.permission === 'granted') {
                         // Show test notification
                         if (socket && socket.showBrowserNotification) {
-                            socket.showBrowserNotification('Claude Code Web Manager', 'Notifications working properly!', 'Test');
+                            socket.showBrowserNotification('Vibe Code Distiller', 'Notifications working properly!', 'Test');
                         }
                     }
                 } else {
@@ -822,7 +822,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="loading-content">
                         <div class="error-icon">❌</div>
                         <h2>Failed to Initialize</h2>
-                        <p>Claude Code Web Manager failed to start:</p>
+                        <p>Vibe Code Distiller failed to start:</p>
                         <p class="error-message">${error.message}</p>
                         <button class="btn btn-primary" onclick="location.reload()">Retry</button>
                     </div>
@@ -856,4 +856,4 @@ window.addEventListener('unhandledrejection', (event) => {
     console.error('An unexpected error occurred');
 });
 
-console.log('🚀 Claude Code Web Manager loading...');
+console.log('🚀 Vibe Code Distiller loading...');

@@ -402,58 +402,50 @@ class ProjectManager extends EventEmitter {
         const form = DOM.get('project-form');
         const title = DOM.get('project-modal-title');
         
+        if (!modal) {
+            console.error('❌ project-modal element not found in DOM');
+            return;
+        }
+        
         if (title) title.textContent = 'Create New Project';
         if (form) form.reset();
         
-        // Debug: Check modal's computed styles before opening
-        if (modal) {
-            const computedStyle = window.getComputedStyle(modal);
-        }
+        // Show modal with inline styles to ensure it appears above welcome screen
+        modal.style.display = 'flex';
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100vw';
+        modal.style.height = '100vh';
+        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.style.opacity = '0';
+        modal.style.visibility = 'hidden';
         
-        // Try direct modal display first (bypass modal manager temporarily for debugging)
-        if (modal) {
-            // Set initial styles
-            modal.style.display = 'flex';
-            modal.style.position = 'fixed';
-            modal.style.top = '0';
-            modal.style.left = '0';
-            modal.style.width = '100vw';
-            modal.style.height = '100vh';
-            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-            modal.style.alignItems = 'center';
-            modal.style.justifyContent = 'center';
-            modal.style.zIndex = '1000';
-            modal.style.opacity = '0';
-            modal.style.visibility = 'hidden';
+        // Force browser to recognize the changes
+        modal.offsetHeight; // Force reflow
+        
+        setTimeout(() => {
+            modal.classList.add('active');
+            modal.style.opacity = '1';
+            modal.style.visibility = 'visible';
             
-            
-            // Force browser to recognize the changes
-            modal.offsetHeight; // Force reflow
-            
-            setTimeout(() => {
-                modal.classList.add('active');
-                modal.style.opacity = '1';
-                modal.style.visibility = 'visible';
-                
-                // Focus first input
-                const firstInput = modal.querySelector('input, textarea, select');
-                if (firstInput) {
-                    firstInput.focus();
-                }
-            }, 10);
-            
-            // Add backdrop click handler
-            const handleBackdropClick = (e) => {
-                if (e.target === modal) {
-                    this.closeProjectModal();
-                    modal.removeEventListener('click', handleBackdropClick);
-                }
-            };
-            modal.addEventListener('click', handleBackdropClick);
-        } else {
-            console.error('Project modal element not found');
-            console.error('Failed to open project creation dialog');
-        }
+            // Focus first input
+            const firstInput = modal.querySelector('input, textarea, select');
+            if (firstInput) {
+                firstInput.focus();
+            }
+        }, 10);
+        
+        // Add backdrop click handler
+        const handleBackdropClick = (e) => {
+            if (e.target === modal) {
+                this.closeProjectModal();
+                modal.removeEventListener('click', handleBackdropClick);
+            }
+        };
+        modal.addEventListener('click', handleBackdropClick);
     }
     
     closeProjectModal() {
@@ -503,16 +495,30 @@ class ProjectManager extends EventEmitter {
                 // Select the new project
                 this.selectProject(response.project.id);
                 
+                // Automatically create terminal session for the new project
+                this.createNewTerminal(response.project.id);
+                
                 this.emit('project_created', response.project);
             }
         } catch (error) {
             console.error('Failed to create project:', error);
             
-            // Show specific error message for conflict
-            if (error.message.includes('409')) {
-                console.error('Project name already exists. Please choose a different name.');
+            // Show user-friendly error messages
+            if (error.message.includes('409') || error.message.includes('already exists')) {
+                // Show user-friendly notification using global notification system
+                if (window.notifications) {
+                    window.notifications.error('Project name already exists. Please choose a different name.', {
+                        title: 'Project Creation Failed',
+                        duration: 5000
+                    });
+                }
             } else {
-                console.error('Failed to create project: ' + error.message);
+                if (window.notifications) {
+                    window.notifications.error('Failed to create project: ' + error.message, {
+                        title: 'Project Creation Failed',
+                        duration: 5000
+                    });
+                }
             }
         } finally {
             // Always restore button state
