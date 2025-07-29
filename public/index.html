@@ -81,6 +81,9 @@
                 </div>
                 
                 <div class="header-actions">
+                    <button class="btn btn-icon" id="help-docs-btn" title="Documentation">
+                        <span class="icon">📖</span>
+                    </button>
                     <button class="btn btn-icon" id="settings-btn" title="Settings">
                         <span class="icon">⚙️</span>
                     </button>
@@ -448,6 +451,26 @@
                     </div>
                     <div class="settings-content">
                         <!-- Settings panels will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Documentation Modal -->
+        <div id="docs-modal" class="modal">
+            <div class="modal-content large">
+                <div class="modal-header">
+                    <h3>📖 Documentation</h3>
+                    <button class="btn btn-icon modal-close">
+                        <span class="icon">✕</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="docs-content" id="docs-content">
+                        <div class="loading-placeholder">
+                            <div class="loading-spinner"></div>
+                            <span>Loading documentation...</span>
+                        </div>
                     </div>
                 </div>
             </div>
