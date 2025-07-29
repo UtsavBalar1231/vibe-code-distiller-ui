@@ -359,6 +359,22 @@ class ClaudeCodeWebManager extends EventEmitter {
                         </div>
                     </div>
                 </div>
+                
+                <div class="settings-group">
+                    <h4>New terminal button</h4>
+                    <div class="settings-item">
+                        <div class="settings-item-info">
+                            <div class="settings-item-title">Show New Terminal Button</div>
+                            <div class="settings-item-description">Display new terminal button in terminal status bar (advanced feature)</div>
+                        </div>
+                        <div class="settings-item-control">
+                            <div class="toggle-switch" id="new-terminal-btn-toggle">
+                                <input type="checkbox" id="new-terminal-btn-enabled">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <div class="settings-panel" data-panel="system">
@@ -470,6 +486,24 @@ class ClaudeCodeWebManager extends EventEmitter {
             }
         });
         
+        // New terminal button settings event handler
+        DOM.on('new-terminal-btn-toggle', 'click', (e) => {
+            const toggleElement = e.currentTarget;
+            const checkbox = toggleElement.querySelector('input[type="checkbox"]');
+            
+            // Toggle the checkbox state
+            checkbox.checked = !checkbox.checked;
+            
+            // Update visual state
+            toggleElement.classList.toggle('active', checkbox.checked);
+            
+            // Save state and update button visibility
+            Storage.set('new-terminal-btn-enabled', checkbox.checked);
+            
+            // Apply the setting immediately
+            this.updateNewTerminalButtonVisibility(checkbox.checked);
+        });
+        
     }
     
     async loadSettingsValues() {
@@ -518,6 +552,20 @@ class ClaudeCodeWebManager extends EventEmitter {
             shortcutsCheckbox.checked = shortcutsPanelEnabled;
             shortcutsToggle.classList.toggle('active', shortcutsPanelEnabled);
         }
+        
+        // Load new terminal button settings - default to false (button hidden)
+        const newTerminalBtnEnabled = Storage.get('new-terminal-btn-enabled', false);
+        
+        // Set new terminal button toggle switch state
+        const newTerminalBtnToggle = DOM.get('new-terminal-btn-toggle');
+        const newTerminalBtnCheckbox = DOM.get('new-terminal-btn-enabled');
+        if (newTerminalBtnToggle && newTerminalBtnCheckbox) {
+            newTerminalBtnCheckbox.checked = newTerminalBtnEnabled;
+            newTerminalBtnToggle.classList.toggle('active', newTerminalBtnEnabled);
+        }
+        
+        // Apply the initial button visibility
+        this.updateNewTerminalButtonVisibility(newTerminalBtnEnabled);
     }
     
     switchSettingsTab(tabName) {
@@ -718,6 +766,20 @@ class ClaudeCodeWebManager extends EventEmitter {
             statusElement.style.color = '#f44336';
         }
     }
+    
+    // Update new terminal button visibility based on setting
+    updateNewTerminalButtonVisibility(enabled) {
+        const newTerminalBtn = DOM.get('new-terminal-btn');
+        if (newTerminalBtn) {
+            if (enabled) {
+                newTerminalBtn.style.display = '';
+                console.log('New terminal button enabled - now visible');
+            } else {
+                newTerminalBtn.style.display = 'none';
+                console.log('New terminal button disabled - now hidden');
+            }
+        }
+    }
 }
 
 // Initialize application when DOM is ready
@@ -737,6 +799,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             window.app = new ClaudeCodeWebManager();
+            
+            // Apply initial new terminal button visibility setting after app initialization
+            setTimeout(() => {
+                if (window.app && typeof window.app.updateNewTerminalButtonVisibility === 'function') {
+                    const newTerminalBtnEnabled = Storage.get('new-terminal-btn-enabled', false);
+                    window.app.updateNewTerminalButtonVisibility(newTerminalBtnEnabled);
+                }
+            }, 200);
             
             // Initialize image manager socket connection
             if (window.ImageManager && window.socket) {
