@@ -1871,3 +1871,114 @@ kbd {
     color: var(--text-secondary);
     margin: 0;
 }
+
+/* ===== FILE TREE ===== */
+.file-tree-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    max-height: calc(100vh - 200px);
+}
+
+.file-tree-root {
+    padding: var(--spacing-xs);
+}
+
+.file-tree-node {
+    margin: 0;
+    user-select: none;
+}
+
+.tree-node-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    cursor: pointer;
+    border-radius: var(--border-radius-sm);
+    transition: background-color var(--transition-fast);
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+}
+
+.tree-node-header:hover {
+    background-color: var(--bg-hover);
+}
+
+.tree-node-header.file-node:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.tree-node-icon {
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.tree-node-label {
+    flex: 1;
+    color: var(--text-primary);
+    font-weight: var(--font-weight-normal);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-tree-node.file .tree-node-label {
+    color: var(--text-secondary);
+}
+
+.tree-node-children {
+    padding-left: var(--spacing-md);
+    border-left: 1px solid var(--border-color);
+    margin-left: 8px;
+    display: none;
+}
+
+.file-tree-node.expanded > .tree-node-children {
+    display: block;
+}
+
+.file-tree-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xl);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.file-tree-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xl);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.empty-icon {
+    font-size: 2rem;
+    opacity: 0.5;
+}
+
+.empty-message {
+    font-weight: var(--font-weight-medium);
+}
+
+/* File tree specific button styles */
+#refresh-tree-btn,
+#toggle-hidden-btn {
+    min-width: 32px;
+    padding: var(--spacing-xs);
+}
+
+/* Monaco Editor and Git Diff styles have been moved to main.css to avoid conflicts */
