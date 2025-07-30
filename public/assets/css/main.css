@@ -1288,6 +1288,61 @@ body {
     margin-bottom: 0;
 }
 
+/* ===== TERMINAL LOADING STATE STYLES ===== */
+.terminal-loading-state {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.terminal-loading-content {
+    text-align: center;
+    padding: 3rem 2rem;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.terminal-loading-icon {
+    font-size: 4rem;
+    margin-bottom: 1.5rem;
+    opacity: 0.6;
+}
+
+.terminal-loading-title {
+    font-size: var(--font-size-xxl);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    letter-spacing: 0.02em;
+}
+
+.terminal-loading-description {
+    font-size: var(--font-size-md);
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 2rem;
+}
+
+.loading-spinner {
+    margin: 0 auto;
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--border-color);
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
     .terminal-empty-content {
@@ -1353,6 +1408,286 @@ body {
     }
     
     .empty-state-description {
+        font-size: var(--font-size-sm);
+    }
+}
+
+/* ===== MONACO EDITOR & FILE TREE STYLES ===== */
+
+/* File Tree Container */
+#file-tree-container {
+    max-height: 100%;
+    overflow-y: auto;
+    padding: var(--spacing-sm);
+}
+
+.file-tree-root {
+    width: 100%;
+}
+
+.file-tree-node {
+    margin-bottom: 2px;
+}
+
+.tree-node-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+    font-size: var(--font-size-sm);
+}
+
+.tree-node-header:hover {
+    background-color: var(--bg-hover);
+}
+
+.tree-node-header.file-node:hover {
+    background-color: var(--bg-active);
+    color: var(--text-inverse);
+}
+
+.tree-node-icon {
+    font-size: var(--font-size-md);
+    flex-shrink: 0;
+}
+
+.tree-node-label {
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-node-children {
+    margin-left: var(--spacing-md);
+    border-left: 1px solid var(--border-color);
+    padding-left: var(--spacing-sm);
+}
+
+.file-tree-empty {
+    text-align: center;
+    padding: var(--spacing-xl);
+    color: var(--text-secondary);
+}
+
+.empty-icon {
+    font-size: 2rem;
+    margin-bottom: var(--spacing-md);
+    opacity: 0.6;
+}
+
+.empty-message {
+    font-size: var(--font-size-sm);
+}
+
+/* Monaco Editor Modal */
+#monaco-editor-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: var(--z-modal-backdrop);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all var(--transition-normal);
+}
+
+#monaco-editor-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+#monaco-editor-modal {
+    width: calc(100% - 4rem);
+    height: calc(100% - 4rem);
+    max-width: 1400px;
+    max-height: 900px;
+    background-color: var(--bg-primary);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: var(--shadow-xl);
+    transform: scale(0.9);
+    transition: transform var(--transition-normal);
+}
+
+#monaco-editor-modal.active {
+    transform: scale(1);
+}
+
+#monaco-editor-title {
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.editor-header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.file-icon {
+    font-size: var(--font-size-lg);
+}
+
+.file-name {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+}
+
+.file-status {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    margin-left: var(--spacing-sm);
+}
+
+.editor-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+#monaco-editor {
+    flex: 1;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* Git Diff Decorations for Monaco Editor */
+.git-diff-added-line {
+    background-color: rgba(40, 167, 69, 0.15) !important;
+    border-left: 3px solid #28a745 !important;
+}
+
+.git-diff-modified-line {
+    background-color: rgba(255, 193, 7, 0.15) !important;
+    border-left: 3px solid #ffc107 !important;
+}
+
+.git-diff-deleted-line {
+    background-color: rgba(220, 53, 69, 0.15) !important;
+    border-left: 3px solid #dc3545 !important;
+}
+
+.git-diff-added-glyph {
+    background-color: #28a745 !important;
+    color: white !important;
+    width: 16px !important;
+    height: 16px !important;
+    border-radius: 2px !important;
+    text-align: center !important;
+    line-height: 16px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    font-family: monospace !important;
+}
+
+.git-diff-added-glyph::before {
+    content: '+' !important;
+}
+
+.git-diff-modified-glyph {
+    background-color: #ffc107 !important;
+    color: #333 !important;
+    width: 16px !important;
+    height: 16px !important;
+    border-radius: 2px !important;
+    text-align: center !important;
+    line-height: 16px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    font-family: monospace !important;
+}
+
+.git-diff-modified-glyph::before {
+    content: '~' !important;
+}
+
+.git-diff-deleted-glyph {
+    background-color: #dc3545 !important;
+    color: white !important;
+    width: 16px !important;
+    height: 16px !important;
+    border-radius: 2px !important;
+    text-align: center !important;
+    line-height: 16px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    font-family: monospace !important;
+}
+
+.git-diff-deleted-glyph::before {
+    content: '-' !important;
+}
+
+.git-diff-added-margin {
+    background-color: rgba(40, 167, 69, 0.1) !important;
+}
+
+.git-diff-modified-margin {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+}
+
+.git-diff-deleted-margin {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+}
+
+/* Monaco Editor Dark Theme Overrides */
+.monaco-editor .margin {
+    background-color: var(--bg-secondary) !important;
+}
+
+.monaco-editor .current-line {
+    border: 1px solid var(--border-color) !important;
+}
+
+/* Panel controls */
+.panel-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.panel-controls .btn-icon {
+    min-width: 24px;
+    min-height: 24px;
+    padding: var(--spacing-xs);
+}
+
+/* Mobile responsive for Monaco Editor */
+@media (max-width: 768px) {
+    #monaco-editor-modal {
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        margin: 0;
+    }
+    
+    #monaco-editor-overlay {
+        padding: 0;
+    }
+    
+    .editor-header-left {
+        gap: var(--spacing-xs);
+    }
+    
+    .file-name {
         font-size: var(--font-size-sm);
     }
 }

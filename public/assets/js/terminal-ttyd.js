@@ -694,6 +694,9 @@ class TTYdTerminalManager {
     }
 
     showIframe() {
+        // Hide terminal loading state before showing iframe
+        this.hideTerminalLoading();
+        
         if (this.iframe) {
             this.iframe.style.display = 'block';
         }
@@ -715,6 +718,12 @@ class TTYdTerminalManager {
         const welcomeScreen = document.getElementById('welcome-screen');
         if (welcomeScreen) {
             welcomeScreen.style.display = 'none';
+        }
+        
+        // Hide terminal loading state
+        const terminalLoadingState = document.getElementById('terminal-loading-state');
+        if (terminalLoadingState) {
+            terminalLoadingState.style.display = 'none';
         }
         
         // Hide iframe
@@ -758,6 +767,18 @@ class TTYdTerminalManager {
             welcomeScreen.style.display = 'flex';
             // 恢复默认的welcome内容
             this.resetWelcomeContent();
+        }
+        
+        // Hide terminal empty state
+        const terminalEmptyState = document.getElementById('terminal-empty-state');
+        if (terminalEmptyState) {
+            terminalEmptyState.style.display = 'none';
+        }
+        
+        // Hide terminal loading state
+        const terminalLoadingState = document.getElementById('terminal-loading-state');
+        if (terminalLoadingState) {
+            terminalLoadingState.style.display = 'none';
         }
         
         if (this.iframe) {
@@ -849,33 +870,42 @@ class TTYdTerminalManager {
 
     showTerminalLoading() {
         console.log('💼 Showing terminal loading status...');
+        
+        // Hide welcome screen
         const welcomeScreen = document.getElementById('welcome-screen');
         if (welcomeScreen) {
-            welcomeScreen.style.display = 'flex';
+            welcomeScreen.style.display = 'none';
         }
         
+        // Hide terminal empty state
+        const terminalEmptyState = document.getElementById('terminal-empty-state');
+        if (terminalEmptyState) {
+            terminalEmptyState.style.display = 'none';
+        }
+        
+        // Hide iframe
         if (this.iframe) {
             this.iframe.style.display = 'none';
         }
         
-        // 修改welcome screen内容显示加载状态
-        const welcomeContent = document.querySelector('.welcome-content');
-        if (welcomeContent) {
-            welcomeContent.innerHTML = `
-                <h2>💼 Terminal Loading</h2>
-                <p>Preparing terminal session...</p>
-                <div class="loading-spinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <style>
-                    @keyframes spin {
-                        0% { transform: rotate(0deg); }
-                        100% { transform: rotate(360deg); }
-                    }
-                </style>
-            `;
+        // Show terminal loading state
+        const terminalLoadingState = document.getElementById('terminal-loading-state');
+        if (terminalLoadingState) {
+            terminalLoadingState.style.display = 'flex';
         }
 
         // Hide scroll controls during loading
         this.hideScrollControls();
+    }
+
+    hideTerminalLoading() {
+        console.log('🔄 Hiding terminal loading status...');
+        
+        // Hide terminal loading state
+        const terminalLoadingState = document.getElementById('terminal-loading-state');
+        if (terminalLoadingState) {
+            terminalLoadingState.style.display = 'none';
+        }
     }
 
     showDisconnectionMessage() {

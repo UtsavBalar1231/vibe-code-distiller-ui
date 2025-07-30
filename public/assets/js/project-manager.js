@@ -280,8 +280,8 @@ class ProjectManager extends EventEmitter {
                 this.autoSelectTerminalTab(project);
             }
             
-            // Notify file manager about project change
-            if (window.fileManager) {
+            // Notify file tree manager about project change
+            if (window.fileTreeManager) {
                 document.dispatchEvent(new CustomEvent('projectChanged', {
                     detail: { projectId: projectId, project: project }
                 }));
