@@ -7,6 +7,7 @@ class MonacoEditorManager {
         this.editor = null;
         this.currentFile = null;
         this.originalContent = null;
+        this.initialContent = null; // Store initial content for unsaved changes detection
         this.isEditorReady = false;
         this.decorations = []; // Track current decorations
         this.isNewFile = false; // Track if current file is new
@@ -37,7 +38,7 @@ class MonacoEditorManager {
         // Close editor button
         const closeBtn = document.getElementById('close-editor-btn');
         if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.closeEditor());
+            closeBtn.addEventListener('click', () => this.handleCloseAttempt());
         }
 
         // Save file button  
@@ -53,7 +54,7 @@ class MonacoEditorManager {
             overlay.addEventListener('click', (e) => {
                 // Only close if clicking the overlay itself, not the modal content
                 if (e.target === overlay) {
-                    this.closeEditor();
+                    this.handleCloseAttempt();
                 }
             });
             
@@ -71,7 +72,7 @@ class MonacoEditorManager {
                     this.saveFile();
                 } else if (event.key === 'Escape') {
                     event.preventDefault();
-                    this.closeEditor();
+                    this.handleCloseAttempt();
                 }
             }
         });
@@ -154,9 +155,10 @@ class MonacoEditorManager {
                 fontFamily: 'Menlo, Monaco, "Courier New", monospace'
             });
 
-            // Add editor change listener for diff updates
+            // Add editor change listener for diff updates and unsaved changes indicator
             this.editor.onDidChangeModelContent(() => {
                 this.updateDiffDecorations();
+                this.updateUnsavedChangesIndicator();
             });
 
             this.isEditorReady = true;
@@ -171,6 +173,7 @@ class MonacoEditorManager {
             // Reset state for new file
             this.isNewFile = false;
             this.originalContent = null;
+            this.initialContent = null; // Reset initial content for unsaved changes detection
             this.inGitRepo = true; // Reset to default state
 
             // Initialize Monaco if not ready BEFORE loading file
@@ -195,6 +198,9 @@ class MonacoEditorManager {
 
             // Update current file info
             this.currentFile = { path: filePath, name: fileName };
+
+            // Store initial content for unsaved changes detection
+            this.initialContent = content;
 
             // Set editor content and language
             const language = this.getLanguageFromFileName(fileName);
@@ -223,8 +229,11 @@ class MonacoEditorManager {
                 }
             }
 
-            // Apply initial diff decorations
-            setTimeout(() => this.updateDiffDecorations(), 100);
+            // Apply initial diff decorations and update unsaved changes indicator
+            setTimeout(() => {
+                this.updateDiffDecorations();
+                this.updateUnsavedChangesIndicator();
+            }, 100);
 
         } catch (error) {
             console.error('Failed to open file:', error);
@@ -305,6 +314,9 @@ class MonacoEditorManager {
             if (data.success) {
                 this.updateFileStatus('saved');
                 
+                // Update initial content to current content after successful save
+                this.initialContent = content;
+                
                 // Reload Git original content for updated diff
                 this.originalContent = await this.loadGitOriginalContent(this.currentFile.path);
                 this.updateDiffDecorations();
@@ -373,6 +385,22 @@ class MonacoEditorManager {
         }
 
         return changes;
+    }
+
+    hasUnsavedChanges() {
+        // Return false if no editor or no initial content to compare with
+        if (!this.editor || this.initialContent === null) {
+            return false;
+        }
+
+        const currentContent = this.editor.getValue();
+        
+        // Normalize line endings for comparison
+        const normalizeContent = (content) => {
+            return content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        };
+
+        return normalizeContent(currentContent) !== normalizeContent(this.initialContent);
     }
 
     createDecorations(changes) {
@@ -525,21 +553,41 @@ class MonacoEditorManager {
         return iconMap[ext] || '📄';
     }
 
+    updateUnsavedChangesIndicator() {
+        const statusElement = document.querySelector('#monaco-editor-title .file-status');
+        if (statusElement) {
+            if (this.hasUnsavedChanges()) {
+                statusElement.textContent = '● Unsaved changes';
+                statusElement.style.color = '#ffc107'; // Yellow color to indicate unsaved changes
+            } else {
+                // Only clear if it's showing unsaved changes (don't interfere with save confirmation)
+                if (statusElement.textContent === '● Unsaved changes') {
+                    statusElement.textContent = '';
+                    statusElement.style.color = '';
+                }
+            }
+        }
+    }
+
     updateFileStatus(status) {
         const statusElement = document.querySelector('#monaco-editor-title .file-status');
         if (statusElement) {
             switch (status) {
                 case 'saved':
                     statusElement.textContent = '✅ Saved';
+                    statusElement.style.color = '#28a745'; // Green color for saved
                     setTimeout(() => {
-                        statusElement.textContent = '';
+                        // After showing saved message, update to current state
+                        this.updateUnsavedChangesIndicator();
                     }, 2000);
                     break;
                 case 'modified':
                     statusElement.textContent = '● Modified';
+                    statusElement.style.color = '#ffc107'; // Yellow color for modified
                     break;
                 default:
                     statusElement.textContent = '';
+                    statusElement.style.color = '';
             }
         }
     }
@@ -559,6 +607,59 @@ class MonacoEditorManager {
         }
     }
 
+    async handleCloseAttempt() {
+        // Check if there are unsaved changes
+        if (this.hasUnsavedChanges()) {
+            const result = await this.showUnsavedChangesDialog();
+            
+            switch (result) {
+                case 'save':
+                    // Save file first, then close
+                    try {
+                        await this.saveFile();
+                        this.closeEditor();
+                    } catch (error) {
+                        // If save fails, don't close the editor
+                        console.error('Save failed, editor will remain open:', error);
+                    }
+                    break;
+                case 'discard':
+                    // Close without saving
+                    this.closeEditor();
+                    break;
+                case 'cancel':
+                    // Do nothing, keep editor open
+                    break;
+            }
+        } else {
+            // No unsaved changes, close directly
+            this.closeEditor();
+        }
+    }
+
+    showUnsavedChangesDialog() {
+        return new Promise((resolve) => {
+            const fileName = this.currentFile ? this.currentFile.name : 'this file';
+            const message = `You have unsaved changes in ${fileName}.\n\nWhat would you like to do?`;
+            
+            // Create custom dialog with three options
+            const result = confirm(message + '\n\nClick OK to SAVE and close, or Cancel to continue editing.');
+            
+            if (result) {
+                // User clicked OK - they want to save
+                resolve('save');
+            } else {
+                // User clicked Cancel - ask if they want to discard changes
+                const discardResult = confirm('Do you want to close without saving? Your changes will be lost.\n\nClick OK to DISCARD changes and close, or Cancel to continue editing.');
+                if (discardResult) {
+                    resolve('discard');
+                } else {
+                    resolve('cancel');
+                }
+            }
+        });
+    }
+
     closeEditor() {
         const modal = document.getElementById('monaco-editor-modal');
         const overlay = document.getElementById('monaco-editor-overlay');
@@ -575,6 +676,7 @@ class MonacoEditorManager {
 
         this.currentFile = null;
         this.originalContent = null;
+        this.initialContent = null; // Reset initial content
         this.isNewFile = false;
         this.inGitRepo = true; // Reset to default state
     }
@@ -597,6 +699,7 @@ class MonacoEditorManager {
         // Reset state but don't clear editor content yet - let closeEditor handle that
         this.currentFile = null;
         this.originalContent = null;
+        this.initialContent = null; // Reset initial content
         this.isNewFile = false;
         this.inGitRepo = true;
     }
