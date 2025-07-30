@@ -33,9 +33,6 @@ class ClaudeCodeWebManager extends EventEmitter {
             // Initialize system monitoring
             this.initializeSystemMonitoring();
             
-            // Request notification permission after app is ready
-            this.requestNotificationPermission();
-            
             // Setup notification status click handler
             this.setupNotificationStatusHandler();
             
@@ -819,11 +816,20 @@ class ClaudeCodeWebManager extends EventEmitter {
     }
     
     requestNotificationPermission() {
-        // Only request permission if it's not already determined
+        // Only request permission if notifications are enabled and permission is not already determined
+        const notificationsEnabled = Storage.get('notifications-enabled', false);
+        
+        if (!notificationsEnabled) {
+            // Don't request permission if notifications are disabled
+            return;
+        }
+        
         if ('Notification' in window && Notification.permission === 'default') {
             // Add a click handler to request permission on first user interaction
             const requestPermissionOnInteraction = () => {
-                if (socket && socket.requestNotificationPermission) {
+                // Double-check notifications are still enabled
+                const currentlyEnabled = Storage.get('notifications-enabled', false);
+                if (currentlyEnabled && socket && socket.requestNotificationPermission) {
                     socket.requestNotificationPermission();
                 }
                 // Remove the listener after first interaction
@@ -835,7 +841,8 @@ class ClaudeCodeWebManager extends EventEmitter {
             
             // Also try after a short delay as fallback
             setTimeout(() => {
-                if ('Notification' in window && Notification.permission === 'default') {
+                const currentlyEnabled = Storage.get('notifications-enabled', false);
+                if (currentlyEnabled && 'Notification' in window && Notification.permission === 'default') {
                     requestPermissionOnInteraction();
                 }
             }, 3000);
