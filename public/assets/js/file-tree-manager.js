@@ -6,7 +6,7 @@
 class FileTreeManager {
     constructor() {
         this.currentPath = '/';
-        this.showHidden = false;
+        this.showHidden = true;
         this.fileTree = new Map(); // Cache for file tree structure
         this.expandedFolders = new Set(); // Track expanded folders
         this.selectedProject = null; // Track selected project for highlighting
@@ -61,11 +61,6 @@ class FileTreeManager {
             refreshBtn.addEventListener('click', () => this.refreshFullTree());
         }
 
-        // Toggle hidden files button
-        const toggleHiddenBtn = document.getElementById('toggle-hidden-btn');
-        if (toggleHiddenBtn) {
-            toggleHiddenBtn.addEventListener('click', () => this.toggleHiddenFiles());
-        }
 
         // Listen for project changes - navigate to project in full tree
         document.addEventListener('projectChanged', (event) => {
@@ -75,19 +70,8 @@ class FileTreeManager {
             }
         });
 
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (event) => {
-            if (event.ctrlKey && event.key === 'h') {
-                event.preventDefault();
-                this.toggleHiddenFiles();
-            }
-        });
     }
 
-    toggleHiddenFiles() {
-        this.showHidden = !this.showHidden;
-        this.refreshFullTree();
-    }
 
     /**
      * Refresh the full tree while maintaining project selection state
@@ -111,7 +95,7 @@ class FileTreeManager {
 
     async loadFileTree() {
         try {
-            const apiUrl = `/api/filesystem/browse?path=${encodeURIComponent(this.currentPath)}&showHidden=${this.showHidden}`;
+            const apiUrl = `/api/filesystem/browse?path=${encodeURIComponent(this.currentPath)}&showHidden=true`;
             const response = await fetch(apiUrl);
             const data = await response.json();
 
@@ -255,7 +239,7 @@ class FileTreeManager {
 
     async loadDirectoryChildren(path, nodeElement) {
         try {
-            const apiUrl = `/api/filesystem/browse?path=${encodeURIComponent(path)}&showHidden=${this.showHidden}`;
+            const apiUrl = `/api/filesystem/browse?path=${encodeURIComponent(path)}&showHidden=true`;
             const response = await fetch(apiUrl);
             const data = await response.json();
 

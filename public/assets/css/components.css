@@ -1992,8 +1992,7 @@ kbd {
 }
 
 /* File tree specific button styles */
-#refresh-tree-btn,
-#toggle-hidden-btn {
+#refresh-tree-btn {
     min-width: 32px;
     padding: var(--spacing-xs);
 }
