@@ -168,17 +168,12 @@ class MonacoEditorManager {
 
     async openFile(filePath, fileName) {
         try {
-            
             // Reset state for new file
             this.isNewFile = false;
             this.originalContent = null;
             this.inGitRepo = true; // Reset to default state
-            
-            // Show editor first with loading state
-            this.updateEditorHeader(fileName);
-            this.showEditor();
 
-            // Initialize Monaco if not ready
+            // Initialize Monaco if not ready BEFORE loading file
             if (!this.isEditorReady) {
                 await this.initializeMonaco();
             }
@@ -188,11 +183,15 @@ class MonacoEditorManager {
                 throw new Error('Monaco Editor not properly initialized');
             }
 
-            // Load file content
+            // Load and validate file content BEFORE showing modal
             const content = await this.loadFileContent(filePath);
             
             // Load Git original content for diff
             this.originalContent = await this.loadGitOriginalContent(filePath);
+
+            // If we get here, file loading was successful - now show editor
+            this.updateEditorHeader(fileName);
+            this.showEditor();
 
             // Update current file info
             this.currentFile = { path: filePath, name: fileName };
@@ -229,6 +228,11 @@ class MonacoEditorManager {
 
         } catch (error) {
             console.error('Failed to open file:', error);
+            
+            // Ensure modal is hidden on error
+            this.hideModalOnError();
+            
+            // Show user-friendly error message
             alert('Failed to open file: ' + error.message);
         }
     }
@@ -416,26 +420,78 @@ class MonacoEditorManager {
         const ext = fileName.toLowerCase().split('.').pop();
         
         const languageMap = {
+            // JavaScript/TypeScript
             'js': 'javascript',
+            'mjs': 'javascript', 
+            'jsx': 'javascript',
             'javascript': 'javascript',
             'ts': 'typescript',
+            'tsx': 'typescript',
             'typescript': 'typescript',
+            
+            // Python
             'py': 'python',
             'python': 'python',
+            
+            // Web languages
             'html': 'html',
             'htm': 'html',
             'css': 'css',
             'scss': 'scss',
             'sass': 'sass',
             'less': 'less',
+            
+            // Data formats  
             'json': 'json',
             'xml': 'xml',
             'yaml': 'yaml',
             'yml': 'yaml',
+            'csv': 'plaintext',
+            'sql': 'sql',
+            
+            // Documentation
             'md': 'markdown',
             'markdown': 'markdown',
+            
+            // Programming languages
+            'java': 'java',
+            'c': 'c',
+            'cpp': 'cpp',
+            'cc': 'cpp',
+            'cxx': 'cpp',
+            'h': 'c',
+            'hpp': 'cpp',
+            'cs': 'csharp',
+            'php': 'php',
+            'rb': 'ruby',
+            'go': 'go',
+            'rs': 'rust',
+            
+            // Shell scripts
+            'sh': 'shell',
+            'bash': 'shell',
+            'zsh': 'shell',
+            'fish': 'shell',
+            'ps1': 'powershell',
+            'bat': 'bat',
+            'cmd': 'bat',
+            
+            // Config files
+            'conf': 'plaintext',
+            'config': 'plaintext',
+            'ini': 'ini',
+            'env': 'plaintext',
+            'properties': 'properties',
+            'gitignore': 'plaintext',
+            'gitattributes': 'plaintext',
+            'editorconfig': 'plaintext',
+            
+            // Plain text and logs
             'txt': 'plaintext',
-            'log': 'plaintext'
+            'log': 'plaintext',
+            'rst': 'plaintext',
+            'adoc': 'plaintext',
+            'asciidoc': 'plaintext'
         };
 
         return languageMap[ext] || 'plaintext';
@@ -521,6 +577,28 @@ class MonacoEditorManager {
         this.originalContent = null;
         this.isNewFile = false;
         this.inGitRepo = true; // Reset to default state
+    }
+
+    hideModalOnError() {
+        // Hide modal and overlay if they're visible
+        const modal = document.getElementById('monaco-editor-modal');
+        const overlay = document.getElementById('monaco-editor-overlay');
+        
+        if (modal && overlay) {
+            modal.classList.remove('active');
+            overlay.classList.remove('active');
+        }
+
+        // Clear any decorations
+        if (this.editor && this.decorations.length > 0) {
+            this.decorations = this.editor.deltaDecorations(this.decorations, []);
+        }
+
+        // Reset state but don't clear editor content yet - let closeEditor handle that
+        this.currentFile = null;
+        this.originalContent = null;
+        this.isNewFile = false;
+        this.inGitRepo = true;
     }
 
     isEditorOpen() {

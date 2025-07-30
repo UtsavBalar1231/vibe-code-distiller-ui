@@ -200,18 +200,78 @@ router.get('/preview', async (req, res, next) => {
         
         // Determine MIME type
         const mimeTypes = {
+            // Text formats
             '.txt': 'text/plain',
+            '.log': 'text/plain',
+            '.conf': 'text/plain',
+            '.config': 'text/plain',
+            '.ini': 'text/plain',
+            '.env': 'text/plain',
+            '.properties': 'text/plain',
+            '.gitignore': 'text/plain',
+            '.gitattributes': 'text/plain',
+            '.editorconfig': 'text/plain',
+            
+            // Programming languages
             '.js': 'text/javascript',
-            '.json': 'application/json',
-            '.html': 'text/html',
-            '.css': 'text/css',
-            '.md': 'text/markdown',
+            '.mjs': 'text/javascript',
+            '.jsx': 'text/javascript',
+            '.ts': 'text/typescript',
+            '.tsx': 'text/typescript',
             '.py': 'text/plain',
+            '.java': 'text/plain',
+            '.c': 'text/plain',
+            '.cpp': 'text/plain',
+            '.cc': 'text/plain',
+            '.cxx': 'text/plain',
+            '.h': 'text/plain',
+            '.hpp': 'text/plain',
+            '.cs': 'text/plain',
+            '.php': 'text/plain',
+            '.rb': 'text/plain',
+            '.go': 'text/plain',
+            '.rs': 'text/plain',
+            '.sh': 'text/plain',
+            '.bash': 'text/plain',
+            '.zsh': 'text/plain',
+            '.fish': 'text/plain',
+            '.ps1': 'text/plain',
+            '.bat': 'text/plain',
+            '.cmd': 'text/plain',
+            
+            // Web formats
+            '.html': 'text/html',
+            '.htm': 'text/html',
+            '.css': 'text/css',
+            '.scss': 'text/css',
+            '.sass': 'text/css',
+            '.less': 'text/css',
+            
+            // Data formats
+            '.json': 'application/json',
+            '.yaml': 'text/plain',
+            '.yml': 'text/plain',
+            '.xml': 'text/xml',
+            '.csv': 'text/csv',
+            '.tsv': 'text/plain',
+            '.sql': 'text/plain',
+            
+            // Documentation
+            '.md': 'text/markdown',
+            '.markdown': 'text/markdown',
+            '.rst': 'text/plain',
+            '.adoc': 'text/plain',
+            '.asciidoc': 'text/plain',
+            
+            // Images
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
             '.png': 'image/png',
             '.gif': 'image/gif',
-            '.svg': 'image/svg+xml'
+            '.svg': 'image/svg+xml',
+            '.webp': 'image/webp',
+            '.bmp': 'image/bmp',
+            '.ico': 'image/x-icon'
         };
         
         const mimeType = mimeTypes[fileExt] || 'application/octet-stream';
