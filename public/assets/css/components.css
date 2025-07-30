@@ -1943,6 +1943,23 @@ kbd {
     display: block;
 }
 
+/* Selected project highlighting */
+.file-tree-node.selected-project > .tree-node-header {
+    background-color: var(--accent-primary);
+    color: var(--text-primary-inverted);
+    border: 1px solid var(--accent-secondary);
+    box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb), 0.2);
+}
+
+.file-tree-node.selected-project > .tree-node-header .tree-node-label {
+    color: var(--text-primary-inverted);
+    font-weight: var(--font-weight-medium);
+}
+
+.file-tree-node.selected-project > .tree-node-header:hover {
+    background-color: var(--accent-secondary);
+}
+
 .file-tree-loading {
     display: flex;
     flex-direction: column;

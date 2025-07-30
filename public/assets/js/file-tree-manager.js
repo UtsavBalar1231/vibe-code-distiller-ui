@@ -9,6 +9,7 @@ class FileTreeManager {
         this.showHidden = false;
         this.fileTree = new Map(); // Cache for file tree structure
         this.expandedFolders = new Set(); // Track expanded folders
+        this.selectedProject = null; // Track selected project for highlighting
         
         this.init();
     }
@@ -23,11 +24,15 @@ class FileTreeManager {
     }
 
     checkActiveProject() {
+        // Always start from root directory to show full tree
+        this.currentPath = '/';
+        
         // Get current active project from project manager
         if (window.projectManager && window.projectManager.activeProject) {
             const activeProject = window.projectManager.activeProject;
             if (activeProject && activeProject.path) {
-                this.navigateToDirectory(activeProject.path);
+                // Use the new method to show project in full tree context
+                this.navigateToProjectInFullTree(activeProject.path, activeProject.id);
                 return;
             }
         }
@@ -39,11 +44,13 @@ class FileTreeManager {
                 // Use the first project as fallback
                 const firstProject = storedProjects[0];
                 if (firstProject && firstProject.path) {
-                    this.navigateToDirectory(firstProject.path);
+                    this.navigateToProjectInFullTree(firstProject.path, firstProject.id);
                 }
             }
         } catch (error) {
             console.warn('Could not get active project, using root path');
+            // Just load the full tree from root
+            this.loadFileTree();
         }
     }
 
@@ -51,7 +58,7 @@ class FileTreeManager {
         // Refresh tree button
         const refreshBtn = document.getElementById('refresh-tree-btn');
         if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => this.loadFileTree());
+            refreshBtn.addEventListener('click', () => this.refreshFullTree());
         }
 
         // Toggle hidden files button
@@ -60,11 +67,11 @@ class FileTreeManager {
             toggleHiddenBtn.addEventListener('click', () => this.toggleHiddenFiles());
         }
 
-        // Listen for project changes - navigate to project directory
+        // Listen for project changes - navigate to project in full tree
         document.addEventListener('projectChanged', (event) => {
             const project = event.detail.project;
             if (project && project.path) {
-                this.navigateToDirectory(project.path);
+                this.navigateToProjectInFullTree(project.path, project.id);
             }
         });
 
@@ -79,7 +86,27 @@ class FileTreeManager {
 
     toggleHiddenFiles() {
         this.showHidden = !this.showHidden;
-        this.loadFileTree();
+        this.refreshFullTree();
+    }
+
+    /**
+     * Refresh the full tree while maintaining project selection state
+     */
+    async refreshFullTree() {
+        // Always ensure we're showing full tree from root
+        this.currentPath = '/';
+        
+        // Load the tree
+        await this.loadFileTree();
+        
+        // If we have a selected project, re-expand to it and highlight
+        if (this.selectedProject) {
+            await this.expandPathRecursively(this.selectedProject.path);
+            
+            setTimeout(() => {
+                this.highlightSelectedProject();
+            }, 100);
+        }
     }
 
     async loadFileTree() {
@@ -276,10 +303,242 @@ class FileTreeManager {
         return iconMap[ext] || '📄';
     }
 
-    navigateToDirectory(path) {
-        this.currentPath = path;
-        this.expandedFolders.clear(); // Reset expanded state
-        this.loadFileTree();
+    /**
+     * Get parent directory path from a given path
+     * @param {string} fullPath - Full path to get parent from
+     * @returns {string} Parent directory path
+     */
+    getParentDirectory(fullPath) {
+        if (!fullPath || fullPath === '/') return '/';
+        
+        // Remove trailing slash if exists
+        const cleanPath = fullPath.replace(/\/$/, '');
+        
+        // Get parent directory
+        const lastSlashIndex = cleanPath.lastIndexOf('/');
+        if (lastSlashIndex <= 0) return '/';
+        
+        return cleanPath.substring(0, lastSlashIndex);
+    }
+
+    /**
+     * Navigate to project in full tree view and highlight the selected project
+     * @param {string} projectPath - Full path to the project
+     * @param {string} projectId - Project ID for highlighting
+     */
+    async navigateToProjectInFullTree(projectPath, projectId) {
+        try {
+            const projectName = this.getProjectNameFromPath(projectPath);
+            
+            // Store selected project info for highlighting
+            this.selectedProject = {
+                id: projectId,
+                name: projectName,
+                path: projectPath
+            };
+            
+            // Always keep root as current path to show full tree
+            this.currentPath = '/';
+            
+            // Load the full file tree first
+            await this.loadFileTree();
+            
+            // Ensure currentPath remains root after loadFileTree
+            this.currentPath = '/';
+            
+            // Expand path to project recursively
+            await this.expandPathRecursively(projectPath);
+            
+            // Ensure currentPath is still root after expansion
+            this.currentPath = '/';
+            
+            // Give a moment for all DOM updates to complete, then highlight and scroll
+            setTimeout(() => {
+                this.highlightSelectedProject();
+                this.scrollToProjectNode();
+            }, 150);
+            
+        } catch (error) {
+            console.error('Error navigating to project in full tree:', error);
+            // Fallback: just load the full tree
+            this.currentPath = '/';
+            await this.loadFileTree();
+        }
+    }
+
+    /**
+     * Extract project name from full project path
+     * @param {string} projectPath - Full path to the project
+     * @returns {string} Project name
+     */
+    getProjectNameFromPath(projectPath) {
+        if (!projectPath) return '';
+        
+        // Remove trailing slash if exists
+        const cleanPath = projectPath.replace(/\/$/, '');
+        
+        // Get the last part of the path (project name)
+        const lastSlashIndex = cleanPath.lastIndexOf('/');
+        if (lastSlashIndex === -1) return cleanPath;
+        
+        return cleanPath.substring(lastSlashIndex + 1);
+    }
+
+    /**
+     * Expand path recursively to make project visible
+     * @param {string} targetPath - Full path to expand to (e.g., "/home/projects/lanpangzi")
+     */
+    async expandPathRecursively(targetPath) {
+        if (!targetPath || targetPath === '/') return;
+        
+        // Parse path into directory levels: ["/", "/home", "/home/projects"]
+        const pathParts = this.parsePathLevels(targetPath);
+        
+        // Always expand each level sequentially, regardless of expandedFolders state
+        // This ensures proper expansion after DOM re-rendering
+        for (const pathLevel of pathParts) {
+            await this.expandDirectoryLevel(pathLevel);
+        }
+    }
+
+    /**
+     * Parse full path into directory levels
+     * @param {string} fullPath - Full path like "/home/projects/lanpangzi"
+     * @returns {Array} Array of paths like ["/", "/home", "/home/projects"]
+     */
+    parsePathLevels(fullPath) {
+        const cleanPath = fullPath.replace(/\/$/, ''); // Remove trailing slash
+        const parts = cleanPath.split('/').filter(part => part.length > 0);
+        
+        const levels = [];
+        let currentPath = '';
+        
+        for (const part of parts) {
+            currentPath += '/' + part;
+            // Include all parent directories, but not the final project itself
+            if (currentPath !== cleanPath) {
+                levels.push(currentPath);
+            }
+        }
+        
+        // Always include root if not already there
+        if (levels.length === 0 || levels[0] !== '/') {
+            levels.unshift('/');
+        }
+        
+        return levels;
+    }
+
+    /**
+     * Expand a specific directory level and load its children
+     * @param {string} dirPath - Directory path to expand
+     */
+    async expandDirectoryLevel(dirPath) {
+        // Find the directory node in the DOM
+        const dirNode = document.querySelector(`.file-tree-node[data-path="${dirPath}"][data-type="directory"]`);
+        if (!dirNode) return;
+
+        // Always force expansion (don't check current state)
+        // This ensures proper expansion after DOM re-rendering
+        dirNode.classList.add('expanded');
+        this.expandedFolders.add(dirPath);
+
+        // Update folder icon
+        const icon = dirNode.querySelector('.tree-node-icon');
+        if (icon) icon.textContent = '📁';
+
+        // Load children if not already loaded or if container is empty
+        const childrenContainer = dirNode.querySelector('.tree-node-children');
+        if (childrenContainer) {
+            // Always reload children to ensure they're up to date
+            if (childrenContainer.children.length === 0) {
+                await this.loadDirectoryChildren(dirPath, dirNode);
+            }
+            // Make children visible
+            childrenContainer.style.display = 'block';
+        }
+    }
+
+    /**
+     * Scroll to the selected project node to make it visible
+     */
+    scrollToProjectNode() {
+        if (!this.selectedProject) return;
+
+        setTimeout(() => {
+            // Find the project node in the DOM
+            const projectNode = document.querySelector(
+                `.file-tree-node[data-path="${this.selectedProject.path}"]`
+            );
+            
+            if (!projectNode) return;
+
+            // Get the file tree container
+            const treeContainer = document.getElementById('file-tree-container');
+            if (!treeContainer) return;
+
+            // Calculate scroll position
+            const containerRect = treeContainer.getBoundingClientRect();
+            const nodeRect = projectNode.getBoundingClientRect();
+            
+            // Check if node is already visible
+            const isVisible = (
+                nodeRect.top >= containerRect.top &&
+                nodeRect.bottom <= containerRect.bottom
+            );
+
+            if (!isVisible) {
+                // Calculate optimal scroll position
+                // Position the project node at 1/3 from the top for better visibility
+                const offsetFromTop = containerRect.height / 3;
+                const targetScrollTop = 
+                    treeContainer.scrollTop + 
+                    (nodeRect.top - containerRect.top) - 
+                    offsetFromTop;
+
+                // Smooth scroll to target position
+                treeContainer.scrollTo({
+                    top: Math.max(0, targetScrollTop),
+                    behavior: 'smooth'
+                });
+            }
+        }, 200); // Delay to ensure DOM updates are complete
+    }
+
+    /**
+     * Highlight the selected project in the file tree
+     */
+    highlightSelectedProject() {
+        if (!this.selectedProject) return;
+        
+        setTimeout(() => {
+            // Remove previous highlights
+            const prevHighlighted = document.querySelectorAll('.file-tree-node.selected-project');
+            prevHighlighted.forEach(node => node.classList.remove('selected-project'));
+            
+            // Find and highlight the selected project node using exact path match
+            const projectNode = document.querySelector(
+                `.file-tree-node[data-path="${this.selectedProject.path}"][data-type="directory"]`
+            );
+            
+            if (projectNode) {
+                projectNode.classList.add('selected-project');
+            } else {
+                // Fallback: try to find by name if exact path doesn't work
+                const allDirNodes = document.querySelectorAll('.file-tree-node[data-type="directory"]');
+                for (const node of allDirNodes) {
+                    const nodePath = node.dataset.path;
+                    if (nodePath && nodePath.endsWith('/' + this.selectedProject.name)) {
+                        // Additional check: ensure this is actually the right project
+                        const nodeLabel = node.querySelector('.tree-node-label');
+                        if (nodeLabel && nodeLabel.textContent.trim() === this.selectedProject.name) {
+                            node.classList.add('selected-project');
+                            break;
+                        }
+                    }
+                }
+            }
+        }, 150); // Slightly longer delay to ensure all DOM updates are complete
     }
 
     renderEmptyState() {
