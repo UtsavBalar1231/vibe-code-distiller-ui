@@ -665,7 +665,7 @@ class ClaudeCodeWebManager extends EventEmitter {
         // Load shortcuts panel settings
         // Default to false on mobile devices, true on desktop
         const isMobile = window.innerWidth <= 768;
-        const shortcutsPanelDefaultValue = !isMobile;
+        const shortcutsPanelDefaultValue = false;
         const shortcutsPanelEnabled = Storage.get('shortcuts-panel-enabled', shortcutsPanelDefaultValue);
         
         // Set shortcuts panel toggle switch state
