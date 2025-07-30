@@ -123,24 +123,20 @@
                     <div class="sidebar-divider-handle"></div>
                 </div>
 
-                <!-- File Browser Panel -->
+                <!-- File Tree Panel -->
                 <section class="sidebar-panel">
                     <div class="panel-header">
-                        <h3>Files</h3>
+                        <h3>📁 File Explorer</h3>
                         <div class="file-actions">
-                            <button class="btn btn-small btn-primary" id="upload-files-btn" title="Upload Files">Upload</button>
-                            <button class="btn btn-small btn-secondary" id="create-folder-btn" title="New Folder">New</button>
+                            <button class="btn btn-small btn-secondary" id="refresh-tree-btn" title="Refresh Tree">🔄</button>
+                            <button class="btn btn-small btn-secondary" id="toggle-hidden-btn" title="Toggle Hidden Files">👁️</button>
                         </div>
                     </div>
                     <div class="panel-content">
-                        <div class="file-browser" id="file-browser">
-                            <div class="file-breadcrumb" id="file-breadcrumb">
-                                <button class="breadcrumb-item active" data-path="">Project Root</button>
-                            </div>
-                            <div class="file-list" id="file-list">
-                                <div class="no-files" id="no-files">
-                                    <span class="no-files-text">Loading files...</span>
-                                </div>
+                        <div class="file-tree-container" id="file-tree-container">
+                            <div class="file-tree-loading">
+                                <div class="loading-spinner small"></div>
+                                <span>Loading file tree...</span>
                             </div>
                         </div>
                     </div>
@@ -537,42 +533,36 @@
         </div>
     </div>
 
-    <!-- Hidden file input for file upload -->
-    <input type="file" id="file-input" multiple style="display: none;">
-    
-    <!-- New Folder Modal -->
-    <div class="modal" id="new-folder-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Create New Folder</h3>
-                <button class="modal-close" onclick="closeNewFolderModal()">&times;</button>
+    <!-- Monaco Editor Modal -->
+    <div id="monaco-editor-overlay" class="monaco-editor-overlay">
+        <div id="monaco-editor-modal" class="monaco-editor-modal">
+            <div id="monaco-editor-title" class="monaco-editor-title">
+                <div class="editor-header-left">
+                    <span class="file-icon">📄</span>
+                    <span class="file-name">Untitled</span>
+                    <span class="file-status"></span>
+                </div>
+                <div class="editor-header-actions">
+                    <button class="btn btn-small btn-secondary" id="save-file-btn" title="Save File (Ctrl+S)">💾 Save</button>
+                    <button class="btn btn-small btn-secondary" id="close-editor-btn" title="Close Editor (Esc)">✕</button>
+                </div>
             </div>
-            <div class="modal-body">
-                <form id="new-folder-form">
-                    <div class="form-group">
-                        <label for="folder-name">Folder Name:</label>
-                        <input type="text" id="folder-name" name="folderName" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="folder-path">Location:</label>
-                        <input type="text" id="folder-path" name="folderPath" readonly>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeNewFolderModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary" form="new-folder-form">Create</button>
-            </div>
+            <div id="monaco-editor" class="monaco-editor-container"></div>
         </div>
     </div>
 
+
+    <!-- Monaco Editor -->
+    <script src="/node_modules/monaco-editor/min/vs/loader.js"></script>
+    
     <!-- JavaScript Files -->
     <script src="/assets/js/utils.js"></script>
     <script src="/assets/js/dropdown-manager.js"></script>
     <script src="/assets/js/socket-client.js"></script>
     <script src="/assets/js/terminal-ttyd.js"></script>
     <script src="/assets/js/project-manager.js"></script>
-    <script src="/assets/js/file-manager.js"></script>
+    <script src="/assets/js/file-tree-manager.js"></script>
+    <script src="/assets/js/monaco-editor-manager.js"></script>
     <script src="/assets/js/sidebar-divider.js"></script>
     <script src="/assets/js/vertical-divider.js"></script>
     <script src="/assets/js/shortcuts-panel.js"></script>
