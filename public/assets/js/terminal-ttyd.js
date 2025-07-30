@@ -720,6 +720,12 @@ class TTYdTerminalManager {
             welcomeScreen.style.display = 'none';
         }
         
+        // Hide terminal loading state
+        const terminalLoadingState = document.getElementById('terminal-loading-state');
+        if (terminalLoadingState) {
+            terminalLoadingState.style.display = 'none';
+        }
+        
         // Hide iframe
         if (this.iframe) {
             this.iframe.style.display = 'none';
@@ -761,6 +767,18 @@ class TTYdTerminalManager {
             welcomeScreen.style.display = 'flex';
             // 恢复默认的welcome内容
             this.resetWelcomeContent();
+        }
+        
+        // Hide terminal empty state
+        const terminalEmptyState = document.getElementById('terminal-empty-state');
+        if (terminalEmptyState) {
+            terminalEmptyState.style.display = 'none';
+        }
+        
+        // Hide terminal loading state
+        const terminalLoadingState = document.getElementById('terminal-loading-state');
+        if (terminalLoadingState) {
+            terminalLoadingState.style.display = 'none';
         }
         
         if (this.iframe) {
