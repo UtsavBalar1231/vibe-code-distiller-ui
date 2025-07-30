@@ -2,10 +2,8 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs').promises;
-const multer = require('multer');
 const { AppError } = require('../middleware/error-handler');
 const { ERROR_CODES } = require('../utils/constants');
-const fileService = require('../services/file-service');
 
 /**
  * Filesystem Routes - Support for absolute path browsing
@@ -294,125 +292,51 @@ router.get('/download', async (req, res, next) => {
 });
 
 /**
- * Configure multer for file uploads
+ * Save file content to absolute path
+ * PUT /api/filesystem/save
+ * Body: { path: string, content: string }
  */
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        // Use the targetPath from query parameter
-        const targetPath = req.query.targetPath || '/tmp';
-        
-        // Security validation
-        if (!isPathAllowed(targetPath)) {
-            return cb(new AppError('Access denied to target directory', 403, ERROR_CODES.ACCESS_DENIED));
-        }
-        
-        cb(null, targetPath);
-    },
-    filename: function (req, file, cb) {
-        // Use original filename
-        cb(null, file.originalname);
-    }
-});
-
-const upload = multer({ 
-    storage: storage,
-    limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB limit
-        files: 10 // Maximum 10 files at once
-    },
-    fileFilter: function (req, file, cb) {
-        // Accept all file types for filesystem upload
-        cb(null, true);
-    }
-});
-
-/**
- * Upload files to filesystem
- * POST /api/filesystem/upload?targetPath=/absolute/path
- * Body: multipart/form-data with files
- */
-router.post('/upload', upload.array('files', 10), async (req, res, next) => {
+router.put('/save', async (req, res, next) => {
     try {
-        const targetPath = req.query.targetPath || '/tmp';
-        const uploadedFiles = req.files || [];
+        const { path: filePath, content } = req.body;
         
-        // Security validation
-        if (!isPathAllowed(targetPath)) {
-            throw new AppError('Access denied to target directory', 403, ERROR_CODES.ACCESS_DENIED);
-        }
-        
-        // Ensure target directory exists
-        try {
-            await fs.access(targetPath);
-        } catch (error) {
-            throw new AppError('Target directory does not exist', 404, ERROR_CODES.FILE_SYSTEM_ERROR);
-        }
-        
-        const results = [];
-        
-        for (const file of uploadedFiles) {
-            try {
-                results.push({
-                    originalName: file.originalname,
-                    filename: file.filename,
-                    path: file.path,
-                    size: file.size,
-                    success: true
-                });
-            } catch (error) {
-                results.push({
-                    originalName: file.originalname,
-                    success: false,
-                    error: error.message
-                });
-            }
-        }
-        
-        res.json({
-            success: true,
-            message: `Successfully uploaded ${results.filter(r => r.success).length} file(s)`,
-            files: results,
-            targetPath: targetPath
-        });
-        
-    } catch (error) {
-        next(error);
-    }
-});
-
-/**
- * Delete file or directory from absolute path
- * DELETE /api/filesystem/delete?path=/absolute/path/to/file-or-directory
- */
-router.delete('/delete', async (req, res, next) => {
-    try {
-        const requestedPath = req.query.path;
-        
-        if (!requestedPath) {
+        if (!filePath) {
             throw new AppError('File path is required', 400, ERROR_CODES.VALIDATION_ERROR);
         }
         
+        if (typeof content !== 'string') {
+            throw new AppError('File content must be a string', 400, ERROR_CODES.VALIDATION_ERROR);
+        }
+        
         // Security validation
-        if (!isPathAllowed(requestedPath)) {
+        if (!isPathAllowed(filePath)) {
             throw new AppError('Access denied to this path', 403, ERROR_CODES.ACCESS_DENIED);
         }
         
-        const fullPath = path.resolve(requestedPath);
+        const fullPath = path.resolve(filePath);
         
-        // Check if file/directory exists
+        // Ensure parent directory exists
+        const parentDir = path.dirname(fullPath);
         try {
-            await fs.stat(fullPath);
+            await fs.mkdir(parentDir, { recursive: true });
         } catch (error) {
-            throw new AppError('File or directory not found', 404, ERROR_CODES.NOT_FOUND);
+            // Directory might already exist, continue
         }
         
-        // Use FileService to delete the file/directory
-        const result = await fileService.deleteFile(fullPath);
+        // Write file content
+        await fs.writeFile(fullPath, content, 'utf8');
+        
+        // Get file stats for response
+        const stats = await fs.stat(fullPath);
         
         res.json({
             success: true,
-            message: 'File or directory deleted successfully',
-            path: fullPath,
+            message: 'File saved successfully',
+            file: {
+                path: fullPath,
+                size: stats.size,
+                modified: stats.mtime.toISOString()
+            },
             timestamp: new Date().toISOString()
         });
         
@@ -420,5 +344,6 @@ router.delete('/delete', async (req, res, next) => {
         next(error);
     }
 });
+
 
 module.exports = router;

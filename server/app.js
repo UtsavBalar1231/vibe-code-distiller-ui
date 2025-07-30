@@ -38,6 +38,7 @@ const claudeRoutes = require('./routes/claude');
 const imageRoutes = require('./routes/images');
 const ttydRoutes = require('./routes/ttyd');
 const filesystemRoutes = require('./routes/filesystem');
+const gitRoutes = require('./routes/git');
 
 // Import socket handler
 const socketHandler = require('./socket-handler');
@@ -131,6 +132,9 @@ app.use(cookieParser());
 // Static files
 app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
 
+// Monaco Editor static files
+app.use('/node_modules', express.static(path.join(__dirname, '../node_modules')));
+
 // Health check endpoint (no auth required)
 app.get('/health', (req, res) => {
   res.json({
@@ -187,6 +191,7 @@ app.use('/api/claude', claudeRoutes);
 app.use('/api/images', imageRoutes);
 app.use('/api/ttyd', ttydRoutes);
 app.use('/api/filesystem', filesystemRoutes);
+app.use('/api/git', gitRoutes);
 
 // Serve main application
 app.get('/', (req, res) => {
@@ -276,6 +281,36 @@ const setupTmuxConfig = () => {
   }
 };
 
+// Check if Git is installed
+const checkGitInstallation = () => {
+  try {
+    // Try to run git --version command
+    execSync('git --version', { stdio: 'ignore' });
+    logger.info('Git installation verified successfully');
+    return true;
+  } catch (error) {
+    const errorMessage = 'Git is not installed or not available in PATH. Please install Git before starting the application.';
+    logger.error(errorMessage);
+    console.error(`
+╔════════════════════════════════════════════════════════════════╗
+║                         ❌ STARTUP ERROR                       ║
+║                                                                ║
+║  Git is required for file editing functionality but was not    ║
+║  found on this system.                                         ║
+║                                                                ║
+║  Please install Git and ensure it's available in your PATH:   ║
+║                                                                ║
+║  • Ubuntu/Debian: sudo apt install git                        ║
+║  • CentOS/RHEL: sudo yum install git                          ║
+║  • macOS: xcode-select --install                              ║
+║                                                                ║
+║  After installing Git, restart the application.               ║
+╚════════════════════════════════════════════════════════════════╝
+    `);
+    return false;
+  }
+};
+
 // Setup Claude aliases function
 const setupClaudeAliases = () => {
   try {
@@ -327,6 +362,12 @@ const setupClaudeAliases = () => {
 // Start server
 const startServer = async () => {
   try {
+    // Check Git installation first (required for file editing functionality)
+    if (!checkGitInstallation()) {
+      logger.error('Application startup aborted due to missing Git installation');
+      process.exit(1);
+    }
+    
     // Setup Claude aliases at startup
     setupClaudeAliases();
     
