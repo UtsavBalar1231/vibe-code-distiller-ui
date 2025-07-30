@@ -71,7 +71,8 @@ router.get('/original-content/*', async (req, res, next) => {
                 success: true,
                 content: '', // Empty content for files not in Git
                 path: fullPath,
-                isNewFile: true,
+                isNewFile: false, // Not a new file, just not in Git
+                inGitRepo: false, // Explicitly indicate file is not in Git repository
                 timestamp: new Date().toISOString()
             });
             return;
@@ -90,19 +91,21 @@ router.get('/original-content/*', async (req, res, next) => {
                 success: true,
                 content: originalContent,
                 path: fullPath,
-                isNewFile: false,
+                isNewFile: false, // File exists in Git HEAD
+                inGitRepo: true, // File is in Git repository
                 timestamp: new Date().toISOString()
             });
 
         } catch (gitError) {
             // File might not exist in Git or might be a new file
             if (gitError.status === 128) {
-                // Git error - file doesn't exist in HEAD or not in a git repo
+                // Git error - file doesn't exist in HEAD (new file in Git repo)
                 res.json({
                     success: true,
                     content: '', // Empty content for new files
                     path: fullPath,
-                    isNewFile: true,
+                    isNewFile: true, // File is new in Git repository
+                    inGitRepo: true, // File is in Git repository but not committed
                     timestamp: new Date().toISOString()
                 });
             } else {

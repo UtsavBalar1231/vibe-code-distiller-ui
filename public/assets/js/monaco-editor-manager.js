@@ -10,6 +10,7 @@ class MonacoEditorManager {
         this.isEditorReady = false;
         this.decorations = []; // Track current decorations
         this.isNewFile = false; // Track if current file is new
+        this.inGitRepo = true; // Track if current file is in Git repository (default true for backward compatibility)
         
         this.init();
     }
@@ -171,6 +172,7 @@ class MonacoEditorManager {
             // Reset state for new file
             this.isNewFile = false;
             this.originalContent = null;
+            this.inGitRepo = true; // Reset to default state
             
             // Show editor first with loading state
             this.updateEditorHeader(fileName);
@@ -252,17 +254,26 @@ class MonacoEditorManager {
             const data = await response.json();
 
             if (data.success) {
-                // Store whether this is a new file for diff display
+                // Store Git repository status and new file flag
+                this.inGitRepo = data.inGitRepo !== undefined ? data.inGitRepo : true; // Default to true for backward compatibility
                 this.isNewFile = data.isNewFile || false;
+                
+                // If file is not in Git repository, return null to disable Git features
+                if (!this.inGitRepo) {
+                    return null;
+                }
+                
                 return data.content || '';
             } else {
+                this.inGitRepo = false;
                 this.isNewFile = true;
-                return '';
+                return null;
             }
         } catch (error) {
             console.warn('Could not load Git original content:', error);
+            this.inGitRepo = false;
             this.isNewFile = true;
-            return '';
+            return null;
         }
     }
 
@@ -305,8 +316,8 @@ class MonacoEditorManager {
     }
 
     updateDiffDecorations() {
-        if (!this.editor || this.originalContent === null) {
-            // Clear decorations if no original content
+        // Clear decorations if file is not in Git repository or no original content
+        if (!this.editor || this.originalContent === null || !this.inGitRepo) {
             if (this.decorations.length > 0) {
                 this.decorations = this.editor.deltaDecorations(this.decorations, []);
             }
@@ -509,6 +520,7 @@ class MonacoEditorManager {
         this.currentFile = null;
         this.originalContent = null;
         this.isNewFile = false;
+        this.inGitRepo = true; // Reset to default state
     }
 
     isEditorOpen() {
