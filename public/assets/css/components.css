@@ -2082,6 +2082,30 @@ kbd {
     border-radius: var(--border-radius-sm);
 }
 
+/* Dragging state for file tree nodes */
+.file-tree-node.dragging {
+    opacity: 0.5;
+    transform: scale(0.98);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.file-tree-node.dragging > .tree-node-header {
+    background-color: rgba(var(--accent-primary-rgb), 0.1);
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--border-radius-sm);
+}
+
+/* Terminal drop zone visual feedback - handled by overlay */
+
+/* Enhanced cursor feedback for draggable items */
+.file-tree-node[draggable="true"]:hover {
+    cursor: grab;
+}
+
+.file-tree-node[draggable="true"]:active {
+    cursor: grabbing;
+}
+
 .drop-indicator {
     position: absolute;
     right: 8px;

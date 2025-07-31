@@ -10,6 +10,10 @@ class FileTreeManager {
         this.fileTree = new Map(); // Cache for file tree structure
         this.expandedFolders = new Set(); // Track expanded folders
         this.selectedProject = null; // Track selected project for highlighting
+        this.dropOverlay = null; // Track drop overlay element
+        this.dragCounter = 0; // Track drag enter/leave events
+        this.isInTerminalArea = false; // Track if currently dragging in terminal area
+        this.isDragging = false; // Track if currently in a drag operation
         
         this.init();
     }
@@ -21,6 +25,9 @@ class FileTreeManager {
         this.checkActiveProject();
         
         this.loadFileTree();
+        
+        // Setup drag and drop for terminal (with retry mechanism)
+        this.initializeDropZone();
     }
 
     checkActiveProject() {
@@ -48,7 +55,6 @@ class FileTreeManager {
                 }
             }
         } catch (error) {
-            console.warn('Could not get active project, using root path');
             // Just load the full tree from root
             this.loadFileTree();
         }
@@ -111,11 +117,9 @@ class FileTreeManager {
                     this.renderEmptyState();
                 }
             } else {
-                console.error(data.message || 'Failed to load file tree');
                 this.renderEmptyState();
             }
         } catch (error) {
-            console.error('Error loading file tree:', error);
             this.renderEmptyState();
         }
     }
@@ -153,6 +157,9 @@ class FileTreeManager {
         node.className = `file-tree-node ${item.type}`;
         node.dataset.path = item.path;
         node.dataset.type = item.type;
+        
+        // Enable drag functionality for files and folders
+        node.draggable = true;
 
         if (item.type === 'directory') {
             const isExpanded = isRoot || this.expandedFolders.has(item.path);
@@ -201,6 +208,9 @@ class FileTreeManager {
 
             node.appendChild(header);
         }
+
+        // Add drag event listeners
+        this.addDragEventListeners(node, item);
 
         return node;
     }
@@ -266,7 +276,7 @@ class FileTreeManager {
                 }
             }
         } catch (error) {
-            console.error('Error loading directory children:', error);
+            // Failed to load directory children
         }
     }
 
@@ -358,7 +368,6 @@ class FileTreeManager {
             }, 150);
             
         } catch (error) {
-            console.error('Error navigating to project in full tree:', error);
             // Fallback: just load the full tree
             this.currentPath = '/';
             await this.loadFileTree();
@@ -561,9 +570,354 @@ class FileTreeManager {
         // Trigger Monaco Editor modal
         if (window.monacoEditorManager) {
             window.monacoEditorManager.openFile(filePath, fileName);
-        } else {
-            console.warn('Monaco Editor Manager not available');
         }
+    }
+
+    /**
+     * Add drag event listeners to file/folder nodes
+     * @param {HTMLElement} node - The tree node element
+     * @param {Object} item - The file/folder item data
+     */
+    addDragEventListeners(node, item) {
+        node.addEventListener('dragstart', (e) => {
+            e.stopPropagation();
+            
+            e.dataTransfer.setData('text/plain', item.path);
+            e.dataTransfer.setData('application/x-file-path', item.path);
+            e.dataTransfer.setData('application/x-file-type', item.type);
+            e.dataTransfer.effectAllowed = 'copy';
+            
+            node.classList.add('dragging');
+            this.draggedNode = node;
+        });
+
+        node.addEventListener('dragend', (e) => {
+            node.classList.remove('dragging');
+            this.draggedNode = null;
+        });
+    }
+
+    /**
+     * Initialize drop zone with retry mechanism
+     */
+    initializeDropZone() {
+        this.setupTerminalDropZone();
+        
+        setTimeout(() => {
+            if (!this.dropOverlay) {
+                this.setupTerminalDropZone();
+            }
+        }, 1000);
+        
+        document.addEventListener('terminalStateChanged', () => {
+            setTimeout(() => {
+                if (!this.dropOverlay) {
+                    this.setupTerminalDropZone();
+                }
+            }, 500);
+        });
+    }
+
+    /**
+     * Setup terminal content area as drop zone
+     */
+    setupTerminalDropZone() {
+        const terminalContent = document.getElementById('terminal-content');
+        const terminalIframe = document.getElementById('ttyd-terminal');
+        
+        if (!terminalContent) {
+            return;
+        }
+        
+        if (this.dropOverlay) {
+            this.dropOverlay.remove();
+            this.dropOverlay = null;
+        }
+        
+        this.createDropZoneOverlay(terminalContent);
+        this.setupDropZoneEvents(terminalContent, terminalIframe);
+    }
+
+    /**
+     * Create an overlay that covers iframe during drag operations
+     */
+    createDropZoneOverlay(terminalContent) {
+        const overlay = document.createElement('div');
+        overlay.id = 'terminal-drop-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(var(--accent-primary-rgb), 0.1);
+            border: 2px dashed var(--accent-primary);
+            border-radius: var(--border-radius);
+            display: none;
+            z-index: 999999;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        `;
+        
+        overlay.innerHTML = `
+            <div style="
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+                color: var(--accent-primary);
+                font-weight: 600;
+                pointer-events: none;
+                background: var(--bg-primary);
+                padding: 20px;
+                border-radius: var(--border-radius);
+                box-shadow: var(--shadow-lg);
+            ">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📁➡️💻</div>
+                <div>Drop file or folder path here</div>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+        this.dropOverlay = overlay;
+    }
+
+    /**
+     * Setup drag and drop event listeners
+     */
+    setupDropZoneEvents(terminalContent, terminalIframe) {
+        this.dragCounter = 0;
+        this.isInTerminalArea = false;
+        this.isDragging = false;
+        
+        const isInTerminalArea = (e) => {
+            if (!terminalContent) return false;
+            
+            const rect = terminalContent.getBoundingClientRect();
+            return (
+                e.clientX >= rect.left &&
+                e.clientX <= rect.right &&
+                e.clientY >= rect.top &&
+                e.clientY <= rect.bottom
+            );
+        };
+        
+        const globalDragStartHandler = (e) => {
+            this.isDragging = true;
+            
+            if (terminalIframe) {
+                terminalIframe.style.pointerEvents = 'none';
+            }
+        };
+        
+        const globalDragOverHandler = (e) => {
+            e.preventDefault();
+            
+            if (!this.isDragging) return;
+            
+            const inTerminalArea = isInTerminalArea(e);
+            
+            if (inTerminalArea) {
+                e.dataTransfer.dropEffect = 'copy';
+                
+                if (!this.isInTerminalArea) {
+                    this.isInTerminalArea = true;
+                    
+                    if (this.dropOverlay) {
+                        this.dropOverlay.style.display = 'block';
+                        this.dropOverlay.style.opacity = '1';
+                        this.dropOverlay.style.pointerEvents = 'auto';
+                    }
+                }
+            } else {
+                e.dataTransfer.dropEffect = 'none';
+                
+                if (this.isInTerminalArea) {
+                    this.isInTerminalArea = false;
+                    
+                    if (this.dropOverlay) {
+                        this.dropOverlay.style.opacity = '0';
+                        this.dropOverlay.style.pointerEvents = 'none';
+                        setTimeout(() => {
+                            if (this.dropOverlay && !this.isInTerminalArea) {
+                                this.dropOverlay.style.display = 'none';
+                            }
+                        }, 100);
+                    }
+                }
+            }
+        };
+        
+        const globalDropHandler = (e) => {
+            if (this.isDragging && (this.isInTerminalArea || isInTerminalArea(e))) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const filePath = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('application/x-file-path');
+                const fileType = e.dataTransfer.getData('application/x-file-type');
+                
+                if (filePath) {
+                    this.sendPathToTerminal(filePath, fileType);
+                }
+            }
+            
+            this.cleanupDragState(terminalIframe);
+        };
+        
+        const globalDragEndHandler = () => {
+            this.cleanupDragState(terminalIframe);
+        };
+        
+        this.removeGlobalEventListeners();
+        
+        this.globalDragStartHandler = globalDragStartHandler;
+        this.globalDragOverHandler = globalDragOverHandler;
+        this.globalDropHandler = globalDropHandler; 
+        this.globalDragEndHandler = globalDragEndHandler;
+        
+        document.addEventListener('dragstart', this.globalDragStartHandler, true);
+        document.addEventListener('dragover', this.globalDragOverHandler, true);
+        document.addEventListener('drop', this.globalDropHandler, true);
+        document.addEventListener('dragend', this.globalDragEndHandler, true);
+    }
+    
+    /**
+     * 清理拖拽状态
+     */
+    cleanupDragState(terminalIframe) {
+        this.isDragging = false;
+        this.isInTerminalArea = false;
+        this.dragCounter = 0;
+        
+        if (this.dropOverlay) {
+            this.dropOverlay.style.opacity = '0';
+            this.dropOverlay.style.pointerEvents = 'none';
+            setTimeout(() => {
+                if (this.dropOverlay) {
+                    this.dropOverlay.style.display = 'none';
+                }
+            }, 100);
+        }
+        
+        if (terminalIframe) {
+            terminalIframe.style.pointerEvents = 'auto';
+        }
+    }
+    
+    /**
+     * 移除全局事件监听器
+     */
+    removeGlobalEventListeners() {
+        if (this.globalDragStartHandler) {
+            document.removeEventListener('dragstart', this.globalDragStartHandler, true);
+        }
+        if (this.globalDragOverHandler) {
+            document.removeEventListener('dragover', this.globalDragOverHandler, true);
+        }
+        if (this.globalDropHandler) {
+            document.removeEventListener('drop', this.globalDropHandler, true);
+        }
+        if (this.globalDragEndHandler) {
+            document.removeEventListener('dragend', this.globalDragEndHandler, true);
+        }
+    }
+
+    /**
+     * Send file/folder path to terminal
+     * @param {string} filePath - Absolute path of the file/folder
+     * @param {string} fileType - Type of the item ('file' or 'directory')
+     */
+    async sendPathToTerminal(filePath, fileType) {
+        const terminalManager = window.terminalManager;
+        
+        if (!terminalManager) {
+            this.showNotification('Terminal system not available', 'warning');
+            return;
+        }
+        
+        const activeSession = terminalManager.getActiveSession();
+        
+        if (!activeSession || !activeSession.name) {
+            this.showNotification('No active terminal session. Please select a terminal tab first.', 'warning');
+            return;
+        }
+        
+        // Only work with session-based terminals
+        if (!activeSession.name.startsWith('claude-web-')) {
+            this.showNotification('Invalid terminal session format', 'warning');
+            return;
+        }
+        
+        try {
+            // Send the absolute file path to the terminal via API
+            const response = await fetch('/api/terminal/send-input', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    sessionName: activeSession.name,
+                    text: filePath
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showNotification(`${fileType === 'directory' ? 'Folder' : 'File'} path sent to terminal: ${filePath}`, 'success');
+            } else {
+                throw new Error(result.error || result.message || 'Failed to send path to terminal');
+            }
+            
+        } catch (error) {
+            this.showNotification(`Failed to send path to terminal: ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Show notification to user
+     * @param {string} message - Notification message
+     * @param {string} type - Notification type ('success', 'warning', 'error', 'info')
+     */
+    showNotification(message, type = 'info') {
+        // Try to use existing notification system if available
+        if (window.projectManager && typeof window.projectManager.showNotification === 'function') {
+            window.projectManager.showNotification(message, type);
+        } else if (window.showNotification && typeof window.showNotification === 'function') {
+            window.showNotification(message, type);
+        } else {
+            // Fallback for critical error messages
+            if (type === 'error') {
+                alert(message);
+            }
+        }
+    }
+
+    /**
+     * Clean up resources and event listeners
+     */
+    destroy() {
+        // Clean up all global event listeners
+        this.removeGlobalEventListeners();
+        
+        // Clean up drop overlay
+        if (this.dropOverlay && this.dropOverlay.parentNode) {
+            this.dropOverlay.parentNode.removeChild(this.dropOverlay);
+            this.dropOverlay = null;
+        }
+
+        // Clean up drag state
+        this.dragCounter = 0;
+        this.isInTerminalArea = false;
+        this.isDragging = false;
+
+        // Clean up other resources
+        this.fileTree.clear();
+        this.expandedFolders.clear();
+        this.selectedProject = null;
+        this.draggedNode = null;
     }
 }
 
