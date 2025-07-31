@@ -148,7 +148,7 @@ class ProjectManager extends EventEmitter {
         // Options button
         const optionsButton = DOM.create('button', {
             className: 'project-options-btn btn-icon small',
-            html: '<span class="icon">⋮</span>',
+            html: '<img src="assets/icons/more-vertical.svg" alt="Options" class="icon" style="width: 14px; height: 14px;">',
             attributes: { 'title': 'Project options' }
         });
         
@@ -193,7 +193,7 @@ class ProjectManager extends EventEmitter {
         // Create New Terminal button
         const createTerminalButton = DOM.create('button', {
             className: 'project-create-terminal-btn btn-icon small',
-            html: '<span class="icon">+</span>',
+            html: '<img src="assets/icons/plus.svg" alt="Create Terminal" class="icon" style="width: 14px; height: 14px;">',
             attributes: { 'title': 'Create New Terminal' }
         });
         
@@ -538,7 +538,7 @@ class ProjectManager extends EventEmitter {
         
         contextMenuItems.innerHTML = `
             <button class="context-menu-item" onclick="projectManager.selectProject('${project.id}')">
-                <span class="icon">📁</span>
+                <img src="assets/icons/folder.svg" alt="Open" class="icon" style="width: 14px; height: 14px;">
                 <span>Open Project</span>
             </button>
             <button class="context-menu-item" onclick="projectManager.startClaude('${project.id}')">
@@ -551,7 +551,7 @@ class ProjectManager extends EventEmitter {
             </button>
             <div class="context-menu-separator"></div>
             <button class="context-menu-item" onclick="projectManager.showProjectSettings('${project.id}')">
-                <span class="icon">⚙️</span>
+                <img src="assets/icons/settings.svg" alt="Settings" class="icon" style="width: 14px; height: 14px;">
                 <span>Project Settings</span>
             </button>
             <button class="context-menu-item" onclick="projectManager.duplicateProject('${project.id}')">
