@@ -542,11 +542,11 @@ class ProjectManager extends EventEmitter {
                 <span>Open Project</span>
             </button>
             <button class="context-menu-item" onclick="projectManager.startClaude('${project.id}')">
-                <span class="icon">🤖</span>
+                <img src="assets/icons/lightbulb.svg" alt="Claude" class="icon" style="width: 14px; height: 14px;">
                 <span>Start Claude</span>
             </button>
             <button class="context-menu-item" onclick="projectManager.openInTerminal('${project.id}')">
-                <span class="icon">💻</span>
+                <img src="assets/icons/terminal.svg" alt="Terminal" class="icon" style="width: 14px; height: 14px;">
                 <span>Open Terminal</span>
             </button>
             <div class="context-menu-separator"></div>
@@ -555,12 +555,12 @@ class ProjectManager extends EventEmitter {
                 <span>Project Settings</span>
             </button>
             <button class="context-menu-item" onclick="projectManager.duplicateProject('${project.id}')">
-                <span class="icon">📋</span>
+                <img src="assets/icons/document.svg" alt="Duplicate" class="icon" style="width: 14px; height: 14px;">
                 <span>Duplicate</span>
             </button>
             <div class="context-menu-separator"></div>
             <button class="context-menu-item" onclick="projectManager.deleteProject('${project.id}')">
-                <span class="icon">🗑️</span>
+                <img src="assets/icons/trash.svg" alt="Delete" class="icon" style="width: 14px; height: 14px;">
                 <span>Delete Project</span>
             </button>
         `;
