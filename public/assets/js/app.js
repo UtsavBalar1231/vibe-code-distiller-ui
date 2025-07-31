@@ -236,6 +236,11 @@ class ClaudeCodeWebManager extends EventEmitter {
         this.applyTheme(theme);
         console.log(`🎨 Theme changed to: ${theme}`);
         
+        // Dispatch theme change event for other components
+        document.dispatchEvent(new CustomEvent('themeChanged', {
+            detail: { theme }
+        }));
+        
         // Update TTYd terminal theme
         try {
             const response = await HTTP.post('/api/ttyd/config', { theme });
