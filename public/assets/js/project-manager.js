@@ -317,7 +317,7 @@ class ProjectManager extends EventEmitter {
         if (breadcrumb) {
             breadcrumb.innerHTML = `
                 <span class="breadcrumb-item">Dashboard</span>
-                <span class="breadcrumb-separator">›</span>
+                <span class="breadcrumb-separator"><img src="/assets/icons/arrow-right.svg" alt="separator" style="width: 16px; height: 16px;"></span>
                 <span class="breadcrumb-item active">${project.name}</span>
             `;
         }

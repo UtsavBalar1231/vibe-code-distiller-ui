@@ -1181,13 +1181,19 @@ kbd {
 }
 
 .breadcrumb-item.active {
-    color: var(--accent-primary);
+    color: var(--text-primary);
     font-weight: 500;
 }
 
 .breadcrumb-separator {
-    color: var(--text-secondary);
-    font-size: var(--font-size-xs);
+    display: flex;
+    align-items: center;
+    opacity: 0.6;
+}
+
+.breadcrumb-separator img {
+    filter: brightness(0.7);
+    transition: filter 0.2s ease;
 }
 
 .file-list {

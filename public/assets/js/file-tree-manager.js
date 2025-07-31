@@ -14,12 +14,16 @@ class FileTreeManager {
         this.dragCounter = 0; // Track drag enter/leave events
         this.isInTerminalArea = false; // Track if currently dragging in terminal area
         this.isDragging = false; // Track if currently in a drag operation
+        this.svgCache = new Map(); // Cache for SVG icons
         
         this.init();
     }
 
     init() {
         this.setupEventListeners();
+        
+        // Preload commonly used SVG icons
+        this.preloadSvgIcons();
         
         // Check if there's an active project and navigate to it
         this.checkActiveProject();
@@ -76,6 +80,60 @@ class FileTreeManager {
             }
         });
 
+    }
+
+    /**
+     * Preload commonly used SVG icons
+     */
+    async preloadSvgIcons() {
+        const commonIcons = [
+            'folder', 'folder-open', 'document', 'image', 'code', 
+            'text', 'json', 'web', 'css', 'settings'
+        ];
+        
+        for (const iconName of commonIcons) {
+            await this.loadSvgIcon(iconName);
+        }
+    }
+
+    /**
+     * Load and cache SVG icon
+     * @param {string} iconName - Name of the icon (without .svg extension)
+     * @returns {Promise<string>} SVG content
+     */
+    async loadSvgIcon(iconName) {
+        if (this.svgCache.has(iconName)) {
+            return this.svgCache.get(iconName);
+        }
+        
+        try {
+            const response = await fetch(`/assets/icons/${iconName}.svg`);
+            const svgContent = await response.text();
+            
+            // Modify SVG to be inline-friendly
+            const modifiedSvg = svgContent
+                .replace(/width=["']24["']/, 'width="16"')
+                .replace(/height=["']24["']/, 'height="16"')
+                .replace(/stroke=["']#000000["']/g, 'stroke="currentColor"')
+                .replace(/fill=["']#000000["']/g, 'fill="currentColor"');
+            
+            this.svgCache.set(iconName, modifiedSvg);
+            return modifiedSvg;
+        } catch (error) {
+            // Fallback to a generic icon
+            const fallbackSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect width="20" height="16" x="2" y="4" rx="2" stroke="currentColor" stroke-width="1.5"/></svg>';
+            this.svgCache.set(iconName, fallbackSvg);
+            return fallbackSvg;
+        }
+    }
+
+    /**
+     * Get SVG icon HTML
+     * @param {string} iconName - Name of the icon
+     * @returns {string} SVG HTML
+     */
+    getSvgIcon(iconName) {
+        return this.svgCache.get(iconName) || '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect width="20" height="16" x="2" y="4" rx="2" stroke="currentColor" stroke-width="1.5"/></svg>';
     }
 
 
@@ -168,8 +226,9 @@ class FileTreeManager {
             // Directory header
             const header = document.createElement('div');
             header.className = 'tree-node-header';
+            const folderIcon = isExpanded ? this.getSvgIcon('folder-open') : this.getSvgIcon('folder');
             header.innerHTML = `
-                <span class="tree-node-icon">${isExpanded ? '📁' : '📂'}</span>
+                <span class="tree-node-icon">${folderIcon}</span>
                 <span class="tree-node-label">${isRoot ? 'Root' : item.name}</span>
             `;
 
@@ -195,8 +254,9 @@ class FileTreeManager {
             // File node
             const header = document.createElement('div');
             header.className = 'tree-node-header file-node';
+            const fileIcon = this.getFileIcon(item);
             header.innerHTML = `
-                <span class="tree-node-icon">${this.getFileIcon(item)}</span>
+                <span class="tree-node-icon">${fileIcon}</span>
                 <span class="tree-node-label">${item.name}</span>
             `;
 
@@ -239,7 +299,7 @@ class FileTreeManager {
             this.expandedFolders.delete(path);
             
             const icon = nodeElement.querySelector('.tree-node-icon');
-            if (icon) icon.textContent = '📂';
+            if (icon) icon.innerHTML = this.getSvgIcon('folder');
             
             const children = nodeElement.querySelector('.tree-node-children');
             if (children) children.innerHTML = '';
@@ -250,7 +310,7 @@ class FileTreeManager {
             this.expandedFolders.add(path);
             
             const icon = nodeElement.querySelector('.tree-node-icon');
-            if (icon) icon.textContent = '📁';
+            if (icon) icon.innerHTML = this.getSvgIcon('folder-open');
             
             // Load children
             await this.loadDirectoryChildren(path, nodeElement);
@@ -284,6 +344,18 @@ class FileTreeManager {
         const ext = file.name.toLowerCase().split('.').pop();
         
         const iconMap = {
+            // Images
+            'jpg': '🖼️',
+            'jpeg': '🖼️',
+            'png': '🖼️',
+            'gif': '🖼️',
+            'bmp': '🖼️',
+            'webp': '🖼️',
+            'svg': '🖼️',
+            'ico': '🖼️',
+            'tiff': '🖼️',
+            'tif': '🖼️',
+            // Code files
             'js': '📄',
             'javascript': '📄', 
             'ts': '📄',
@@ -310,6 +382,17 @@ class FileTreeManager {
         };
 
         return iconMap[ext] || '📄';
+    }
+
+    /**
+     * Check if a file is an image based on its extension
+     * @param {string} filename - The filename to check
+     * @returns {boolean} True if the file is an image
+     */
+    isImageFile(filename) {
+        const ext = filename.toLowerCase().split('.').pop();
+        const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tiff', 'tif'];
+        return imageExtensions.includes(ext);
     }
 
     /**
@@ -453,7 +536,7 @@ class FileTreeManager {
 
         // Update folder icon
         const icon = dirNode.querySelector('.tree-node-icon');
-        if (icon) icon.textContent = '📁';
+        if (icon) icon.innerHTML = this.getSvgIcon('folder-open');
 
         // Load children if not already loaded or if container is empty
         const childrenContainer = dirNode.querySelector('.tree-node-children');
@@ -567,11 +650,346 @@ class FileTreeManager {
     }
 
     openFileInEditor(filePath, fileName) {
-        // Trigger Monaco Editor modal
-        if (window.monacoEditorManager) {
-            window.monacoEditorManager.openFile(filePath, fileName);
+        // Check if it's an image file
+        if (this.isImageFile(fileName)) {
+            this.openImageViewer(filePath, fileName);
+        } else {
+            // Trigger Monaco Editor modal for text files
+            if (window.monacoEditorManager) {
+                window.monacoEditorManager.openFile(filePath, fileName);
+            }
         }
     }
+
+    /**
+     * Open image viewer for image files using modal approach like Monaco Editor
+     * @param {string} filePath - Full path to the image file
+     * @param {string} fileName - Name of the image file
+     */
+    async openImageViewer(filePath, fileName) {
+        try {
+            // Show loading notification
+            this.showNotification(`Loading image: ${fileName}`, 'info');
+            
+            // Fetch image data from API
+            const response = await fetch(`/api/filesystem/preview?path=${encodeURIComponent(filePath)}`);
+            const result = await response.json();
+            
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || 'Failed to load image');
+            }
+            
+            if (!result.file.isImage) {
+                throw new Error('File is not an image');
+            }
+            
+            // Create and show image modal
+            this.showImageModal(result.file, fileName);
+            
+            this.showNotification(`Image loaded: ${fileName}`, 'success');
+            
+        } catch (error) {
+            console.error('Error opening image viewer:', error);
+            this.showNotification(`Failed to open image viewer: ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Show image in a modal similar to Monaco Editor
+     * @param {Object} imageFile - Image file data from API
+     * @param {string} fileName - Name of the image file
+     */
+    showImageModal(imageFile, fileName) {
+        // Remove existing image modal if any
+        const existingModal = document.getElementById('image-viewer-overlay');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'image-viewer-overlay';
+        overlay.className = 'image-viewer-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+
+        // Create modal content
+        const modal = document.createElement('div');
+        modal.className = 'image-viewer-modal';
+        modal.style.cssText = `
+            background: #ffffff;
+            border-radius: 8px;
+            max-width: 90vw;
+            max-height: 90vh;
+            position: relative;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #e0e0e0;
+        `;
+
+        // Create header similar to Monaco Editor
+        const header = document.createElement('div');
+        header.className = 'image-viewer-header';
+        header.style.cssText = `
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            min-height: 48px;
+        `;
+
+        const headerLeft = document.createElement('div');
+        headerLeft.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        `;
+
+        const fileIcon = document.createElement('span');
+        fileIcon.textContent = '🖼️';
+        fileIcon.style.fontSize = '16px';
+
+        const fileNameSpan = document.createElement('span');
+        fileNameSpan.textContent = fileName;
+        fileNameSpan.style.cssText = `
+            color: #333333;
+            font-weight: 500;
+        `;
+
+        const fileInfo = document.createElement('span');
+        fileInfo.textContent = `${imageFile.mimeType} • ${this.formatFileSize(imageFile.size)}`;
+        fileInfo.style.cssText = `
+            color: #666666;
+            font-size: 12px;
+            margin-left: 8px;
+        `;
+
+        const shortcutHint = document.createElement('span');
+        shortcutHint.textContent = 'Press ESC to close';
+        shortcutHint.style.cssText = `
+            color: #999999;
+            font-size: 11px;
+            margin-left: 12px;
+            font-style: italic;
+        `;
+
+        headerLeft.appendChild(fileIcon);
+        headerLeft.appendChild(fileNameSpan);
+        headerLeft.appendChild(fileInfo);
+        headerLeft.appendChild(shortcutHint);
+
+        const headerActions = document.createElement('div');
+        headerActions.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        `;
+
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '✕';
+        closeButton.title = 'Close Image Viewer (Esc)';
+        closeButton.style.cssText = `
+            background: none;
+            border: none;
+            color: #666666;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        `;
+        closeButton.onmouseover = () => {
+            closeButton.style.background = '#e9ecef';
+            closeButton.style.color = '#333333';
+        };
+        closeButton.onmouseout = () => {
+            closeButton.style.background = 'none';
+            closeButton.style.color = '#666666';
+        };
+
+        headerActions.appendChild(closeButton);
+        header.appendChild(headerLeft);
+        header.appendChild(headerActions);
+
+        // Create image container
+        const imageContainer = document.createElement('div');
+        imageContainer.style.cssText = `
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: #ffffff;
+            overflow: auto;
+            position: relative;
+            min-height: 300px;
+        `;
+
+        // Add loading indicator
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #666666;
+            font-size: 14px;
+        `;
+        loadingIndicator.textContent = 'Loading image...';
+        imageContainer.appendChild(loadingIndicator);
+
+        const img = document.createElement('img');
+        img.src = `data:${imageFile.mimeType};base64,${imageFile.content}`;
+        img.alt = fileName;
+        img.draggable = false; // Disable dragging of the image
+        img.style.cssText = `
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            pointer-events: auto;
+            user-select: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+
+        // Show image when loaded and hide loading indicator
+        img.onload = () => {
+            img.style.opacity = '1';
+            if (loadingIndicator && loadingIndicator.parentNode) {
+                loadingIndicator.parentNode.removeChild(loadingIndicator);
+            }
+        };
+
+        img.onerror = () => {
+            loadingIndicator.textContent = 'Failed to load image';
+            loadingIndicator.style.color = '#dc3545';
+        };
+
+        // Prevent drag events on the image
+        img.addEventListener('dragstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        img.addEventListener('drag', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        img.addEventListener('dragend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        imageContainer.appendChild(img);
+        modal.appendChild(header);
+        modal.appendChild(imageContainer);
+        overlay.appendChild(modal);
+
+        // Prevent drag events on modal and overlay
+        modal.addEventListener('dragstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        modal.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        modal.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        overlay.addEventListener('dragstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        overlay.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        overlay.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        // Close handlers
+        const closeModal = () => {
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                if (overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            }, 300);
+        };
+
+        closeButton.onclick = closeModal;
+        overlay.onclick = (e) => {
+            if (e.target === overlay) closeModal();
+        };
+
+        // Keyboard shortcuts
+        const keyHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', keyHandler);
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
+
+        // Show modal
+        document.body.appendChild(overlay);
+        
+        // Trigger animation
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+        });
+    }
+
+    /**
+     * Format file size for display
+     * @param {number} bytes - File size in bytes
+     * @returns {string} Formatted file size
+     */
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
 
     /**
      * Add drag event listeners to file/folder nodes
