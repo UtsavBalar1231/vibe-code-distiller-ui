@@ -660,25 +660,64 @@ class FileTreeManager {
             transition: opacity 0.2s ease;
         `;
         
-        overlay.innerHTML = `
-            <div style="
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                text-align: center;
-                color: var(--accent-primary);
-                font-weight: 600;
-                pointer-events: none;
-                background: var(--bg-primary);
-                padding: 20px;
-                border-radius: var(--border-radius);
-                box-shadow: var(--shadow-lg);
-            ">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📁➡️💻</div>
-                <div>Drop file or folder path here</div>
-            </div>
-        `;
+        // Load SVG icons
+        const loadSvgIcon = async (iconPath, width = 24, height = 24, color = '#4a5568') => {
+            try {
+                const response = await fetch(iconPath);
+                const svgText = await response.text();
+                return svgText
+                    .replace(/width="24"/, `width="${width}"`)
+                    .replace(/height="24"/, `height="${height}"`)
+                    .replace(/currentColor/g, color)
+                    .replace(/stroke="[^"]*"/g, `stroke="${color}"`);
+            } catch (error) {
+                return `<svg width="${width}" height="${height}" viewBox="0 0 24 24" fill="none"><rect width="20" height="16" x="2" y="4" rx="2" stroke="${color}" stroke-width="1.5"/></svg>`;
+            }
+        };
+
+        const createOverlayContent = async () => {
+            const folderIcon = await loadSvgIcon('/assets/icons/folder.svg', 36, 36, '#4a5568');
+            const arrowIcon = await loadSvgIcon('/assets/icons/arrow-right.svg', 28, 28, '#718096');
+            const terminalIcon = await loadSvgIcon('/assets/icons/terminal.svg', 36, 36, '#4a5568');
+
+            overlay.innerHTML = `
+                <div style="
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    text-align: center;
+                    color: #2d3748;
+                    font-weight: 600;
+                    pointer-events: none;
+                    background: rgba(255, 255, 255, 0.95);
+                    backdrop-filter: blur(10px);
+                    padding: 40px 48px;
+                    border-radius: 20px;
+                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1);
+                    min-width: 360px;
+                    border: 1px solid rgba(0, 0, 0, 0.08);
+                ">
+                    <div style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 24px;
+                        margin-bottom: 20px;
+                    ">
+                        <div>${folderIcon}</div>
+                        <div style="opacity: 0.8;">${arrowIcon}</div>
+                        <div>${terminalIcon}</div>
+                    </div>
+                    <div style="font-size: 16px; line-height: 1.5; color: #2d3748;">
+                        <div style="font-weight: 700; margin-bottom: 8px; font-size: 18px;">Drop to Terminal</div>
+                        <div style="opacity: 0.75; font-size: 14px; font-weight: 400;">Send file or folder path to active terminal session</div>
+                    </div>
+                </div>
+            `;
+        };
+
+        createOverlayContent();
         
         document.body.appendChild(overlay);
         this.dropOverlay = overlay;
