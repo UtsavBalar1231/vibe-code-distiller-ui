@@ -51,6 +51,9 @@ body {
     --accent-warning: #f39c12;
     --accent-danger: #e74c3c;
     
+    /* Icon colors - Dark theme uses white icons */
+    --icon-filter: invert(1) brightness(1);
+    
     /* Spacing */
     --spacing-xs: 0.25rem;
     --spacing-sm: 0.5rem;
@@ -124,11 +127,27 @@ body {
     
     --accent-primary: #1976d2;
     --accent-secondary: #1565c0;
+    
+    /* Icon colors - Light theme uses dark icons */
+    --icon-filter: invert(0) brightness(0.2);
 }
 
 body {
     background-color: var(--bg-primary);
     color: var(--text-primary);
+}
+
+/* ===== ICON COLOR SYSTEM ===== */
+.icon,
+img[src*="assets/icons/"]:not([src*="favicon"]):not([src*=".png"]) {
+    filter: var(--icon-filter);
+    transition: filter var(--transition-fast);
+}
+
+/* Favicon and PNG icons should maintain original appearance */
+img[src*="favicon"],
+img[src*="assets/icons/"][src*=".png"] {
+    filter: none !important;
 }
 
 /* ===== LOADING SCREEN ===== */

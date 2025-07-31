@@ -814,6 +814,51 @@ select {
     margin-left: var(--spacing-md);
 }
 
+/* ===== THEME SELECTOR COMPONENT ===== */
+.theme-selector {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: 8px 12px;
+    font-size: var(--font-size-sm);
+    min-width: 120px;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.theme-selector:hover {
+    border-color: var(--border-hover);
+    background-color: var(--bg-hover);
+}
+
+.theme-selector:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
+}
+
+.theme-selector option {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    padding: 8px;
+}
+
+/* Light theme adjustments for theme selector */
+.theme-light .theme-selector {
+    background-color: var(--bg-primary);
+    border-color: var(--border-color);
+}
+
+.theme-light .theme-selector:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--border-hover);
+}
+
+.theme-light .theme-selector option {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+}
+
 /* ===== TOGGLE SWITCH COMPONENT ===== */
 .toggle-switch {
     position: relative;
