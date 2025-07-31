@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs').promises;
+const multer = require('multer');
 const { AppError } = require('../middleware/error-handler');
 const { ERROR_CODES } = require('../utils/constants');
 
@@ -61,6 +62,55 @@ function isPathAllowed(requestedPath) {
     }
     
     return false;
+}
+
+/**
+ * Configure multer for file upload
+ */
+const storage = multer.memoryStorage();
+
+const fileFilter = (req, file, cb) => {
+    // File size limit (10MB)
+    const maxSize = 10 * 1024 * 1024;
+    
+    // Allow all file types but with size restriction
+    cb(null, true);
+};
+
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+    fileFilter: fileFilter
+});
+
+/**
+ * Generate unique filename to avoid conflicts
+ */
+async function generateUniqueFilename(dir, originalName) {
+    const ext = path.extname(originalName);
+    const baseName = path.basename(originalName, ext);
+    let filename = originalName;
+    let counter = 1;
+
+    try {
+        while (true) {
+            try {
+                await fs.access(path.join(dir, filename));
+                // File exists, generate new name
+                filename = `${baseName}_${counter}${ext}`;
+                counter++;
+            } catch (error) {
+                // File doesn't exist, use this name
+                break;
+            }
+        }
+    } catch (error) {
+        // Error checking file existence, use original name
+    }
+
+    return filename;
 }
 
 
@@ -399,6 +449,101 @@ router.put('/save', async (req, res, next) => {
             },
             timestamp: new Date().toISOString()
         });
+        
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Upload files to filesystem path
+ * POST /api/filesystem/upload
+ * Body: FormData with files and targetPath
+ */
+router.post('/upload', upload.array('files', 10), async (req, res, next) => {
+    try {
+        const { targetPath } = req.body;
+        
+        if (!targetPath) {
+            throw new AppError('Target path is required', 400, ERROR_CODES.VALIDATION_ERROR);
+        }
+        
+        if (!req.files || req.files.length === 0) {
+            throw new AppError('No files provided', 400, ERROR_CODES.VALIDATION_ERROR);
+        }
+        
+        // Security validation
+        if (!isPathAllowed(targetPath)) {
+            throw new AppError('Access denied to this path', 403, ERROR_CODES.ACCESS_DENIED);
+        }
+        
+        const fullTargetPath = path.resolve(targetPath);
+        
+        // Check if target directory exists
+        try {
+            const stats = await fs.stat(fullTargetPath);
+            if (!stats.isDirectory()) {
+                throw new AppError('Target path is not a directory', 400, ERROR_CODES.VALIDATION_ERROR);
+            }
+        } catch (error) {
+            throw new AppError('Target directory does not exist', 404, ERROR_CODES.NOT_FOUND);
+        }
+        
+        const uploadResults = [];
+        const errors = [];
+        
+        // Process each file
+        for (const file of req.files) {
+            try {
+                // Validate file size
+                if (file.size > 10 * 1024 * 1024) {
+                    errors.push({
+                        filename: file.originalname,
+                        error: 'File size exceeds 10MB limit'
+                    });
+                    continue;
+                }
+                
+                // Generate unique filename
+                const filename = await generateUniqueFilename(fullTargetPath, file.originalname);
+                const filePath = path.join(fullTargetPath, filename);
+                
+                // Write file
+                await fs.writeFile(filePath, file.buffer);
+                
+                // Get file stats
+                const stats = await fs.stat(filePath);
+                
+                uploadResults.push({
+                    originalName: file.originalname,
+                    filename: filename,
+                    path: filePath,
+                    size: stats.size,
+                    mimetype: file.mimetype,
+                    uploaded: stats.mtime.toISOString()
+                });
+                
+            } catch (error) {
+                errors.push({
+                    filename: file.originalname,
+                    error: error.message
+                });
+            }
+        }
+        
+        const response = {
+            success: true,
+            message: `${uploadResults.length} files uploaded successfully`,
+            uploaded: uploadResults,
+            timestamp: new Date().toISOString()
+        };
+        
+        if (errors.length > 0) {
+            response.errors = errors;
+            response.message += `, ${errors.length} files failed`;
+        }
+        
+        res.json(response);
         
     } catch (error) {
         next(error);
