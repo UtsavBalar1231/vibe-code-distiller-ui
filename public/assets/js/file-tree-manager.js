@@ -89,6 +89,11 @@ class FileTreeManager {
             
             setTimeout(() => {
                 this.highlightSelectedProject();
+                
+                // Notify upload manager that tree was refreshed
+                document.dispatchEvent(new CustomEvent('fileTreeUpdated', {
+                    detail: { action: 'treeRefreshed' }
+                }));
             }, 100);
         }
     }
@@ -136,6 +141,11 @@ class FileTreeManager {
         }
 
         treeContainer.appendChild(treeRoot);
+        
+        // Notify upload manager that file tree was rendered
+        document.dispatchEvent(new CustomEvent('fileTreeUpdated', {
+            detail: { action: 'treeRendered' }
+        }));
     }
 
     createTreeNode(item, isRoot = false) {
@@ -248,6 +258,11 @@ class FileTreeManager {
                 if (childrenContainer) {
                     childrenContainer.innerHTML = '';
                     this.populateChildren(childrenContainer, data.directory.files);
+                    
+                    // Notify upload manager that new directories were added
+                    document.dispatchEvent(new CustomEvent('fileTreeUpdated', {
+                        detail: { path: path, action: 'directoryExpanded' }
+                    }));
                 }
             }
         } catch (error) {
@@ -440,6 +455,11 @@ class FileTreeManager {
             }
             // Make children visible
             childrenContainer.style.display = 'block';
+            
+            // Notify upload manager that directory was expanded
+            document.dispatchEvent(new CustomEvent('fileTreeUpdated', {
+                detail: { path: dirPath, action: 'directoryExpanded' }
+            }));
         }
     }
 
