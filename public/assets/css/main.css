@@ -274,7 +274,7 @@ img[src*="assets/icons/"][src*=".png"] {
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-md);
     color: var(--text-secondary);
 }
 
@@ -472,7 +472,7 @@ img[src*="assets/icons/"][src*=".png"] {
 .project-name {
     font-weight: var(--font-weight-medium);
     color: var(--text-primary);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-md);
     margin-bottom: var(--spacing-xs);
     white-space: nowrap;
     overflow: hidden;
@@ -731,7 +731,7 @@ img[src*="assets/icons/"][src*=".png"] {
     border-radius: var(--border-radius-sm);
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-md);
     transition: all var(--transition-fast);
     /* Prevent tab shrinking and ensure minimum readable width */
     min-width: 120px;
