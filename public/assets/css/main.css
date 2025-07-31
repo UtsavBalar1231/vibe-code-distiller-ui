@@ -31,7 +31,7 @@ body {
     --bg-secondary: #2d2d30;
     --bg-tertiary: #3e3e42;
     --bg-hover: #404040;
-    --bg-active: #0e639c;
+    --bg-active: #4a90e2;
     --bg-success: #16825d;
     --bg-warning: #f9a825;
     --bg-danger: #f44336;
@@ -45,7 +45,7 @@ body {
     --border-hover: #6b7280;
     --border-focus: #0078d4;
     
-    --accent-primary: #0078d4;
+    --accent-primary: #5ba0f2;
     --accent-secondary: #106ebe;
     --accent-success: #16a085;
     --accent-warning: #f39c12;
@@ -114,7 +114,7 @@ body {
     --bg-secondary: #f8f9fa;
     --bg-tertiary: #e9ecef;
     --bg-hover: #f1f3f4;
-    --bg-active: #1976d2;
+    --bg-active: #64b5f6;
     
     --text-primary: #212529;
     --text-secondary: #495057;
@@ -125,7 +125,7 @@ body {
     --border-hover: #adb5bd;
     --border-focus: #0078d4;
     
-    --accent-primary: #1976d2;
+    --accent-primary: #64b5f6;
     --accent-secondary: #1565c0;
     
     /* Icon colors - Light theme uses dark icons */
