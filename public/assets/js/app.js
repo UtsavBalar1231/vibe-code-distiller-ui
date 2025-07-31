@@ -232,9 +232,29 @@ class ClaudeCodeWebManager extends EventEmitter {
         console.log(`🎨 Theme applied: ${theme}`);
     }
     
-    handleThemeChange(theme) {
+    async handleThemeChange(theme) {
         this.applyTheme(theme);
         console.log(`🎨 Theme changed to: ${theme}`);
+        
+        // Update TTYd terminal theme
+        try {
+            const response = await HTTP.post('/api/ttyd/config', { theme });
+            if (response.success) {
+                console.log('TTYd theme updated successfully');
+                // Update TTYd status after configuration change
+                this.updateTTYdStatus();
+                // Reload the terminal iframe to reflect changes
+                if (window.terminalManager) {
+                    setTimeout(() => {
+                        window.terminalManager.reloadTerminal();
+                    }, 2000);
+                }
+            } else {
+                console.error(`Failed to update TTYd theme: ${response.error}`);
+            }
+        } catch (error) {
+            console.error(`Error updating TTYd theme: ${error.message}`);
+        }
     }
     
     
@@ -600,7 +620,10 @@ class ClaudeCodeWebManager extends EventEmitter {
                 e.target.disabled = true;
                 e.target.textContent = 'Applying...';
                 
-                const response = await HTTP.post('/api/ttyd/config', { fontSize });
+                // Get current theme to preserve it during font size change
+                const currentTheme = localStorage.getItem('app-theme') || 'dark';
+                
+                const response = await HTTP.post('/api/ttyd/config', { fontSize, theme: currentTheme });
                 
                 if (response.success) {
                     console.log('Font size updated! TTYd service has been restarted.');
