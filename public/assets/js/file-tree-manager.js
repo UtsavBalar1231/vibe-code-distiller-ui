@@ -345,43 +345,44 @@ class FileTreeManager {
         
         const iconMap = {
             // Images
-            'jpg': '🖼️',
-            'jpeg': '🖼️',
-            'png': '🖼️',
-            'gif': '🖼️',
-            'bmp': '🖼️',
-            'webp': '🖼️',
-            'svg': '🖼️',
-            'ico': '🖼️',
-            'tiff': '🖼️',
-            'tif': '🖼️',
+            'jpg': 'image',
+            'jpeg': 'image',
+            'png': 'image',
+            'gif': 'image',
+            'bmp': 'image',
+            'webp': 'image',
+            'svg': 'image',
+            'ico': 'image',
+            'tiff': 'image',
+            'tif': 'image',
             // Code files
-            'js': '📄',
-            'javascript': '📄', 
-            'ts': '📄',
-            'typescript': '📄',
-            'py': '🐍',
-            'python': '🐍',
-            'html': '🌐',
-            'htm': '🌐',
-            'css': '🎨',
-            'scss': '🎨',
-            'sass': '🎨',
-            'less': '🎨',
-            'json': '📋',
-            'xml': '📋',
-            'yaml': '📋',
-            'yml': '📋',
-            'md': '📝',
-            'markdown': '📝',
-            'txt': '📝',
-            'log': '📄',
-            'config': '⚙️',
-            'conf': '⚙️',
-            'cfg': '⚙️'
+            'js': 'code',
+            'javascript': 'code', 
+            'ts': 'code',
+            'typescript': 'code',
+            'py': 'code',
+            'python': 'code',
+            'html': 'web',
+            'htm': 'web',
+            'css': 'css',
+            'scss': 'css',
+            'sass': 'css',
+            'less': 'css',
+            'json': 'json',
+            'xml': 'json',
+            'yaml': 'json',
+            'yml': 'json',
+            'md': 'text',
+            'markdown': 'text',
+            'txt': 'text',
+            'log': 'document',
+            'config': 'settings',
+            'conf': 'settings',
+            'cfg': 'settings'
         };
 
-        return iconMap[ext] || '📄';
+        const iconName = iconMap[ext] || 'document';
+        return this.getSvgIcon(iconName);
     }
 
     /**
@@ -641,9 +642,10 @@ class FileTreeManager {
         const treeContainer = document.getElementById('file-tree-container');
         if (!treeContainer) return;
 
+        const folderIcon = this.getSvgIcon('folder');
         treeContainer.innerHTML = `
             <div class="file-tree-empty">
-                <div class="empty-icon">📁</div>
+                <div class="empty-icon">${folderIcon}</div>
                 <div class="empty-message">No files found</div>
             </div>
         `;
@@ -762,7 +764,7 @@ class FileTreeManager {
         `;
 
         const fileIcon = document.createElement('span');
-        fileIcon.textContent = '🖼️';
+        fileIcon.innerHTML = this.getSvgIcon('image');
         fileIcon.style.fontSize = '16px';
 
         const fileNameSpan = document.createElement('span');
