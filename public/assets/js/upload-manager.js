@@ -476,7 +476,7 @@ class UploadManager {
                 
                 // Refresh file tree to show uploaded files
                 if (window.fileTreeManager) {
-                    await window.fileTreeManager.refreshFullTree();
+                    await window.fileTreeManager.refreshFullTree(false);
                 }
             } else {
                 this.showNotification('error', result.message || 'Upload failed');

@@ -68,7 +68,7 @@ class FileTreeManager {
         // Refresh tree button
         const refreshBtn = document.getElementById('refresh-tree-btn');
         if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => this.refreshFullTree());
+            refreshBtn.addEventListener('click', () => this.refreshFullTree(false));
         }
 
 
@@ -139,8 +139,18 @@ class FileTreeManager {
 
     /**
      * Refresh the full tree while maintaining project selection state
+     * @param {boolean} shouldScrollToProject - Whether to scroll to selected project after refresh (default: false)
      */
-    async refreshFullTree() {
+    async refreshFullTree(shouldScrollToProject = false) {
+        // Save current scroll position if we don't want to scroll to project
+        let savedScrollPosition = null;
+        if (!shouldScrollToProject) {
+            const treeContainer = document.getElementById('file-tree-container');
+            if (treeContainer) {
+                savedScrollPosition = treeContainer.scrollTop;
+            }
+        }
+        
         // Always ensure we're showing full tree from root
         this.currentPath = '/';
         
@@ -154,11 +164,31 @@ class FileTreeManager {
             setTimeout(() => {
                 this.highlightSelectedProject();
                 
+                // Restore scroll position or scroll to project based on parameter
+                if (shouldScrollToProject) {
+                    this.scrollToProjectNode();
+                } else if (savedScrollPosition !== null) {
+                    const treeContainer = document.getElementById('file-tree-container');
+                    if (treeContainer) {
+                        treeContainer.scrollTop = savedScrollPosition;
+                    }
+                }
+                
                 // Notify upload manager that tree was refreshed
                 document.dispatchEvent(new CustomEvent('fileTreeUpdated', {
                     detail: { action: 'treeRefreshed' }
                 }));
             }, 100);
+        } else {
+            // No selected project, just restore scroll position if saved
+            if (savedScrollPosition !== null) {
+                setTimeout(() => {
+                    const treeContainer = document.getElementById('file-tree-container');
+                    if (treeContainer) {
+                        treeContainer.scrollTop = savedScrollPosition;
+                    }
+                }, 50);
+            }
         }
     }
 
@@ -244,8 +274,16 @@ class FileTreeManager {
             const children = document.createElement('div');
             children.className = 'tree-node-children';
             
-            if (isExpanded && item.files) {
-                this.populateChildren(children, item.files);
+            if (isExpanded) {
+                if (item.files && item.files.length > 0) {
+                    // Has cached file data, populate immediately
+                    this.populateChildren(children, item.files);
+                } else {
+                    // Need to load children dynamically for expanded folder
+                    setTimeout(() => {
+                        this.loadDirectoryChildren(item.path, node);
+                    }, 50);
+                }
             }
 
             node.appendChild(children);
@@ -804,7 +842,7 @@ class FileTreeManager {
         `;
 
         const closeButton = document.createElement('button');
-        closeButton.innerHTML = '✕';
+        closeButton.innerHTML = '<img src="/assets/icons/x.svg" alt="Close" class="icon" style="width: 14px; height: 14px;">';
         closeButton.title = 'Close Image Viewer (Esc)';
         closeButton.style.cssText = `
             background: none;
