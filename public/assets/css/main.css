@@ -334,7 +334,7 @@ img[src*="assets/icons/"][src*=".png"] {
 
 /* Mobile Menu Toggle */
 .mobile-menu-toggle {
-    display: none;
+    display: none !important;
     background-color: transparent;
     border: none;
     color: var(--text-primary);
@@ -1011,7 +1011,7 @@ img[src*="assets/icons/"][src*=".png"] {
     
     /* Show mobile menu toggle */
     .mobile-menu-toggle {
-        display: flex;
+        display: flex !important;
     }
     
     /* Mobile backdrop */
