@@ -398,14 +398,36 @@ router.post('/terminal/send-input', async (req, res) => {
       });
     }
     
-    // Escape text for safe shell execution
-    const escapedText = text.replace(/"/g, '\\"');
+    // 使用更安全的方式发送文本到tmux，避免shell转义问题
+    // 方法1: 使用tmux的stdin输入方式
+    const sendTextCommand = [
+      'tmux', 'send-keys', '-t', sessionName, '-l', text
+    ];
     
-    // Use tmux send-keys to send text to the terminal session (without Enter)
-    const command = `tmux send-keys -t "${sessionName}" "${escapedText}"`;
-    logger.info('Sending text to terminal (without executing):', { sessionName, text: text.substring(0, 100) + (text.length > 100 ? '...' : '') });
+    logger.info('Sending text to terminal (literal mode):', { 
+      sessionName, 
+      text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+      command: sendTextCommand.join(' ')
+    });
     
-    await execAsync(command);
+    // 使用spawn而不是shell执行，避免转义问题
+    const { spawn } = require('child_process');
+    
+    await new Promise((resolve, reject) => {
+      const tmuxProcess = spawn('tmux', ['send-keys', '-t', sessionName, '-l', text]);
+      
+      tmuxProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`tmux command failed with code ${code}`));
+        }
+      });
+      
+      tmuxProcess.on('error', (error) => {
+        reject(error);
+      });
+    });
     
     logger.info('Text sent successfully to terminal:', { sessionName });
     

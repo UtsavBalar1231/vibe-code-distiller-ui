@@ -32,7 +32,7 @@ router.get('/status', async (req, res) => {
  */
 router.post('/config', async (req, res) => {
     try {
-        const { fontSize, port } = req.body;
+        const { fontSize, port, theme } = req.body;
         
         // Validate input
         if (fontSize !== undefined) {
@@ -55,10 +55,20 @@ router.post('/config', async (req, res) => {
             }
         }
 
+        if (theme !== undefined) {
+            if (!['light', 'dark'].includes(theme)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Theme must be either "light" or "dark"'
+                });
+            }
+        }
+
         // Update TTYd service configuration (dynamic config only)
         const updateData = {};
         if (fontSize !== undefined) updateData.fontSize = parseInt(fontSize);
         if (port !== undefined) updateData.port = parseInt(port);
+        if (theme !== undefined) updateData.theme = theme;
         
         await ttydService.updateConfig(updateData);
         
@@ -70,7 +80,8 @@ router.post('/config', async (req, res) => {
             message: 'TTYd configuration updated and service restarted',
             data: {
                 fontSize: currentStatus.fontSize,
-                port: currentStatus.port
+                port: currentStatus.port,
+                theme: currentStatus.theme
             }
         });
         
@@ -171,6 +182,7 @@ router.get('/config', async (req, res) => {
             data: {
                 port: status.port,                    // Dynamic config
                 fontSize: status.fontSize,            // Dynamic config
+                theme: status.theme,                  // Dynamic config
                 executable: staticConfig.executable,  // Static config
                 baseCommand: staticConfig.baseCommand, // Static config
                 arguments: staticConfig.arguments      // Static config

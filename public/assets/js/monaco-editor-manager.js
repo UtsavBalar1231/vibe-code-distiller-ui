@@ -19,6 +19,7 @@ class MonacoEditorManager {
     init() {
         this.setupEventListeners();
         this.ensureModalHidden();
+        this.setupThemeListeners();
     }
 
     ensureModalHidden() {
@@ -76,6 +77,33 @@ class MonacoEditorManager {
                 }
             }
         });
+    }
+
+    setupThemeListeners() {
+        // Listen for theme changes from the application
+        document.addEventListener('themeChanged', (event) => {
+            const theme = event.detail?.theme || this.getCurrentTheme();
+            this.updateEditorTheme(theme);
+        });
+    }
+
+    getCurrentTheme() {
+        // Get current theme from localStorage, default to 'light'
+        return localStorage.getItem('app-theme') || 'light';
+    }
+
+    getMonacoTheme(appTheme) {
+        // Map application theme to Monaco Editor theme
+        return appTheme === 'dark' ? 'vs-dark' : 'vs';
+    }
+
+    updateEditorTheme(appTheme) {
+        // Update Monaco Editor theme if editor exists
+        if (this.editor && typeof monaco !== 'undefined') {
+            const monacoTheme = this.getMonacoTheme(appTheme);
+            monaco.editor.setTheme(monacoTheme);
+            console.log(`Monaco Editor theme updated to: ${monacoTheme} (app theme: ${appTheme})`);
+        }
     }
 
     async initializeMonaco() {
@@ -136,11 +164,15 @@ class MonacoEditorManager {
 
     createEditorInstance() {
         try {
+            // Get current theme for Monaco Editor
+            const currentTheme = this.getCurrentTheme();
+            const monacoTheme = this.getMonacoTheme(currentTheme);
+            
             // Create Monaco Editor instance
             this.editor = monaco.editor.create(document.getElementById('monaco-editor'), {
                 value: '',
                 language: 'plaintext',
-                theme: 'vs-dark',
+                theme: monacoTheme,
                 automaticLayout: true,
                 scrollBeyondLastLine: false,
                 minimap: { enabled: true },
@@ -154,6 +186,8 @@ class MonacoEditorManager {
                 fontSize: 14,
                 fontFamily: 'Menlo, Monaco, "Courier New", monospace'
             });
+            
+            console.log(`Monaco Editor initialized with theme: ${monacoTheme} (app theme: ${currentTheme})`);
 
             // Add editor change listener for diff updates and unsaved changes indicator
             this.editor.onDidChangeModelContent(() => {
@@ -533,7 +567,8 @@ class MonacoEditorManager {
 
         const iconElement = document.querySelector('#monaco-editor-title .file-icon');
         if (iconElement) {
-            iconElement.textContent = this.getFileIcon(fileName);
+            const iconName = this.getFileIcon(fileName);
+            iconElement.innerHTML = `<img src="/assets/icons/${iconName}.svg" alt="${iconName}" class="icon" style="width: 14px; height: 14px;">`;
         }
     }
 
@@ -541,16 +576,16 @@ class MonacoEditorManager {
         const ext = fileName.toLowerCase().split('.').pop();
         
         const iconMap = {
-            'js': '📄',
-            'ts': '📄',
-            'py': '🐍',
-            'html': '🌐',
-            'css': '🎨',
-            'json': '📋',
-            'md': '📝'
+            'js': 'code',
+            'ts': 'code',
+            'py': 'code',
+            'html': 'web',
+            'css': 'css',
+            'json': 'json',
+            'md': 'document'
         };
 
-        return iconMap[ext] || '📄';
+        return iconMap[ext] || 'document';
     }
 
     updateUnsavedChangesIndicator() {

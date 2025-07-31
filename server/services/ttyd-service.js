@@ -30,7 +30,8 @@ class TTYdService {
         const ttydConfig = config.get('ttyd');
         this.dynamicConfig = {
             fontSize: ttydConfig.fontSize || 15,
-            port: ttydConfig.port || 7681
+            port: ttydConfig.port || 7681,
+            theme: ttydConfig.theme || 'light'
         };
         
         this.startupTimeout = 10000; // 10 seconds
@@ -113,9 +114,16 @@ class TTYdService {
         const args = [
             ...this.staticConfig.arguments,
             '-t', `fontSize=${this.dynamicConfig.fontSize}`,
-            '-p', this.dynamicConfig.port.toString(),
-            ...baseCommandArgs  // Spread the command arguments
+            '-p', this.dynamicConfig.port.toString()
         ];
+
+        // Add theme-specific arguments
+        if (this.dynamicConfig.theme === 'light') {
+            args.push('-t', 'theme={"background": "#f8f9fa", "foreground": "#2b2b2b", "cursor": "#adadad", "selectionBackground": "#0366d6"}');
+        }
+        // For dark theme, no additional theme arguments needed (default)
+
+        args.push(...baseCommandArgs);  // Spread the command arguments
         
         return { executable: executablePath, args };
     }
@@ -155,7 +163,8 @@ class TTYdService {
                 executable, 
                 args, 
                 port: this.dynamicConfig.port,
-                fontSize: this.dynamicConfig.fontSize
+                fontSize: this.dynamicConfig.fontSize,
+                theme: this.dynamicConfig.theme
             });
 
             // Start process
@@ -346,6 +355,7 @@ class TTYdService {
             pid: this.pid,
             port: this.dynamicConfig.port,
             fontSize: this.dynamicConfig.fontSize,
+            theme: this.dynamicConfig.theme,
             isStarting: this.isStarting,
             isStopping: this.isStopping
         };
@@ -380,11 +390,20 @@ class TTYdService {
                 new: this.dynamicConfig.port 
             });
         }
+
+        if (newConfig.theme !== undefined) {
+            this.dynamicConfig.theme = newConfig.theme;
+            logger.info('Updated TTYd theme configuration', { 
+                old: oldDynamicConfig.theme, 
+                new: this.dynamicConfig.theme 
+            });
+        }
         
         // Check if restart is needed
         const needsRestart = (
             oldDynamicConfig.port !== this.dynamicConfig.port ||
-            oldDynamicConfig.fontSize !== this.dynamicConfig.fontSize
+            oldDynamicConfig.fontSize !== this.dynamicConfig.fontSize ||
+            oldDynamicConfig.theme !== this.dynamicConfig.theme
         );
 
         if (needsRestart && this.process) {

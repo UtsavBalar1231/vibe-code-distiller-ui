@@ -148,7 +148,7 @@ class ProjectManager extends EventEmitter {
         // Options button
         const optionsButton = DOM.create('button', {
             className: 'project-options-btn btn-icon small',
-            html: '<span class="icon">⋮</span>',
+            html: '<img src="assets/icons/more-vertical.svg" alt="Options" class="icon" style="width: 14px; height: 14px;">',
             attributes: { 'title': 'Project options' }
         });
         
@@ -193,7 +193,7 @@ class ProjectManager extends EventEmitter {
         // Create New Terminal button
         const createTerminalButton = DOM.create('button', {
             className: 'project-create-terminal-btn btn-icon small',
-            html: '<span class="icon">+</span>',
+            html: '<img src="assets/icons/plus.svg" alt="Create Terminal" class="icon" style="width: 14px; height: 14px;">',
             attributes: { 'title': 'Create New Terminal' }
         });
         
@@ -317,7 +317,7 @@ class ProjectManager extends EventEmitter {
         if (breadcrumb) {
             breadcrumb.innerHTML = `
                 <span class="breadcrumb-item">Dashboard</span>
-                <span class="breadcrumb-separator">›</span>
+                <span class="breadcrumb-separator"><img src="/assets/icons/arrow-right.svg" alt="separator" style="width: 16px; height: 16px;"></span>
                 <span class="breadcrumb-item active">${project.name}</span>
             `;
         }
@@ -538,29 +538,29 @@ class ProjectManager extends EventEmitter {
         
         contextMenuItems.innerHTML = `
             <button class="context-menu-item" onclick="projectManager.selectProject('${project.id}')">
-                <span class="icon">📁</span>
+                <img src="assets/icons/folder.svg" alt="Open" class="icon" style="width: 14px; height: 14px;">
                 <span>Open Project</span>
             </button>
             <button class="context-menu-item" onclick="projectManager.startClaude('${project.id}')">
-                <span class="icon">🤖</span>
+                <img src="assets/icons/lightbulb.svg" alt="Claude" class="icon" style="width: 14px; height: 14px;">
                 <span>Start Claude</span>
             </button>
             <button class="context-menu-item" onclick="projectManager.openInTerminal('${project.id}')">
-                <span class="icon">💻</span>
+                <img src="assets/icons/terminal.svg" alt="Terminal" class="icon" style="width: 14px; height: 14px;">
                 <span>Open Terminal</span>
             </button>
             <div class="context-menu-separator"></div>
             <button class="context-menu-item" onclick="projectManager.showProjectSettings('${project.id}')">
-                <span class="icon">⚙️</span>
+                <img src="assets/icons/settings.svg" alt="Settings" class="icon" style="width: 14px; height: 14px;">
                 <span>Project Settings</span>
             </button>
             <button class="context-menu-item" onclick="projectManager.duplicateProject('${project.id}')">
-                <span class="icon">📋</span>
+                <img src="assets/icons/document.svg" alt="Duplicate" class="icon" style="width: 14px; height: 14px;">
                 <span>Duplicate</span>
             </button>
             <div class="context-menu-separator"></div>
             <button class="context-menu-item" onclick="projectManager.deleteProject('${project.id}')">
-                <span class="icon">🗑️</span>
+                <img src="assets/icons/trash.svg" alt="Delete" class="icon" style="width: 14px; height: 14px;">
                 <span>Delete Project</span>
             </button>
         `;

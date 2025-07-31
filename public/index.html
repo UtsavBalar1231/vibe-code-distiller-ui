@@ -7,6 +7,11 @@
     <meta name="mobile-web-app-capable" content="yes">
     <title>vibe-code-distiller</title>
     
+    <!-- Google Fonts for Premium Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
     <!-- CSS Files -->
     <link rel="stylesheet" href="/assets/css/main.css">
     <link rel="stylesheet" href="/assets/css/components.css">
@@ -47,7 +52,7 @@
                     <span class="icon">☰</span>
                 </button>
                 <h1 class="app-title">
-                    <img src="/assets/icons/favicon-32x32.png" alt="icon" style="width: 24px; height: 24px;" class="icon">
+                    <img src="/assets/icons/android-chrome-192x192.png" alt="icon" style="width: 36px; height: 36px;" class="icon">
                     <span class="title-text">vibe-code-distiller</span>
                 </h1>
                 <div class="breadcrumb" id="breadcrumb">
@@ -63,29 +68,29 @@
                         <span class="text">Connecting...</span>
                     </div>
                     <div class="status-item" id="system-load">
-                        <span class="icon">📊</span>
+                        <img src="assets/icons/activity.svg" alt="System Load" class="icon" style="width: 16px; height: 16px;">
                         <span class="text">CPU: --</span>
                     </div>
                     <div class="status-item" id="system-temp">
-                        <span class="icon">🌡️</span>
+                        <img src="assets/icons/thermometer.svg" alt="Temperature" class="icon" style="width: 16px; height: 16px;">
                         <span class="text">Temp: --</span>
                     </div>
                     <div class="status-item" id="system-memory">
-                        <span class="icon">💾</span>
+                        <img src="assets/icons/hard-drive.svg" alt="Memory" class="icon" style="width: 16px; height: 16px;">
                         <span class="text">RAM: --</span>
                     </div>
                     <div class="status-item" id="notification-toggle" style="cursor: pointer;" title="Toggle notifications">
-                        <span class="icon">🔔</span>
+                        <img src="assets/icons/bell.svg" alt="Notifications" class="icon" style="width: 16px; height: 16px;">
                         <span class="text">Notifications: Enabled</span>
                     </div>
                 </div>
                 
                 <div class="header-actions">
                     <button class="btn btn-icon" id="help-docs-btn" title="Documentation">
-                        <span class="icon">📖</span>
+                        <img src="assets/icons/book-open.svg" alt="Documentation" class="icon" style="width: 16px; height: 16px;">
                     </button>
                     <button class="btn btn-icon" id="settings-btn" title="Settings">
-                        <span class="icon">⚙️</span>
+                        <img src="assets/icons/settings.svg" alt="Settings" class="icon" style="width: 16px; height: 16px;">
                     </button>
                 </div>
             </div>
@@ -101,7 +106,7 @@
                 <!-- Projects Panel -->
                 <section class="sidebar-panel">
                     <div class="panel-header">
-                        <h3>📁 Projects</h3>
+                        <h3><img src="assets/icons/folder.svg" alt="Projects" class="icon" style="width: 16px; height: 16px; margin-right: 6px;"> Projects</h3>
                         <button class="btn btn-small btn-primary" id="new-project-btn">New Project</button>
                     </div>
                     <div class="panel-content">
@@ -126,9 +131,9 @@
                 <!-- File Tree Panel -->
                 <section class="sidebar-panel">
                     <div class="panel-header">
-                        <h3>📁 File Explorer</h3>
+                        <h3><img src="assets/icons/folder-open.svg" alt="File Explorer" class="icon" style="width: 16px; height: 16px; margin-right: 6px;"> File Explorer</h3>
                         <div class="file-actions">
-                            <button class="btn btn-small btn-secondary" id="refresh-tree-btn" title="Refresh Tree">🔄</button>
+                            <button class="btn btn-small btn-secondary" id="refresh-tree-btn" title="Refresh Tree"><img src="assets/icons/refresh.svg" alt="Refresh" class="icon" style="width: 14px; height: 14px;"></button>
                         </div>
                     </div>
                     <div class="panel-content">
@@ -190,16 +195,46 @@
                         <!-- Terminal Empty State -->
                         <div class="terminal-empty-state" id="terminal-empty-state" style="display: none;">
                             <div class="terminal-empty-content">
-                                <div class="terminal-empty-icon">📋</div>
+                                <div class="terminal-empty-icon">
+                                    <img src="/assets/icons/terminal.svg" alt="Terminal" style="width: 64px; height: 64px; opacity: 0.7;">
+                                </div>
                                 <h2 class="terminal-empty-title">Ready to Code</h2>
-                                <p class="terminal-empty-description">Your projects are loaded. Create a new terminal session to get started.</p>
+                                <p class="terminal-empty-description">
+                                    Your projects are loaded. To start coding with Claude, create a new terminal session.
+                                </p>
+                                
+                                <!-- Direct Instruction -->
+                                <div class="terminal-empty-instructions">
+                                    <div class="instruction-step">
+                                        <div class="step-icon">
+                                            <img src="/assets/icons/mouse-pointer.svg" alt="Click" style="width: 20px; height: 20px;">
+                                        </div>
+                                        <div class="step-action">
+                                            <strong>Click</strong> 
+                                            <span class="step-button">
+                                                <img src="/assets/icons/plus.svg" alt="Plus" class="step-button-icon">
+                                            </span> 
+                                            <strong>button</strong>
+                                        </div>
+                                        <div class="step-location">
+                                            on the right side of any project
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="instruction-hint">
+                                        <img src="/assets/icons/lightbulb.svg" alt="Tip" class="hint-icon-svg">
+                                        <span>Each project has its own terminal session</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
                         <!-- Terminal Loading State -->
                         <div class="terminal-loading-state" id="terminal-loading-state" style="display: none;">
                             <div class="terminal-loading-content">
-                                <div class="terminal-loading-icon">💼</div>
+                                <div class="terminal-loading-icon">
+                                    <img src="/assets/icons/terminal.svg" alt="Terminal" style="width: 48px; height: 48px;">
+                                </div>
                                 <h2 class="terminal-loading-title">Terminal Loading</h2>
                                 <p class="terminal-loading-description">Preparing terminal session...</p>
                                 <div class="loading-spinner"></div>
@@ -420,7 +455,7 @@
                 <div class="modal-header">
                     <h3 id="project-modal-title">Create New Project</h3>
                     <button class="btn btn-icon modal-close">
-                        <span class="icon">✕</span>
+                        <img src="assets/icons/x.svg" alt="Close" class="icon" style="width: 14px; height: 14px;">
                     </button>
                 </div>
                 <div class="modal-body">
@@ -443,9 +478,9 @@
         <div id="settings-modal" class="modal">
             <div class="modal-content large">
                 <div class="modal-header">
-                    <h3>⚙️ Settings</h3>
+                    <h3><img src="assets/icons/settings.svg" alt="Settings" class="icon" style="width: 16px; height: 16px; margin-right: 6px;"> Settings</h3>
                     <button class="btn btn-icon modal-close">
-                        <span class="icon">✕</span>
+                        <img src="assets/icons/x.svg" alt="Close" class="icon" style="width: 14px; height: 14px;">
                     </button>
                 </div>
                 <div class="modal-body">
@@ -465,9 +500,9 @@
         <div id="docs-modal" class="modal">
             <div class="modal-content large">
                 <div class="modal-header">
-                    <h3>📖 Documentation</h3>
+                    <h3><img src="assets/icons/book-open.svg" alt="Documentation" class="icon" style="width: 16px; height: 16px; margin-right: 6px;"> Documentation</h3>
                     <button class="btn btn-icon modal-close">
-                        <span class="icon">✕</span>
+                        <img src="assets/icons/x.svg" alt="Close" class="icon" style="width: 14px; height: 14px;">
                     </button>
                 </div>
                 <div class="modal-body">
@@ -485,9 +520,9 @@
         <div id="help-modal" class="modal">
             <div class="modal-content large">
                 <div class="modal-header">
-                    <h3>❓ Help & Documentation</h3>
+                    <h3><img src="assets/icons/lightbulb.svg" alt="Help" class="icon" style="width: 16px; height: 16px; margin-right: 6px;"> Help & Documentation</h3>
                     <button class="btn btn-icon modal-close">
-                        <span class="icon">✕</span>
+                        <img src="assets/icons/x.svg" alt="Close" class="icon" style="width: 14px; height: 14px;">
                     </button>
                 </div>
                 <div class="modal-body">
@@ -537,13 +572,13 @@
         <div id="monaco-editor-modal" class="monaco-editor-modal">
             <div id="monaco-editor-title" class="monaco-editor-title">
                 <div class="editor-header-left">
-                    <span class="file-icon">📄</span>
+                    <span class="file-icon"><img src="assets/icons/document.svg" alt="File" class="icon" style="width: 14px; height: 14px;"></span>
                     <span class="file-name">Untitled</span>
                     <span class="file-status"></span>
                 </div>
                 <div class="editor-header-actions">
-                    <button class="btn btn-small btn-secondary" id="save-file-btn" title="Save File (Ctrl+S)">💾 Save</button>
-                    <button class="btn btn-small btn-secondary" id="close-editor-btn" title="Close Editor (Esc)">✕</button>
+                    <button class="btn btn-small btn-secondary" id="save-file-btn" title="Save File (Ctrl+S)"><img src="assets/icons/save.svg" alt="Save" class="icon" style="width: 14px; height: 14px; margin-right: 4px;"> Save</button>
+                    <button class="btn btn-small btn-secondary" id="close-editor-btn" title="Close Editor (Esc)"><img src="assets/icons/x.svg" alt="Close" class="icon" style="width: 14px; height: 14px;"></button>
                 </div>
             </div>
             <div id="monaco-editor" class="monaco-editor-container"></div>
@@ -561,6 +596,7 @@
     <script src="/assets/js/terminal-ttyd.js"></script>
     <script src="/assets/js/project-manager.js"></script>
     <script src="/assets/js/file-tree-manager.js"></script>
+    <script src="/assets/js/upload-manager.js"></script>
     <script src="/assets/js/monaco-editor-manager.js"></script>
     <script src="/assets/js/sidebar-divider.js"></script>
     <script src="/assets/js/vertical-divider.js"></script>

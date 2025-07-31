@@ -83,12 +83,12 @@ const corsWithLogging = (req, res, next) => {
 
 // Security headers middleware
 const securityHeaders = (req, res, next) => {
-  // Content Security Policy - Allow iframe embedding for terminal
+  // Content Security Policy - Allow iframe embedding for terminal and Google Fonts
   res.setHeader('Content-Security-Policy', 
     "default-src 'self'; " +
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-    "style-src 'self' 'unsafe-inline'; " +
-    "font-src 'self'; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: blob:; " +
     "media-src 'self' blob:; " +
     "connect-src 'self' ws: wss:; " +

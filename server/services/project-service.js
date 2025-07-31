@@ -1,6 +1,7 @@
 const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
+const { execSync } = require('child_process');
 const chokidar = require('chokidar');
 const archiver = require('archiver');
 const config = require('config');
@@ -249,6 +250,144 @@ class ProjectService {
     }
   }
 
+  async initializeGitRepository(projectPath, projectId) {
+    try {
+      // Check if git is available
+      try {
+        execSync('git --version', { stdio: 'ignore' });
+      } catch (error) {
+        logger.warn('Git not available, skipping git initialization:', { projectId });
+        return;
+      }
+
+      // Initialize git repository
+      execSync('git init', { 
+        cwd: projectPath, 
+        stdio: 'ignore' 
+      });
+
+      // Create .gitignore file with common patterns
+      const gitignoreContent = `# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.nyc_output
+
+# Build outputs
+build/
+dist/
+target/
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Next.js build output
+.next/
+
+# Nuxt.js build / generate output
+.nuxt/
+dist/
+
+# Gatsby files
+.cache/
+public/
+
+# Storybook build outputs
+.out
+.storybook-out
+
+# Temporary folders
+tmp/
+temp/
+
+# Editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+`;
+
+      const gitignorePath = path.join(projectPath, '.gitignore');
+      await fs.writeFile(gitignorePath, gitignoreContent);
+
+      logger.info('Git repository initialized successfully:', { projectId });
+    } catch (error) {
+      logger.warn('Failed to initialize git repository (continuing with project creation):', {
+        projectId,
+        error: error.message
+      });
+      // Don't throw error here - git initialization failure should not prevent project creation
+    }
+  }
+
   // Public API methods
   async getAllProjects(options = {}) {
     const { limit, offset, type } = options;
@@ -325,6 +464,9 @@ class ProjectService {
     try {
       // Create project directory
       await fs.ensureDir(projectPath);
+      
+      // Initialize git repository
+      await this.initializeGitRepository(projectPath, projectId);
       
       // Create Claude config directory
       const configDir = path.join(projectPath, PROJECT.CONFIG_DIR);

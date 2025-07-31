@@ -36,6 +36,9 @@ class ClaudeCodeWebManager extends EventEmitter {
             // Setup notification status click handler
             this.setupNotificationStatusHandler();
             
+            // Initialize theme system
+            this.initializeTheme();
+            
             this.isInitialized = true;
             this.emit('app_initialized');
             
@@ -193,6 +196,69 @@ class ClaudeCodeWebManager extends EventEmitter {
                     console.log('✅ Shortcuts panel ready');
                 }
             }, 100);
+        }
+    }
+    
+    // ===== THEME MANAGEMENT =====
+    initializeTheme() {
+        // Load saved theme or default to light
+        const savedTheme = localStorage.getItem('app-theme') || 'light';
+        this.applyTheme(savedTheme);
+        
+        console.log(`🎨 Theme initialized: ${savedTheme}`);
+    }
+    
+    applyTheme(theme) {
+        const body = document.body;
+        
+        // Remove existing theme classes
+        body.classList.remove('theme-light', 'theme-dark');
+        
+        // Apply new theme
+        if (theme === 'light') {
+            body.classList.add('theme-light');
+        }
+        // Dark theme is the default CSS state (no class needed)
+        
+        // Save theme preference
+        localStorage.setItem('app-theme', theme);
+        
+        // Update theme selector if it exists
+        const themeSelector = DOM.get('theme-selector');
+        if (themeSelector) {
+            themeSelector.value = theme;
+        }
+        
+        console.log(`🎨 Theme applied: ${theme}`);
+    }
+    
+    async handleThemeChange(theme) {
+        this.applyTheme(theme);
+        console.log(`🎨 Theme changed to: ${theme}`);
+        
+        // Dispatch theme change event for other components
+        document.dispatchEvent(new CustomEvent('themeChanged', {
+            detail: { theme }
+        }));
+        
+        // Update TTYd terminal theme
+        try {
+            const response = await HTTP.post('/api/ttyd/config', { theme });
+            if (response.success) {
+                console.log('TTYd theme updated successfully');
+                // Update TTYd status after configuration change
+                this.updateTTYdStatus();
+                // Reload the terminal iframe to reflect changes
+                if (window.terminalManager) {
+                    setTimeout(() => {
+                        window.terminalManager.reloadTerminal();
+                    }, 2000);
+                }
+            } else {
+                console.error(`Failed to update TTYd theme: ${response.error}`);
+            }
+        } catch (error) {
+            console.error(`Error updating TTYd theme: ${error.message}`);
         }
     }
     
@@ -432,6 +498,22 @@ class ClaudeCodeWebManager extends EventEmitter {
                 </div>
                 
                 <div class="settings-group">
+                    <h4>Theme</h4>
+                    <div class="settings-item">
+                        <div class="settings-item-info">
+                            <div class="settings-item-title">Application Theme</div>
+                            <div class="settings-item-description">Choose between light and dark theme appearance</div>
+                        </div>
+                        <div class="settings-item-control">
+                            <select id="theme-selector" class="theme-selector">
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="settings-group">
                     <h4>Shortcuts Panel</h4>
                     <div class="settings-item">
                         <div class="settings-item-info">
@@ -524,6 +606,12 @@ class ClaudeCodeWebManager extends EventEmitter {
         
         // Setup settings event handlers
         
+        // Theme selector event handler
+        DOM.on('theme-selector', 'change', (e) => {
+            const selectedTheme = e.target.value;
+            this.handleThemeChange(selectedTheme);
+        });
+        
         // Terminal settings event handlers
         DOM.on('apply-font-size', 'click', async (e) => {
             const fontSize = parseInt(DOM.get('terminal-font-size').value);
@@ -537,7 +625,10 @@ class ClaudeCodeWebManager extends EventEmitter {
                 e.target.disabled = true;
                 e.target.textContent = 'Applying...';
                 
-                const response = await HTTP.post('/api/ttyd/config', { fontSize });
+                // Get current theme to preserve it during font size change
+                const currentTheme = localStorage.getItem('app-theme') || 'dark';
+                
+                const response = await HTTP.post('/api/ttyd/config', { fontSize, theme: currentTheme });
                 
                 if (response.success) {
                     console.log('Font size updated! TTYd service has been restarted.');
@@ -689,6 +780,13 @@ class ClaudeCodeWebManager extends EventEmitter {
         
         // Apply the initial button visibility
         this.updateNewTerminalButtonVisibility(newTerminalBtnEnabled);
+        
+        // Initialize theme selector with current theme
+        const currentTheme = localStorage.getItem('app-theme') || 'light';
+        const themeSelector = DOM.get('theme-selector');
+        if (themeSelector) {
+            themeSelector.value = currentTheme;
+        }
     }
     
     switchSettingsTab(tabName) {
