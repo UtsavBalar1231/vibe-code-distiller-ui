@@ -167,6 +167,25 @@ class ClaudeCodeWebManager extends EventEmitter {
         socket.onSystemStatus((data) => {
             this.updateSystemStatus(data);
         });
+        
+        // Theme synchronization
+        socket.on('theme-changed', (data) => {
+            if (data && data.theme) {
+                console.log(`🔄 Theme change received from server: ${data.theme}`);
+                this.applyTheme(data.theme);
+                
+                // Dispatch theme change event for other components
+                document.dispatchEvent(new CustomEvent('themeChanged', {
+                    detail: { theme: data.theme }
+                }));
+                
+                // Update documentation highlight theme
+                if (typeof this.ensureHighlightTheme === 'function') {
+                    this.ensureHighlightTheme(data.theme);
+                    console.log(`🎨 Documentation highlight theme synced to: ${data.theme}`);
+                }
+            }
+        });
     }
     
     setupKeyboardShortcuts() {
@@ -200,12 +219,24 @@ class ClaudeCodeWebManager extends EventEmitter {
     }
     
     // ===== THEME MANAGEMENT =====
-    initializeTheme() {
-        // Load saved theme or default to light
-        const savedTheme = localStorage.getItem('app-theme') || 'light';
-        this.applyTheme(savedTheme);
-        
-        console.log(`🎨 Theme initialized: ${savedTheme}`);
+    async initializeTheme() {
+        try {
+            // Load theme from backend API
+            const response = await HTTP.get('/api/theme');
+            
+            if (response.success) {
+                this.applyTheme(response.theme);
+                console.log(`🎨 Theme initialized from server: ${response.theme}`);
+            } else {
+                throw new Error(response.error || 'Failed to load theme from server');
+            }
+        } catch (error) {
+            console.warn('Failed to load theme from server:', error.message);
+            // Fallback to default light theme if API fails
+            const fallbackTheme = 'light';
+            this.applyTheme(fallbackTheme);
+            console.log(`🎨 Theme initialized with fallback: ${fallbackTheme}`);
+        }
     }
     
     applyTheme(theme) {
@@ -220,9 +251,6 @@ class ClaudeCodeWebManager extends EventEmitter {
         }
         // Dark theme is the default CSS state (no class needed)
         
-        // Save theme preference
-        localStorage.setItem('app-theme', theme);
-        
         // Update theme selector if it exists
         const themeSelector = DOM.get('theme-selector');
         if (themeSelector) {
@@ -233,6 +261,20 @@ class ClaudeCodeWebManager extends EventEmitter {
     }
     
     async handleThemeChange(theme) {
+        try {
+            // Save theme to backend first
+            const themeResponse = await HTTP.post('/api/theme', { theme });
+            if (themeResponse.success) {
+                console.log(`🎨 Theme saved to server: ${theme}`);
+            } else {
+                console.error(`Failed to save theme to server: ${themeResponse.error}`);
+                // Continue with local changes even if server save fails
+            }
+        } catch (error) {
+            console.error(`Error saving theme to server: ${error.message}`);
+            // Continue with local changes even if server save fails
+        }
+        
         this.applyTheme(theme);
         console.log(`🎨 Theme changed to: ${theme}`);
         
@@ -263,7 +305,7 @@ class ClaudeCodeWebManager extends EventEmitter {
         
         // Update documentation highlight theme
         if (typeof this.ensureHighlightTheme === 'function') {
-            this.ensureHighlightTheme();
+            this.ensureHighlightTheme(theme);
             console.log(`🎨 Documentation highlight theme updated to: ${theme}`);
         }
     }
@@ -513,8 +555,24 @@ class ClaudeCodeWebManager extends EventEmitter {
     }
     
     // Ensure highlight.js theme CSS is loaded based on current app theme
-    ensureHighlightTheme() {
-        const currentTheme = localStorage.getItem('app-theme') || 'light';
+    async ensureHighlightTheme(theme = null) {
+        let currentTheme = theme;
+        
+        // If no theme provided, get it from backend API
+        if (!currentTheme) {
+            try {
+                const response = await HTTP.get('/api/theme');
+                if (response.success) {
+                    currentTheme = response.theme;
+                } else {
+                    currentTheme = 'light'; // fallback
+                }
+            } catch (error) {
+                console.warn('Failed to get theme for highlight.js:', error.message);
+                currentTheme = 'light'; // fallback
+            }
+        }
+        
         const existingTheme = document.querySelector('#docs-highlight-theme');
         
         // Remove existing theme if present
@@ -701,8 +759,16 @@ class ClaudeCodeWebManager extends EventEmitter {
                 e.target.disabled = true;
                 e.target.textContent = 'Applying...';
                 
-                // Get current theme to preserve it during font size change
-                const currentTheme = localStorage.getItem('app-theme') || 'dark';
+                // Get current theme from backend to preserve it during font size change
+                let currentTheme = 'light'; // fallback
+                try {
+                    const themeResponse = await HTTP.get('/api/theme');
+                    if (themeResponse.success) {
+                        currentTheme = themeResponse.theme;
+                    }
+                } catch (error) {
+                    console.warn('Failed to get current theme for font size update:', error.message);
+                }
                 
                 const response = await HTTP.post('/api/ttyd/config', { fontSize, theme: currentTheme });
                 
@@ -857,11 +923,21 @@ class ClaudeCodeWebManager extends EventEmitter {
         // Apply the initial button visibility
         this.updateNewTerminalButtonVisibility(newTerminalBtnEnabled);
         
-        // Initialize theme selector with current theme
-        const currentTheme = localStorage.getItem('app-theme') || 'light';
-        const themeSelector = DOM.get('theme-selector');
-        if (themeSelector) {
-            themeSelector.value = currentTheme;
+        // Initialize theme selector with current theme from backend
+        try {
+            const themeResponse = await HTTP.get('/api/theme');
+            const currentTheme = themeResponse.success ? themeResponse.theme : 'light';
+            const themeSelector = DOM.get('theme-selector');
+            if (themeSelector) {
+                themeSelector.value = currentTheme;
+            }
+        } catch (error) {
+            console.warn('Failed to load theme for settings:', error.message);
+            // Fallback to light theme for selector
+            const themeSelector = DOM.get('theme-selector');
+            if (themeSelector) {
+                themeSelector.value = 'light';
+            }
         }
     }
     
