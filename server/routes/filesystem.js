@@ -5,6 +5,7 @@ const fs = require('fs').promises;
 const multer = require('multer');
 const { AppError } = require('../middleware/error-handler');
 const { ERROR_CODES } = require('../utils/constants');
+const { isText, isBinary } = require('istextorbinary');
 
 /**
  * Filesystem Routes - Support for absolute path browsing
@@ -113,6 +114,150 @@ async function generateUniqueFilename(dir, originalName) {
     return filename;
 }
 
+
+/**
+ * Detect if a file is text or binary using content analysis
+ * @param {string} filePath - Full path to the file
+ * @param {string} fileName - Name of the file
+ * @param {number} fileSize - Size of the file in bytes
+ * @returns {Promise<{isText: boolean, mimeType: string, isImage: boolean}>} - File type information
+ */
+async function detectFileType(filePath, fileName, fileSize) {
+    const fileExt = path.extname(fileName).toLowerCase();
+    
+    // Known binary file extensions - skip content analysis for these
+    const knownBinaryExtensions = {
+        // Images
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.bmp': 'image/bmp',
+        '.ico': 'image/x-icon',
+        '.tiff': 'image/tiff',
+        '.tif': 'image/tiff',
+        
+        // Archives
+        '.zip': 'application/zip',
+        '.tar': 'application/x-tar',
+        '.gz': 'application/gzip',
+        '.bz2': 'application/x-bzip2',
+        '.7z': 'application/x-7z-compressed',
+        '.rar': 'application/vnd.rar',
+        
+        // Executables
+        '.exe': 'application/x-executable',
+        '.bin': 'application/octet-stream',
+        '.so': 'application/x-sharedlib',
+        '.dll': 'application/x-msdownload',
+        
+        // Media
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        '.mp4': 'video/mp4',
+        '.avi': 'video/x-msvideo',
+        '.mov': 'video/quicktime',
+        
+        // Documents (binary formats)
+        '.pdf': 'application/pdf',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.xls': 'application/vnd.ms-excel',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    };
+    
+    // Quick check for known binary files
+    if (knownBinaryExtensions[fileExt]) {
+        const mimeType = knownBinaryExtensions[fileExt];
+        return {
+            isText: false,
+            mimeType: mimeType,
+            isImage: mimeType.startsWith('image/')
+        };
+    }
+    
+    // Known text file extensions with specific MIME types
+    const knownTextExtensions = {
+        '.js': 'text/javascript',
+        '.mjs': 'text/javascript',
+        '.jsx': 'text/javascript',
+        '.ts': 'text/typescript',
+        '.tsx': 'text/typescript',
+        '.html': 'text/html',
+        '.htm': 'text/html',
+        '.css': 'text/css',
+        '.scss': 'text/css',
+        '.sass': 'text/css',
+        '.less': 'text/css',
+        '.json': 'application/json',
+        '.xml': 'text/xml',
+        '.csv': 'text/csv',
+        '.md': 'text/markdown',
+        '.markdown': 'text/markdown',
+        '.svg': 'image/svg+xml' // SVG is text-based
+    };
+    
+    // For files that are too large, avoid reading content for analysis
+    const maxAnalysisSize = 1024 * 1024; // 1MB
+    if (fileSize > maxAnalysisSize) {
+        // For large files, rely on extension or default to binary
+        if (knownTextExtensions[fileExt]) {
+            return {
+                isText: true,
+                mimeType: knownTextExtensions[fileExt],
+                isImage: false
+            };
+        }
+        return {
+            isText: false,
+            mimeType: 'application/octet-stream',
+            isImage: false
+        };
+    }
+    
+    try {
+        // Read first 512 bytes for content analysis
+        const sampleSize = Math.min(512, fileSize);
+        const fileHandle = await fs.open(filePath, 'r');
+        const buffer = Buffer.alloc(sampleSize);
+        await fileHandle.read(buffer, 0, sampleSize, 0);
+        await fileHandle.close();
+        
+        // Use istextorbinary for intelligent detection
+        const isTextFile = isText(fileName, buffer);
+        
+        let mimeType;
+        if (isTextFile) {
+            // Use specific MIME type if known, otherwise default to text/plain
+            mimeType = knownTextExtensions[fileExt] || 'text/plain';
+        } else {
+            mimeType = 'application/octet-stream';
+        }
+        
+        return {
+            isText: isTextFile,
+            mimeType: mimeType,
+            isImage: mimeType.startsWith('image/') && mimeType !== 'image/svg+xml'
+        };
+        
+    } catch (error) {
+        console.warn(`Error analyzing file ${filePath}:`, error.message);
+        // Fallback to extension-based detection
+        if (knownTextExtensions[fileExt]) {
+            return {
+                isText: true,
+                mimeType: knownTextExtensions[fileExt],
+                isImage: false
+            };
+        }
+        return {
+            isText: false,
+            mimeType: 'application/octet-stream',
+            isImage: false
+        };
+    }
+}
 
 /**
  * Get file stats and determine file type
@@ -246,87 +391,10 @@ router.get('/preview', async (req, res, next) => {
         }
         
         const fileName = path.basename(fullPath);
-        const fileExt = path.extname(fileName).toLowerCase();
         
-        // Determine MIME type
-        const mimeTypes = {
-            // Text formats
-            '.txt': 'text/plain',
-            '.log': 'text/plain',
-            '.conf': 'text/plain',
-            '.config': 'text/plain',
-            '.ini': 'text/plain',
-            '.env': 'text/plain',
-            '.properties': 'text/plain',
-            '.gitignore': 'text/plain',
-            '.gitattributes': 'text/plain',
-            '.editorconfig': 'text/plain',
-            
-            // Programming languages
-            '.js': 'text/javascript',
-            '.mjs': 'text/javascript',
-            '.jsx': 'text/javascript',
-            '.ts': 'text/typescript',
-            '.tsx': 'text/typescript',
-            '.py': 'text/plain',
-            '.java': 'text/plain',
-            '.c': 'text/plain',
-            '.cpp': 'text/plain',
-            '.cc': 'text/plain',
-            '.cxx': 'text/plain',
-            '.h': 'text/plain',
-            '.hpp': 'text/plain',
-            '.cs': 'text/plain',
-            '.php': 'text/plain',
-            '.rb': 'text/plain',
-            '.go': 'text/plain',
-            '.rs': 'text/plain',
-            '.sh': 'text/plain',
-            '.bash': 'text/plain',
-            '.zsh': 'text/plain',
-            '.fish': 'text/plain',
-            '.ps1': 'text/plain',
-            '.bat': 'text/plain',
-            '.cmd': 'text/plain',
-            
-            // Web formats
-            '.html': 'text/html',
-            '.htm': 'text/html',
-            '.css': 'text/css',
-            '.scss': 'text/css',
-            '.sass': 'text/css',
-            '.less': 'text/css',
-            
-            // Data formats
-            '.json': 'application/json',
-            '.yaml': 'text/plain',
-            '.yml': 'text/plain',
-            '.xml': 'text/xml',
-            '.csv': 'text/csv',
-            '.tsv': 'text/plain',
-            '.sql': 'text/plain',
-            
-            // Documentation
-            '.md': 'text/markdown',
-            '.markdown': 'text/markdown',
-            '.rst': 'text/plain',
-            '.adoc': 'text/plain',
-            '.asciidoc': 'text/plain',
-            
-            // Images
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif',
-            '.svg': 'image/svg+xml',
-            '.webp': 'image/webp',
-            '.bmp': 'image/bmp',
-            '.ico': 'image/x-icon'
-        };
-        
-        const mimeType = mimeTypes[fileExt] || 'application/octet-stream';
-        const isText = mimeType.startsWith('text/') || mimeType === 'application/json';
-        const isImage = mimeType.startsWith('image/');
+        // Use intelligent file type detection
+        const fileTypeInfo = await detectFileType(fullPath, fileName, stats.size);
+        const { isText, mimeType, isImage } = fileTypeInfo;
         
         let content = null;
         
