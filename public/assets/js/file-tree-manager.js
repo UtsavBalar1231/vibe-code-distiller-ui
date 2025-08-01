@@ -171,8 +171,16 @@ class FileTreeManager {
             existingNotification.remove();
         }
 
-        // Detect current theme
-        const currentTheme = localStorage.getItem('app-theme') || 'light';
+        // Detect current theme from backend API
+        let currentTheme = 'light'; // fallback
+        try {
+            const response = await HTTP.get('/api/theme');
+            if (response.success) {
+                currentTheme = response.theme;
+            }
+        } catch (error) {
+            console.warn('Failed to get theme for file tree notification:', error.message);
+        }
         const isDark = currentTheme === 'dark';
 
         // Load SVG icon based on type
@@ -1280,8 +1288,16 @@ class FileTreeManager {
         };
 
         const createOverlayContent = async () => {
-            // Detect current theme
-            const currentTheme = localStorage.getItem('app-theme') || 'light';
+            // Detect current theme from backend API
+            let currentTheme = 'light'; // fallback
+            try {
+                const response = await HTTP.get('/api/theme');
+                if (response.success) {
+                    currentTheme = response.theme;
+                }
+            } catch (error) {
+                console.warn('Failed to get theme for file tree overlay:', error.message);
+            }
             const isDark = currentTheme === 'dark';
             
             // Theme-based colors
