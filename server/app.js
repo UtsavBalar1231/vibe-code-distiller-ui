@@ -74,6 +74,10 @@ const io = socketIo(server, {
 // Store io instance for access in routes
 app.set('io', io);
 
+// Initialize theme state management (in-memory storage)
+// Default theme is 'light', reset to 'light' on application restart
+app.set('app-theme', 'light');
+
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', 1);
 

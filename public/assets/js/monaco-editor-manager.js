@@ -81,15 +81,26 @@ class MonacoEditorManager {
 
     setupThemeListeners() {
         // Listen for theme changes from the application
-        document.addEventListener('themeChanged', (event) => {
-            const theme = event.detail?.theme || this.getCurrentTheme();
+        document.addEventListener('themeChanged', async (event) => {
+            const theme = event.detail?.theme || await this.getCurrentTheme();
             this.updateEditorTheme(theme);
         });
     }
 
-    getCurrentTheme() {
-        // Get current theme from localStorage, default to 'light'
-        return localStorage.getItem('app-theme') || 'light';
+    async getCurrentTheme() {
+        // Get current theme from backend API, default to 'light'
+        try {
+            const response = await HTTP.get('/api/theme');
+            if (response.success) {
+                return response.theme;
+            } else {
+                console.warn('Failed to get theme from server:', response.error);
+                return 'light'; // fallback
+            }
+        } catch (error) {
+            console.warn('Failed to get theme from server:', error.message);
+            return 'light'; // fallback
+        }
     }
 
     getMonacoTheme(appTheme) {
@@ -109,10 +120,10 @@ class MonacoEditorManager {
     async initializeMonaco() {
         if (this.isEditorReady) return;
 
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             // Check if Monaco is already loaded
             if (typeof monaco !== 'undefined') {
-                this.createEditorInstance();
+                await this.createEditorInstance();
                 resolve();
                 return;
             }
@@ -145,13 +156,13 @@ class MonacoEditorManager {
             require(['vs/editor/editor.main'], () => {
                 try {
                     // Wait a bit to ensure Monaco is fully loaded
-                    setTimeout(() => {
+                    setTimeout(async () => {
                         if (typeof monaco === 'undefined') {
                             reject(new Error('Monaco failed to load'));
                             return;
                         }
 
-                        this.createEditorInstance();
+                        await this.createEditorInstance();
                         resolve();
                     }, 100);
                 } catch (error) {
@@ -162,10 +173,10 @@ class MonacoEditorManager {
         });
     }
 
-    createEditorInstance() {
+    async createEditorInstance() {
         try {
             // Get current theme for Monaco Editor
-            const currentTheme = this.getCurrentTheme();
+            const currentTheme = await this.getCurrentTheme();
             const monacoTheme = this.getMonacoTheme(currentTheme);
             
             // Create Monaco Editor instance

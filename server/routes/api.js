@@ -215,6 +215,73 @@ router.get('/docs', (req, res) => {
   });
 });
 
+// Theme management endpoints
+// Get current theme setting
+router.get('/theme', (req, res) => {
+  try {
+    const currentTheme = req.app.get('app-theme') || 'light';
+    
+    res.json({
+      success: true,
+      theme: currentTheme,
+      timestamp: new Date().toISOString()
+    });
+    
+    logger.info(`Theme retrieved: ${currentTheme}`);
+    
+  } catch (error) {
+    logger.error('Error getting theme:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get theme',
+      details: error.message
+    });
+  }
+});
+
+// Set theme setting
+router.post('/theme', (req, res) => {
+  try {
+    const { theme } = req.body;
+    
+    // Validate theme value
+    if (!theme || !['light', 'dark'].includes(theme)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid theme',
+        details: 'Theme must be either "light" or "dark"'
+      });
+    }
+    
+    // Update theme in memory
+    req.app.set('app-theme', theme);
+    
+    // Broadcast theme change to all connected clients via Socket.IO
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('theme-changed', { theme });
+      logger.info(`Theme change broadcasted to all clients: ${theme}`);
+    }
+    
+    res.json({
+      success: true,
+      theme,
+      message: 'Theme updated successfully',
+      timestamp: new Date().toISOString()
+    });
+    
+    logger.info(`Theme updated: ${theme}`);
+    
+  } catch (error) {
+    logger.error('Error setting theme:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to set theme',
+      details: error.message
+    });
+  }
+});
+
 // Claude Code notification endpoint
 router.post('/notification', (req, res) => {
   try {

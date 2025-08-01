@@ -1,5 +1,5 @@
 /**
- * Upload Manager - Handles file uploads with drag-and-drop functionality
+ * Upload Manager - Handles file uploads and deletions with drag-and-drop functionality
  * Integrates with FileTreeManager for seamless file management
  */
 
@@ -9,6 +9,8 @@ class UploadManager {
         this.isUploading = false;
         this.uploadQueue = [];
         this.maxFileSize = 10 * 1024 * 1024; // 10MB
+        this.currentDeleteTarget = null;
+        this.isDeleting = false;
         
         this.init();
     }
@@ -16,6 +18,7 @@ class UploadManager {
     init() {
         this.setupDragAndDrop();
         this.setupUploadModal();
+        this.setupDeleteModal();
         this.setupProgressIndicator();
     }
 
@@ -192,9 +195,10 @@ class UploadManager {
     }
 
     /**
-     * Add upload buttons to a specific node and its children
+     * Add upload and delete buttons to a specific node and its children
      */
     addUploadButtonsToNode(container) {
+        // Add upload buttons to directory nodes
         const directoryNodes = container.querySelectorAll('.file-tree-node[data-type="directory"]');
         directoryNodes.forEach(node => {
             const header = node.querySelector('.tree-node-header');
@@ -208,6 +212,23 @@ class UploadManager {
                     this.showUploadModal(node.dataset.path);
                 });
                 header.appendChild(uploadBtn);
+            }
+        });
+        
+        // Add delete buttons to both directory AND file nodes
+        const allNodes = container.querySelectorAll('.file-tree-node');
+        allNodes.forEach(node => {
+            const header = node.querySelector('.tree-node-header');
+            if (header && !header.querySelector('.delete-btn')) {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.innerHTML = '<img src="/assets/icons/trash.svg" alt="Delete" class="icon" style="width: 12px; height: 12px;">';
+                deleteBtn.title = `Delete this ${node.dataset.type}`;
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.showDeleteModal(node.dataset.path, node.dataset.type);
+                });
+                header.appendChild(deleteBtn);
             }
         });
     }
@@ -499,6 +520,273 @@ class UploadManager {
     }
 
     /**
+     * Setup delete confirmation modal
+     */
+    setupDeleteModal() {
+        // Create delete modal if it doesn't exist
+        if (!document.getElementById('delete-modal')) {
+            const modal = document.createElement('div');
+            modal.id = 'delete-modal';
+            modal.className = 'upload-modal'; // Reuse upload modal styles
+            modal.innerHTML = `
+                <div class="upload-modal-content">
+                    <div class="upload-modal-header">
+                        <h3>Delete Confirmation</h3>
+                        <button class="close-btn" onclick="window.uploadManager.hideDeleteModal()">&times;</button>
+                    </div>
+                    <div class="upload-modal-body">
+                        <div class="delete-warning-info">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                                <img src="/assets/icons/trash.svg" alt="Delete" class="icon" style="width: 24px; height: 24px; color: var(--accent-danger);">
+                                <div>
+                                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
+                                        Are you sure you want to delete this <span id="delete-item-type">item</span>?
+                                    </div>
+                                    <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">
+                                        This action cannot be undone.
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="background: var(--bg-tertiary); padding: 12px; border-radius: var(--border-radius-sm); border: 1px solid var(--border-color);">
+                                <div style="font-weight: 500; color: var(--text-primary); margin-bottom: 4px;" id="delete-item-name"></div>
+                                <div style="font-size: var(--font-size-xs); color: var(--text-secondary); font-family: var(--font-mono);" id="delete-item-path"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="upload-modal-footer">
+                        <button class="btn btn-secondary" onclick="window.uploadManager.hideDeleteModal()">Cancel</button>
+                        <button class="btn btn-danger" id="confirm-delete-btn" onclick="window.uploadManager.confirmDelete()">Delete</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+    }
+
+    /**
+     * Show delete confirmation modal for specific file/directory
+     */
+    showDeleteModal(itemPath, itemType) {
+        this.currentDeleteTarget = {
+            path: itemPath,
+            type: itemType
+        };
+        
+        const modal = document.getElementById('delete-modal');
+        const itemTypeElement = document.getElementById('delete-item-type');
+        const itemNameElement = document.getElementById('delete-item-name');
+        const itemPathElement = document.getElementById('delete-item-path');
+        
+        if (modal && itemTypeElement && itemNameElement && itemPathElement) {
+            const itemName = itemPath.split('/').pop() || 'Unknown';
+            
+            itemTypeElement.textContent = itemType === 'directory' ? 'folder' : 'file';
+            itemNameElement.textContent = itemName;
+            itemPathElement.textContent = itemPath;
+            
+            modal.style.display = 'flex';
+        }
+    }
+
+    /**
+     * Hide delete confirmation modal
+     */
+    hideDeleteModal() {
+        const modal = document.getElementById('delete-modal');
+        if (modal) {
+            modal.style.display = 'none';
+            this.currentDeleteTarget = null;
+        }
+    }
+
+    /**
+     * Confirm deletion and execute
+     */
+    async confirmDelete() {
+        if (!this.currentDeleteTarget) return;
+
+        await this.deleteItem(this.currentDeleteTarget.path, this.currentDeleteTarget.type);
+        this.hideDeleteModal();
+    }
+
+    /**
+     * Delete file or directory
+     */
+    async deleteItem(itemPath, itemType) {
+        if (this.isDeleting) return;
+        
+        this.isDeleting = true;
+        this.showProgressIndicator('Deleting...');
+
+        try {
+            const response = await fetch('/api/filesystem/delete', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    path: itemPath,
+                    type: itemType
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Show center notification instead of corner notification
+                await this.showDeleteSuccessNotification(result.deleted.name, result.deleted.type);
+                
+                // Refresh file tree to show changes
+                if (window.fileTreeManager) {
+                    await window.fileTreeManager.refreshFullTree(false);
+                }
+            } else {
+                this.showNotification('error', result.message || 'Delete failed');
+            }
+
+        } catch (error) {
+            console.error('Delete error:', error);
+            this.showNotification('error', 'Delete failed: ' + error.message);
+        } finally {
+            this.isDeleting = false;
+            this.hideProgressIndicator();
+        }
+    }
+
+    /**
+     * Show delete success notification in center of screen (matching file tree style)
+     */
+    async showDeleteSuccessNotification(itemName, itemType) {
+        // Remove existing notification if any
+        const existingNotification = document.getElementById('delete-success-notification');
+        if (existingNotification) {
+            existingNotification.remove();
+        }
+
+        // Detect current theme from backend API
+        let currentTheme = 'light'; // fallback
+        try {
+            const response = await HTTP.get('/api/theme');
+            if (response.success) {
+                currentTheme = response.theme;
+            }
+        } catch (error) {
+            console.warn('Failed to get theme for delete notification:', error.message);
+        }
+        const isDark = currentTheme === 'dark';
+
+        // Load success icon
+        const loadSuccessIcon = async () => {
+            try {
+                const response = await fetch('/assets/icons/check-circle.svg');
+                const svgText = await response.text();
+                const iconColor = isDark ? '#48cc6c' : '#22c55e';
+                
+                return svgText
+                    .replace(/width="24"/, 'width="32"')
+                    .replace(/height="24"/, 'height="32"')
+                    .replace(/currentColor/g, iconColor)
+                    .replace(/stroke="[^"]*"/g, `stroke="${iconColor}"`);
+            } catch (error) {
+                const fallbackColor = isDark ? '#48cc6c' : '#22c55e';
+                return `<svg width="32" height="32" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="${fallbackColor}" stroke-width="2"/><path d="m9 12 2 2 4-4" stroke="${fallbackColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+            }
+        };
+
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.id = 'delete-success-notification';
+        notification.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        `;
+
+        // Load icon and create content
+        const iconSvg = await loadSuccessIcon();
+        
+        // Theme-based colors (matching file tree notification style)
+        const colors = isDark ? {
+            background: 'rgba(31, 41, 55, 0.95)',
+            text: '#f9fafb',
+            textSecondary: '#d1d5db',
+            border: 'rgba(75, 85, 99, 0.3)'
+        } : {
+            background: 'rgba(255, 255, 255, 0.95)',
+            text: '#1f2937',
+            textSecondary: '#6b7280',
+            border: 'rgba(0, 0, 0, 0.08)'
+        };
+
+        const typeText = itemType === 'directory' ? 'Folder' : 'File';
+        
+        notification.innerHTML = `
+            <div style="
+                text-align: center;
+                color: ${colors.text};
+                font-weight: 600;
+                pointer-events: none;
+                background: ${colors.background};
+                backdrop-filter: blur(10px);
+                padding: 40px 48px;
+                border-radius: 20px;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1);
+                min-width: 320px;
+                border: 1px solid ${colors.border};
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-bottom: 20px;
+                ">
+                    ${iconSvg}
+                </div>
+                <div style="font-size: 16px; line-height: 1.5;">
+                    <div style="font-weight: 700; margin-bottom: 8px; font-size: 18px; color: ${colors.text};">
+                        Delete Successful
+                    </div>
+                    <div style="opacity: 0.8; font-size: 14px; font-weight: 400; color: ${colors.textSecondary};">
+                        ${typeText} "${itemName}" has been deleted successfully
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add to document
+        document.body.appendChild(notification);
+        
+        // Animate in
+        requestAnimationFrame(() => {
+            notification.style.opacity = '1';
+        });
+        
+        // Auto remove after 1.5 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 1500);
+        
+        console.log(`🗑️ Delete success notification shown: ${typeText} "${itemName}" deleted (theme: ${currentTheme})`);
+    }
+
+    /**
      * Setup progress indicator
      */
     setupProgressIndicator() {
@@ -509,7 +797,7 @@ class UploadManager {
             progress.innerHTML = `
                 <div class="progress-content">
                     <div class="progress-spinner"></div>
-                    <div class="progress-text">Uploading files...</div>
+                    <div class="progress-text" id="progress-text">Uploading files...</div>
                 </div>
             `;
             document.body.appendChild(progress);
@@ -519,9 +807,13 @@ class UploadManager {
     /**
      * Show progress indicator
      */
-    showProgressIndicator() {
+    showProgressIndicator(text = 'Uploading files...') {
         const progress = document.getElementById('upload-progress');
+        const progressText = document.getElementById('progress-text');
         if (progress) {
+            if (progressText) {
+                progressText.textContent = text;
+            }
             progress.style.display = 'flex';
         }
     }
