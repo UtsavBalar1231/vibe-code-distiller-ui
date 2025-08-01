@@ -68,7 +68,7 @@ class FileTreeManager {
         // Refresh tree button
         const refreshBtn = document.getElementById('refresh-tree-btn');
         if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => this.refreshFullTree(false));
+            refreshBtn.addEventListener('click', () => this.refreshFullTree());
         }
 
 
@@ -136,59 +136,205 @@ class FileTreeManager {
         return this.svgCache.get(iconName) || '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect width="20" height="16" x="2" y="4" rx="2" stroke="currentColor" stroke-width="1.5"/></svg>';
     }
 
+    /**
+     * Clear all project highlighting in the file tree
+     */
+    clearProjectHighlight() {
+        const prevHighlighted = document.querySelectorAll('.file-tree-node.selected-project');
+        prevHighlighted.forEach(node => node.classList.remove('selected-project'));
+        console.log('🧹 Cleared project highlighting');
+    }
 
     /**
-     * Refresh the full tree while maintaining project selection state
-     * @param {boolean} shouldScrollToProject - Whether to scroll to selected project after refresh (default: false)
+     * Show success notification after tree refresh
      */
-    async refreshFullTree(shouldScrollToProject = false) {
-        // Save current scroll position if we don't want to scroll to project
-        let savedScrollPosition = null;
-        if (!shouldScrollToProject) {
-            const treeContainer = document.getElementById('file-tree-container');
-            if (treeContainer) {
-                savedScrollPosition = treeContainer.scrollTop;
-            }
+    showRefreshSuccessNotification() {
+        this.showCenterNotification('File Tree Refreshed Successfully', 'success');
+    }
+
+    /**
+     * Show error notification if tree refresh fails
+     */
+    showRefreshErrorNotification() {
+        this.showCenterNotification('Failed to Refresh File Tree', 'error');
+    }
+
+    /**
+     * Show a centered notification message
+     * @param {string} message - Message to display
+     * @param {string} type - Notification type ('success', 'error', 'info')
+     */
+    async showCenterNotification(message, type = 'info') {
+        // Remove existing notification if any
+        const existingNotification = document.getElementById('file-tree-notification');
+        if (existingNotification) {
+            existingNotification.remove();
         }
+
+        // Detect current theme
+        const currentTheme = localStorage.getItem('app-theme') || 'light';
+        const isDark = currentTheme === 'dark';
+
+        // Load SVG icon based on type
+        const loadNotificationIcon = async (iconType) => {
+            const iconMap = {
+                'success': '/assets/icons/check-circle.svg',
+                'error': '/assets/icons/check-circle.svg', // Will use red color
+                'info': '/assets/icons/check-circle.svg'
+            };
+            
+            try {
+                const response = await fetch(iconMap[iconType] || iconMap.info);
+                const svgText = await response.text();
+                const iconColor = isDark 
+                    ? (iconType === 'success' ? '#48cc6c' : iconType === 'error' ? '#ff6b6b' : '#4a9eff')
+                    : (iconType === 'success' ? '#22c55e' : iconType === 'error' ? '#ef4444' : '#3b82f6');
+                
+                return svgText
+                    .replace(/width="24"/, 'width="32"')
+                    .replace(/height="24"/, 'height="32"')
+                    .replace(/currentColor/g, iconColor)
+                    .replace(/stroke="[^"]*"/g, `stroke="${iconColor}"`);
+            } catch (error) {
+                const fallbackColor = isDark ? '#718096' : '#6b7280';
+                return `<svg width="32" height="32" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="${fallbackColor}" stroke-width="2"/></svg>`;
+            }
+        };
+
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.id = 'file-tree-notification';
+        notification.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        `;
+
+        // Load icon and create content
+        const iconSvg = await loadNotificationIcon(type);
+        
+        // Theme-based colors
+        const colors = isDark ? {
+            background: 'rgba(31, 41, 55, 0.95)',
+            text: '#f9fafb',
+            textSecondary: '#d1d5db',
+            border: 'rgba(75, 85, 99, 0.3)'
+        } : {
+            background: 'rgba(255, 255, 255, 0.95)',
+            text: '#1f2937',
+            textSecondary: '#6b7280',
+            border: 'rgba(0, 0, 0, 0.08)'
+        };
+
+        notification.innerHTML = `
+            <div style="
+                text-align: center;
+                color: ${colors.text};
+                font-weight: 600;
+                pointer-events: none;
+                background: ${colors.background};
+                backdrop-filter: blur(10px);
+                padding: 40px 48px;
+                border-radius: 20px;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1);
+                min-width: 320px;
+                border: 1px solid ${colors.border};
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-bottom: 20px;
+                ">
+                    ${iconSvg}
+                </div>
+                <div style="font-size: 16px; line-height: 1.5;">
+                    <div style="font-weight: 700; margin-bottom: 8px; font-size: 18px; color: ${colors.text};">
+                        ${type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information'}
+                    </div>
+                    <div style="opacity: 0.8; font-size: 14px; font-weight: 400; color: ${colors.textSecondary};">
+                        ${message}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add to document
+        document.body.appendChild(notification);
+        
+        // Animate in
+        requestAnimationFrame(() => {
+            notification.style.opacity = '1';
+        });
+        
+        // Auto remove after 1 second
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 1000);
+        
+        console.log(`📢 Professional notification shown: ${message} (${type}, theme: ${currentTheme})`);
+    }
+
+
+    /**
+     * Refresh the full tree to collapsed root directory view
+     * Shows only root directory content, all folders collapsed
+     */
+    async refreshFullTree() {
+        console.log('🔄 Starting tree refresh to root directory...');
+        
+        // Clear all expanded folders state
+        this.expandedFolders.clear();
+        console.log('🗂️ Cleared all expanded folders');
+        
+        // Clear selected project highlighting
+        this.clearProjectHighlight();
         
         // Always ensure we're showing full tree from root
         this.currentPath = '/';
         
-        // Load the tree
-        await this.loadFileTree();
-        
-        // If we have a selected project, re-expand to it and highlight
-        if (this.selectedProject) {
-            await this.expandPathRecursively(this.selectedProject.path);
+        try {
+            // Load only the root directory tree
+            await this.loadFileTree();
+            console.log('📁 Root directory loaded');
             
-            setTimeout(() => {
-                this.highlightSelectedProject();
-                
-                // Restore scroll position or scroll to project based on parameter
-                if (shouldScrollToProject) {
-                    this.scrollToProjectNode();
-                } else if (savedScrollPosition !== null) {
-                    const treeContainer = document.getElementById('file-tree-container');
-                    if (treeContainer) {
-                        treeContainer.scrollTop = savedScrollPosition;
-                    }
-                }
-                
-                // Notify upload manager that tree was refreshed
-                document.dispatchEvent(new CustomEvent('fileTreeUpdated', {
-                    detail: { action: 'treeRefreshed' }
-                }));
-            }, 100);
-        } else {
-            // No selected project, just restore scroll position if saved
-            if (savedScrollPosition !== null) {
-                setTimeout(() => {
-                    const treeContainer = document.getElementById('file-tree-container');
-                    if (treeContainer) {
-                        treeContainer.scrollTop = savedScrollPosition;
-                    }
-                }, 50);
+            // Ensure scroll is at top after loading
+            const treeContainer = document.getElementById('file-tree-container');
+            if (treeContainer) {
+                treeContainer.scrollTop = 0;
+                console.log('📌 Scroll reset to top');
             }
+            
+            // Show success notification
+            this.showRefreshSuccessNotification();
+            
+            // Notify upload manager that tree was refreshed
+            document.dispatchEvent(new CustomEvent('fileTreeUpdated', {
+                detail: { action: 'treeRefreshed' }
+            }));
+            
+            console.log('✅ Tree refresh to root completed successfully');
+            
+        } catch (error) {
+            console.error('❌ Tree refresh failed:', error);
+            this.showRefreshErrorNotification();
         }
     }
 
@@ -1134,9 +1280,30 @@ class FileTreeManager {
         };
 
         const createOverlayContent = async () => {
-            const folderIcon = await loadSvgIcon('/assets/icons/folder.svg', 36, 36, '#4a5568');
-            const arrowIcon = await loadSvgIcon('/assets/icons/arrow-right.svg', 28, 28, '#718096');
-            const terminalIcon = await loadSvgIcon('/assets/icons/terminal.svg', 36, 36, '#4a5568');
+            // Detect current theme
+            const currentTheme = localStorage.getItem('app-theme') || 'light';
+            const isDark = currentTheme === 'dark';
+            
+            // Theme-based colors
+            const colors = isDark ? {
+                background: 'rgba(31, 41, 55, 0.95)',
+                text: '#f9fafb',
+                textSecondary: '#d1d5db',
+                border: 'rgba(75, 85, 99, 0.3)',
+                iconPrimary: '#9ca3af',
+                iconSecondary: '#6b7280'
+            } : {
+                background: 'rgba(255, 255, 255, 0.95)',
+                text: '#2d3748',
+                textSecondary: '#4a5568',
+                border: 'rgba(0, 0, 0, 0.08)',
+                iconPrimary: '#4a5568',
+                iconSecondary: '#718096'
+            };
+
+            const folderIcon = await loadSvgIcon('/assets/icons/folder.svg', 36, 36, colors.iconPrimary);
+            const arrowIcon = await loadSvgIcon('/assets/icons/arrow-right.svg', 28, 28, colors.iconSecondary);
+            const terminalIcon = await loadSvgIcon('/assets/icons/terminal.svg', 36, 36, colors.iconPrimary);
 
             overlay.innerHTML = `
                 <div style="
@@ -1145,16 +1312,17 @@ class FileTreeManager {
                     left: 50%;
                     transform: translate(-50%, -50%);
                     text-align: center;
-                    color: #2d3748;
+                    color: ${colors.text};
                     font-weight: 600;
                     pointer-events: none;
-                    background: rgba(255, 255, 255, 0.95);
+                    background: ${colors.background};
                     backdrop-filter: blur(10px);
                     padding: 40px 48px;
                     border-radius: 20px;
                     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1);
                     min-width: 360px;
-                    border: 1px solid rgba(0, 0, 0, 0.08);
+                    border: 1px solid ${colors.border};
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 ">
                     <div style="
                         display: flex;
@@ -1167,9 +1335,9 @@ class FileTreeManager {
                         <div style="opacity: 0.8;">${arrowIcon}</div>
                         <div>${terminalIcon}</div>
                     </div>
-                    <div style="font-size: 16px; line-height: 1.5; color: #2d3748;">
+                    <div style="font-size: 16px; line-height: 1.5; color: ${colors.text};">
                         <div style="font-weight: 700; margin-bottom: 8px; font-size: 18px;">Drop to Terminal</div>
-                        <div style="opacity: 0.75; font-size: 14px; font-weight: 400;">Send file or folder path to active terminal session</div>
+                        <div style="opacity: 0.75; font-size: 14px; font-weight: 400; color: ${colors.textSecondary};">Send file or folder path to active terminal session</div>
                     </div>
                 </div>
             `;
