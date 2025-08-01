@@ -331,6 +331,27 @@ select {
     flex: 1;
 }
 
+/* Enable text selection in documentation modal */
+#docs-modal .modal-body,
+#docs-modal .docs-content {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+}
+
+/* Keep UI elements non-selectable in docs modal */
+#docs-modal .modal-header,
+#docs-modal .modal-footer,
+#docs-modal .btn,
+#docs-modal button,
+#docs-modal .modal-close {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
 .modal-footer {
     padding: var(--spacing-lg);
     border-top: 1px solid var(--border-color);
@@ -1762,6 +1783,11 @@ kbd {
     max-width: none;
     overflow-wrap: break-word;
     word-wrap: break-word;
+    /* Enable text selection for documentation content */
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
 }
 
 /* Headers with enhanced spacing and typography */
@@ -1842,6 +1868,11 @@ kbd {
     font-size: 0.85em;
     color: var(--text-primary);
     white-space: nowrap;
+    /* Ensure inline code is selectable for copying */
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
 }
 
 .markdown-content pre {
@@ -1856,6 +1887,11 @@ kbd {
     line-height: 1.5;
     position: relative;
     box-shadow: var(--shadow-sm);
+    /* Ensure code blocks are selectable for copying */
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
 }
 
 .markdown-content pre code {
