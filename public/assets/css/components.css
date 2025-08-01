@@ -845,6 +845,10 @@ select {
     font-size: var(--font-size-sm);
     min-width: 120px;
     transition: border-color var(--transition-fast), background-color var(--transition-fast);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 36px;
 }
 
 .theme-selector:hover {
