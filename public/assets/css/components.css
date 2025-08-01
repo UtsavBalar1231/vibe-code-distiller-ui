@@ -2305,6 +2305,35 @@ kbd {
     border-color: var(--border-hover);
 }
 
+/* Delete button in file tree headers */
+.tree-node-header .delete-btn {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 2px 6px;
+    border-radius: var(--border-radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all var(--transition-fast);
+    margin-left: 4px;
+    min-width: auto;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tree-node-header:hover .delete-btn {
+    opacity: 1;
+}
+
+.tree-node-header .delete-btn:hover {
+    background: var(--accent-danger);
+    color: var(--text-inverse);
+    border-color: var(--accent-danger);
+}
+
 /* Drag and drop visual feedback */
 .file-tree-node.drag-over > .tree-node-header {
     background-color: rgba(var(--accent-primary-rgb), 0.2);

@@ -618,5 +618,86 @@ router.post('/upload', upload.array('files', 10), async (req, res, next) => {
     }
 });
 
+/**
+ * Delete file or directory at absolute path
+ * DELETE /api/filesystem/delete
+ * Body: { path: string, type?: string }
+ */
+router.delete('/delete', async (req, res, next) => {
+    try {
+        const { path: filePath, type } = req.body;
+        
+        if (!filePath) {
+            throw new AppError('File path is required', 400, ERROR_CODES.VALIDATION_ERROR);
+        }
+        
+        // Security validation
+        if (!isPathAllowed(filePath)) {
+            throw new AppError('Access denied to this path', 403, ERROR_CODES.ACCESS_DENIED);
+        }
+        
+        const fullPath = path.resolve(filePath);
+        
+        // Check if file/directory exists
+        let stats;
+        try {
+            stats = await fs.stat(fullPath);
+        } catch (error) {
+            throw new AppError('File or directory not found', 404, ERROR_CODES.NOT_FOUND);
+        }
+        
+        const itemName = path.basename(fullPath);
+        const isDirectory = stats.isDirectory();
+        const actualType = isDirectory ? 'directory' : 'file';
+        
+        // Validate type if provided
+        if (type && type !== actualType) {
+            throw new AppError(`Path is a ${actualType}, not a ${type}`, 400, ERROR_CODES.VALIDATION_ERROR);
+        }
+        
+        // Additional safety check: prevent deletion of system directories
+        const systemPaths = ['/', '/home', '/usr', '/var', '/opt', '/tmp'];
+        if (systemPaths.includes(fullPath)) {
+            throw new AppError('Cannot delete system directories', 403, ERROR_CODES.ACCESS_DENIED);
+        }
+        
+        try {
+            if (isDirectory) {
+                // Remove directory recursively
+                await fs.rm(fullPath, { recursive: true, force: true });
+            } else {
+                // Remove file
+                await fs.unlink(fullPath);
+            }
+            
+            res.json({
+                success: true,
+                message: `${actualType === 'directory' ? 'Directory' : 'File'} deleted successfully`,
+                deleted: {
+                    name: itemName,
+                    path: fullPath,
+                    type: actualType
+                },
+                timestamp: new Date().toISOString()
+            });
+            
+        } catch (error) {
+            // Handle specific deletion errors
+            if (error.code === 'ENOTEMPTY') {
+                throw new AppError('Directory is not empty', 400, ERROR_CODES.VALIDATION_ERROR);
+            } else if (error.code === 'EACCES' || error.code === 'EPERM') {
+                throw new AppError('Permission denied', 403, ERROR_CODES.ACCESS_DENIED);
+            } else if (error.code === 'EBUSY') {
+                throw new AppError('File or directory is busy', 400, ERROR_CODES.VALIDATION_ERROR);
+            } else {
+                throw new AppError(`Failed to delete ${actualType}: ${error.message}`, 500, ERROR_CODES.INTERNAL_ERROR);
+            }
+        }
+        
+    } catch (error) {
+        next(error);
+    }
+});
+
 
 module.exports = router;
