@@ -260,6 +260,12 @@ class ClaudeCodeWebManager extends EventEmitter {
         } catch (error) {
             console.error(`Error updating TTYd theme: ${error.message}`);
         }
+        
+        // Update documentation highlight theme
+        if (typeof this.ensureHighlightTheme === 'function') {
+            this.ensureHighlightTheme();
+            console.log(`🎨 Documentation highlight theme updated to: ${theme}`);
+        }
     }
     
     
@@ -400,68 +406,138 @@ class ClaudeCodeWebManager extends EventEmitter {
         }
     }
 
-    // Simple markdown to HTML converter
+    // Professional markdown to HTML converter using marked.js + highlight.js
     markdownToHtml(markdown) {
         if (!markdown) return '';
         
-        let html = markdown
-            // Headers
-            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-            // Bold
-            .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-            // Italic
-            .replace(/\*(.*)\*/gim, '<em>$1</em>')
-            // Code blocks
-            .replace(/```([^`]+)```/gim, '<pre><code>$1</code></pre>')
-            // Inline code
-            .replace(/`([^`]+)`/gim, '<code>$1</code>')
-            // Images - convert relative paths to API endpoints
-            .replace(/!\[([^\]]*)\]\(([^)]+)\)/gim, (match, alt, src) => {
-                // If it's a relative path (no http/https), convert to API endpoint
-                if (!src.startsWith('http://') && !src.startsWith('https://')) {
-                    src = `/api/documentation/images/${src}`;
+        // Check if libraries are available
+        if (typeof marked === 'undefined' || typeof hljs === 'undefined') {
+            console.warn('Markdown libraries not loaded, falling back to basic rendering');
+            return `<div class="error-message">
+                <h3>❌ Markdown Libraries Missing</h3>
+                <p>Documentation rendering libraries not available. Please refresh the page.</p>
+            </div>`;
+        }
+        
+        try {
+            // Configure marked options for security and features
+            marked.setOptions({
+                // Enable GitHub Flavored Markdown
+                gfm: true,
+                // Break on single line breaks
+                breaks: true,
+                // Use header IDs for navigation
+                headerIds: false,
+                // Syntax highlighting function
+                highlight: function(code, language) {
+                    if (language && hljs.getLanguage(language)) {
+                        try {
+                            return hljs.highlight(code, { language: language }).value;
+                        } catch (err) {
+                            console.warn('Highlight.js error for language ' + language + ':', err);
+                        }
+                    }
+                    // Auto-detect language if not specified or invalid
+                    try {
+                        return hljs.highlightAuto(code).value;
+                    } catch (err) {
+                        console.warn('Highlight.js auto-detection error:', err);
+                        return code; // Return unhighlighted code as fallback
+                    }
+                },
+                // Security: Sanitize HTML to prevent XSS
+                sanitize: false, // We'll handle this manually for better control
+                smartLists: true,
+                smartypants: false // Disable smart quotes to avoid encoding issues
+            });
+            
+            // Create custom renderer for image handling
+            const renderer = new marked.Renderer();
+            
+            // Override image rendering to handle relative paths
+            renderer.image = function(href, title, text) {
+                // Convert relative paths to API endpoints
+                if (href && !href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('data:')) {
+                    href = `/api/documentation/images/${href}`;
                 }
-                return `<img src="${src}" alt="${alt}" class="markdown-image">`;
-            })
-            // Links
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank">$1</a>')
-            // Tables - enhanced table support
-            .replace(/^\|(.+)\|$/gim, (match, content) => {
-                const cells = content.split('|').map(cell => cell.trim());
-                const cellTags = cells.map(cell => `<td>${cell}</td>`).join('');
-                return `<tr>${cellTags}</tr>`;
-            })
-            // Lists
-            .replace(/^\* (.*$)/gim, '<li>$1</li>')
-            .replace(/^\- (.*$)/gim, '<li>$1</li>')
-            // Line breaks
-            .replace(/\n\n/gim, '</p><p>')
-            .replace(/\n/gim, '<br>');
+                
+                let out = '<img src="' + href + '" alt="' + text + '" class="markdown-image"';
+                if (title) {
+                    out += ' title="' + title + '"';
+                }
+                out += '>';
+                return out;
+            };
+            
+            // Override link rendering for security
+            renderer.link = function(href, title, text) {
+                // Security: Only allow safe protocols
+                if (href && (href.startsWith('javascript:') || href.startsWith('vbscript:') || href.startsWith('data:'))) {
+                    return text; // Return just the text for potentially dangerous links
+                }
+                
+                let out = '<a href="' + href + '"';
+                if (title) {
+                    out += ' title="' + title + '"';
+                }
+                // Open external links in new tab
+                if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+                    out += ' target="_blank" rel="noopener noreferrer"';
+                }
+                out += '>' + text + '</a>';
+                return out;
+            };
+            
+            // Set the custom renderer
+            marked.setOptions({ renderer: renderer });
+            
+            // Parse markdown to HTML
+            let html = marked.parse(markdown);
+            
+            // Apply theme-based highlight.js CSS
+            this.ensureHighlightTheme();
+            
+            return html;
+            
+        } catch (error) {
+            console.error('Error rendering markdown:', error);
+            return `<div class="error-message">
+                <h3>❌ Markdown Rendering Error</h3>
+                <p>Failed to render documentation: ${error.message}</p>
+                <details>
+                    <summary>Technical Details</summary>
+                    <pre>${error.stack || 'No stack trace available'}</pre>
+                </details>
+            </div>`;
+        }
+    }
+    
+    // Ensure highlight.js theme CSS is loaded based on current app theme
+    ensureHighlightTheme() {
+        const currentTheme = localStorage.getItem('app-theme') || 'light';
+        const existingTheme = document.querySelector('#docs-highlight-theme');
         
-        // Wrap tables in table tags
-        html = html.replace(/(<tr>.*<\/tr>)/gis, '<table>$1</table>');
+        // Remove existing theme if present
+        if (existingTheme) {
+            existingTheme.remove();
+        }
         
-        // Wrap lists in ul tags
-        html = html.replace(/(<li>.*<\/li>)/gis, '<ul>$1</ul>');
+        // Determine theme file
+        const themeFile = currentTheme === 'light' ? 'github.min.css' : 'github-dark.min.css';
         
-        // Wrap content in paragraphs
-        html = '<p>' + html + '</p>';
+        // Create and append new theme link
+        const link = document.createElement('link');
+        link.id = 'docs-highlight-theme';
+        link.rel = 'stylesheet';
+        link.href = `/assets/libs/highlight-themes/${themeFile}`;
+        link.onload = function() {
+            console.log(`✅ Highlight.js theme loaded: ${themeFile}`);
+        };
+        link.onerror = function() {
+            console.warn(`⚠️ Failed to load highlight.js theme: ${themeFile}`);
+        };
         
-        // Clean up empty paragraphs and fix nested elements
-        html = html.replace(/<p><\/p>/gim, '')
-                  .replace(/<p>(<h[1-6]>)/gim, '$1')
-                  .replace(/(<\/h[1-6]>)<\/p>/gim, '$1')
-                  .replace(/<p>(<pre>)/gim, '$1')
-                  .replace(/(<\/pre>)<\/p>/gim, '$1')
-                  .replace(/<p>(<ul>)/gim, '$1')
-                  .replace(/(<\/ul>)<\/p>/gim, '$1')
-                  .replace(/<p>(<table>)/gim, '$1')
-                  .replace(/(<\/table>)<\/p>/gim, '$1')
-                  .replace(/<p>(<img[^>]*>)<\/p>/gim, '$1');
-        
-        return html;
+        document.head.appendChild(link);
     }
 
     async showSettings(defaultTab = 'general') {
