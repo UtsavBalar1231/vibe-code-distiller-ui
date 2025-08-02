@@ -27,8 +27,8 @@ class ClaudeCodeWebManager extends EventEmitter {
             // Initialize shortcuts panel if available
             this.initializeShortcutsPanel();
             
-            // Hide loading screen and show app
-            this.hideLoadingScreen();
+            // Wait for projects to load before deciding what to show
+            await this.waitForProjectsAndShowApp();
             
             // Initialize system monitoring
             this.initializeSystemMonitoring();
@@ -38,6 +38,9 @@ class ClaudeCodeWebManager extends EventEmitter {
             
             // Initialize theme system
             this.initializeTheme();
+            
+            // Setup project event listeners
+            this.setupProjectEventListeners();
             
             this.isInitialized = true;
             this.emit('app_initialized');
@@ -61,15 +64,237 @@ class ClaudeCodeWebManager extends EventEmitter {
         if (app) DOM.hide(app);
     }
     
-    hideLoadingScreen() {
+    hideLoadingScreen(showMainApp = true) {
         const loadingScreen = DOM.get('loading-screen');
         const app = DOM.get('app');
         
         if (loadingScreen) {
             setTimeout(() => {
                 DOM.hide(loadingScreen);
-                if (app) DOM.show(app);
-            }, 500);
+                if (showMainApp && app) {
+                    DOM.show(app);
+                }
+            }, 100); // Reduced delay for smoother welcome screen transition
+        }
+    }
+    
+    async waitForProjectsAndShowApp() {
+        try {
+            // Wait for project manager to be available
+            await this.waitForProjectManager();
+            
+            // Wait for projects to load
+            await this.waitForProjectsLoaded();
+            
+            // Check if we have projects
+            const hasProjects = window.projectManager && window.projectManager.hasProjects();
+            
+            if (hasProjects) {
+                // Show main app interface normally
+                console.log('📂 Projects found, showing main application interface');
+                this.hideLoadingScreen(true);
+            } else {
+                // No projects - coordinate showing main app and welcome screen simultaneously
+                console.log('📭 No projects found, coordinating main app + welcome screen display');
+                
+                // First prepare welcome screen to be ready
+                this.prepareWelcomeScreen();
+                
+                // Then show main app with welcome screen already visible
+                this.hideLoadingScreen(true);
+                
+                // Validate UI state after a short delay
+                setTimeout(() => {
+                    this.validateUIState();
+                }, 1000);
+            }
+            
+        } catch (error) {
+            console.error('Failed to load projects, showing main app as fallback:', error);
+            // Fallback to showing main app
+            this.hideLoadingScreen(true);
+        }
+    }
+    
+    waitForProjectManager() {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('Project manager initialization timeout'));
+            }, 10000);
+            
+            const checkProjectManager = () => {
+                if (window.projectManager) {
+                    clearTimeout(timeout);
+                    resolve();
+                } else {
+                    setTimeout(checkProjectManager, 100);
+                }
+            };
+            
+            checkProjectManager();
+        });
+    }
+    
+    waitForProjectsLoaded() {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('Projects loading timeout'));
+            }, 15000);
+            
+            // If projects are already loaded, resolve immediately
+            if (window.projectManager && window.projectManager.getAllProjects) {
+                const projects = window.projectManager.getAllProjects();
+                if (projects && Array.isArray(projects)) {
+                    clearTimeout(timeout);
+                    resolve();
+                    return;
+                }
+            }
+            
+            // Otherwise wait for projects_loaded event
+            const handleProjectsLoaded = () => {
+                clearTimeout(timeout);
+                if (window.projectManager) {
+                    window.projectManager.off('projects_loaded', handleProjectsLoaded);
+                }
+                resolve();
+            };
+            
+            if (window.projectManager && typeof window.projectManager.on === 'function') {
+                window.projectManager.on('projects_loaded', handleProjectsLoaded);
+            } else {
+                // Fallback: just wait a bit and assume projects are loaded
+                setTimeout(() => {
+                    clearTimeout(timeout);
+                    resolve();
+                }, 2000);
+            }
+        });
+    }
+    
+    ensureWelcomeScreenDisplay() {
+        // Wait for terminal manager to be available
+        const waitForTerminalManager = () => {
+            if (window.terminalManager && typeof window.terminalManager.showWelcomeOrEmptyScreen === 'function') {
+                console.log('🎯 Terminal manager ready, showing welcome screen');
+                window.terminalManager.showWelcomeOrEmptyScreen();
+            } else {
+                // Fallback: directly show welcome screen if terminal manager is not ready
+                console.log('⚠️ Terminal manager not ready, using direct welcome screen fallback');
+                this.directWelcomeScreenFallback();
+            }
+        };
+        
+        // Try immediately, then with retries
+        waitForTerminalManager();
+        
+        // Backup retry after 1 second
+        setTimeout(() => {
+            if (window.terminalManager && typeof window.terminalManager.showWelcomeOrEmptyScreen === 'function') {
+                // Double-check that welcome screen is actually visible
+                const welcomeScreen = document.getElementById('welcome-screen');
+                if (!welcomeScreen || welcomeScreen.style.display === 'none') {
+                    console.log('🔄 Welcome screen not visible, retrying...');
+                    window.terminalManager.showWelcomeOrEmptyScreen();
+                }
+            }
+        }, 1000);
+    }
+    
+    directWelcomeScreenFallback() {
+        // Direct DOM manipulation as fallback
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const terminalEmptyState = document.getElementById('terminal-empty-state');
+        const terminalLoadingState = document.getElementById('terminal-loading-state');
+        const ttydTerminal = document.getElementById('ttyd-terminal');
+        
+        if (welcomeScreen) {
+            welcomeScreen.style.display = 'flex';
+            console.log('✅ Welcome screen shown via direct fallback');
+        }
+        
+        // Hide other terminal states
+        if (terminalEmptyState) terminalEmptyState.style.display = 'none';
+        if (terminalLoadingState) terminalLoadingState.style.display = 'none';
+        if (ttydTerminal) ttydTerminal.style.display = 'none';
+    }
+    
+    prepareWelcomeScreen() {
+        console.log('🎯 Preparing welcome screen before showing main app');
+        
+        // Immediately set welcome screen to be visible
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const terminalEmptyState = document.getElementById('terminal-empty-state');
+        const terminalLoadingState = document.getElementById('terminal-loading-state');
+        const ttydTerminal = document.getElementById('ttyd-terminal');
+        
+        if (welcomeScreen) {
+            welcomeScreen.style.display = 'flex';
+            console.log('✅ Welcome screen set to visible before main app shows');
+        }
+        
+        // Hide other terminal states
+        if (terminalEmptyState) terminalEmptyState.style.display = 'none';
+        if (terminalLoadingState) terminalLoadingState.style.display = 'none';
+        if (ttydTerminal) ttydTerminal.style.display = 'none';
+        
+        // Also try to ensure terminal manager is in correct state
+        if (window.terminalManager && typeof window.terminalManager.showWelcomeOrEmptyScreen === 'function') {
+            // Call this immediately since we've already set the DOM state
+            window.terminalManager.showWelcomeOrEmptyScreen();
+        }
+    }
+    
+    setupProjectEventListeners() {
+        // Wait for project manager to be available
+        const waitForProjectManager = () => {
+            if (window.projectManager && typeof window.projectManager.on === 'function') {
+                // Listen for project creation to handle welcome screen -> main app transition
+                window.projectManager.on('project_created', (project) => {
+                    console.log('🎉 First project created, transitioning from welcome screen');
+                    
+                    // Hide welcome screen and show normal terminal state
+                    setTimeout(() => {
+                        if (window.terminalManager && typeof window.terminalManager.showWelcomeOrEmptyScreen === 'function') {
+                            window.terminalManager.showWelcomeOrEmptyScreen();
+                        }
+                    }, 100);
+                });
+                
+                console.log('✅ App-level project event listeners setup complete');
+            } else {
+                // Retry after a short delay
+                setTimeout(waitForProjectManager, 100);
+            }
+        };
+        
+        waitForProjectManager();
+    }
+    
+    // Validation method to check if the UI is in the correct state
+    validateUIState() {
+        const hasProjects = window.projectManager && window.projectManager.hasProjects();
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const terminalEmptyState = document.getElementById('terminal-empty-state');
+        const mainApp = document.getElementById('app');
+        const loadingScreen = document.getElementById('loading-screen');
+        
+        console.log('🔍 UI State Validation:');
+        console.log('  - Has projects:', hasProjects);
+        console.log('  - Main app visible:', mainApp && mainApp.style.display !== 'none');
+        console.log('  - Loading screen visible:', loadingScreen && loadingScreen.style.display !== 'none');
+        console.log('  - Welcome screen visible:', welcomeScreen && welcomeScreen.style.display === 'flex');
+        console.log('  - Terminal empty state visible:', terminalEmptyState && terminalEmptyState.style.display !== 'none');
+        
+        // Expected states:
+        // - No projects: welcome screen should be visible, main app should be visible, loading should be hidden
+        // - Has projects: main app should be visible, loading should be hidden, welcome screen should be hidden
+        
+        if (!hasProjects) {
+            if (!welcomeScreen || welcomeScreen.style.display !== 'flex') {
+                console.warn('⚠️ No projects but welcome screen not visible - triggering fallback');
+                this.directWelcomeScreenFallback();
+            }
         }
     }
     
