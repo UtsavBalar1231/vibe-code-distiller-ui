@@ -16,6 +16,14 @@ class FileTreeManager {
         this.isDragging = false; // Track if currently in a drag operation
         this.svgCache = new Map(); // Cache for SVG icons
         
+        // File loading state management
+        this.fileLoadingState = {
+            isLoading: false,
+            loadingOverlay: null,
+            currentFileName: null,
+            currentFileType: null
+        };
+        
         this.init();
     }
 
@@ -843,15 +851,44 @@ class FileTreeManager {
         `;
     }
 
-    openFileInEditor(filePath, fileName) {
-        // Check if it's an image file
-        if (this.isImageFile(fileName)) {
-            this.openImageViewer(filePath, fileName);
-        } else {
-            // Trigger Monaco Editor modal for text files
-            if (window.monacoEditorManager) {
-                window.monacoEditorManager.openFile(filePath, fileName);
+    async openFileInEditor(filePath, fileName) {
+        // Prevent multiple file loading operations
+        if (this.isFileLoading()) {
+            console.log('🚫 File loading already in progress, ignoring click');
+            return;
+        }
+
+        try {
+            // Determine file type for appropriate loading animation
+            const fileType = this.isImageFile(fileName) ? 'image' : 'file';
+            
+            // Show loading animation immediately
+            await this.showFileLoadingState(fileName, fileType);
+            
+            // Add a small delay to ensure loading animation is visible
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Check if it's an image file
+            if (this.isImageFile(fileName)) {
+                await this.openImageViewer(filePath, fileName);
+            } else {
+                // Trigger Monaco Editor modal for text files
+                if (window.monacoEditorManager) {
+                    await window.monacoEditorManager.openFile(filePath, fileName);
+                } else {
+                    throw new Error('Monaco Editor Manager not available');
+                }
             }
+            
+        } catch (error) {
+            console.error('❌ Failed to open file:', error);
+            
+            // Show error notification
+            this.showNotification(`Failed to open file: ${error.message}`, 'error');
+            
+        } finally {
+            // Always hide loading animation, whether success or failure
+            this.hideFileLoadingState();
         }
     }
 
@@ -862,9 +899,6 @@ class FileTreeManager {
      */
     async openImageViewer(filePath, fileName) {
         try {
-            // Show loading notification
-            this.showNotification(`Loading image: ${fileName}`, 'info');
-            
             // Fetch image data from API
             const response = await fetch(`/api/filesystem/preview?path=${encodeURIComponent(filePath)}`);
             const result = await response.json();
@@ -880,11 +914,9 @@ class FileTreeManager {
             // Create and show image modal
             this.showImageModal(result.file, fileName);
             
-            this.showNotification(`Image loaded: ${fileName}`, 'success');
-            
         } catch (error) {
             console.error('Error opening image viewer:', error);
-            this.showNotification(`Failed to open image viewer: ${error.message}`, 'error');
+            throw error; // Re-throw to be handled by openFileInEditor
         }
     }
 
@@ -1577,6 +1609,232 @@ class FileTreeManager {
     }
 
     /**
+     * Check if a file is currently loading
+     * @returns {boolean} True if a file is currently loading
+     */
+    isFileLoading() {
+        return this.fileLoadingState.isLoading;
+    }
+
+    /**
+     * Show file loading state with professional animation
+     * @param {string} fileName - Name of the file being loaded
+     * @param {string} fileType - Type of file ('file', 'image', 'folder')
+     */
+    async showFileLoadingState(fileName, fileType = 'file') {
+        // Don't show if already loading
+        if (this.fileLoadingState.isLoading) {
+            return;
+        }
+
+        // Set loading state
+        this.fileLoadingState.isLoading = true;
+        this.fileLoadingState.currentFileName = fileName;
+        this.fileLoadingState.currentFileType = fileType;
+
+        // Remove existing overlay if any
+        if (this.fileLoadingState.loadingOverlay) {
+            this.fileLoadingState.loadingOverlay.remove();
+            this.fileLoadingState.loadingOverlay = null;
+        }
+
+        // Create loading overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'file-loading-overlay';
+        overlay.className = 'file-loading-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        `;
+
+        // Get current theme for theming
+        let currentTheme = 'light';
+        try {
+            const response = await fetch('/api/theme');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.theme) {
+                    currentTheme = data.theme;
+                }
+            }
+        } catch (error) {
+            console.warn('Failed to get theme for file loading overlay:', error.message);
+        }
+        const isDark = currentTheme === 'dark';
+
+        // Theme-based colors
+        const colors = isDark ? {
+            background: 'rgba(31, 41, 55, 0.95)',
+            text: '#f9fafb',
+            textSecondary: '#d1d5db',
+            border: 'rgba(75, 85, 99, 0.3)',
+            iconColor: '#9ca3af'
+        } : {
+            background: 'rgba(255, 255, 255, 0.95)',
+            text: '#1f2937',
+            textSecondary: '#6b7280',
+            border: 'rgba(0, 0, 0, 0.08)',
+            iconColor: '#4a5568'
+        };
+
+        // Get appropriate icon based on file type
+        let iconName = 'document';
+        if (fileType === 'image') {
+            iconName = 'image';
+        } else if (fileType === 'folder') {
+            iconName = 'folder';
+        }
+
+        // Load and prepare icon
+        const iconSvg = await this.loadFileLoadingIcon(iconName, colors.iconColor);
+
+        // Create modal content
+        overlay.innerHTML = `
+            <div class="file-loading-modal" style="
+                text-align: center;
+                color: ${colors.text};
+                font-weight: 600;
+                pointer-events: none;
+                background: ${colors.background};
+                backdrop-filter: blur(10px);
+                padding: 40px 48px;
+                border-radius: 20px;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1);
+                min-width: 360px;
+                border: 1px solid ${colors.border};
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            ">
+                <div class="file-loading-icon" style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-bottom: 20px;
+                    font-size: 48px;
+                    opacity: 0.8;
+                ">
+                    ${iconSvg}
+                </div>
+                <div class="file-loading-title" style="
+                    font-weight: 700;
+                    margin-bottom: 8px;
+                    font-size: 18px;
+                    color: ${colors.text};
+                ">
+                    Opening ${fileType === 'image' ? 'Image' : 'File'}
+                </div>
+                <div class="file-loading-description" style="
+                    opacity: 0.75;
+                    font-size: 14px;
+                    font-weight: 400;
+                    color: ${colors.textSecondary};
+                    margin-bottom: 20px;
+                ">
+                    Loading ${fileName}...
+                </div>
+                <div class="file-loading-spinner" style="
+                    margin: 0 auto;
+                    width: 32px;
+                    height: 32px;
+                    border: 3px solid ${colors.border};
+                    border-top: 3px solid ${colors.iconColor};
+                    border-radius: 50%;
+                    animation: file-loading-spin 1s linear infinite;
+                "></div>
+            </div>
+        `;
+
+        // Add spinner animation styles
+        if (!document.getElementById('file-loading-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'file-loading-styles';
+            styles.textContent = `
+                @keyframes file-loading-spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(styles);
+        }
+
+        // Add to document and store reference
+        document.body.appendChild(overlay);
+        this.fileLoadingState.loadingOverlay = overlay;
+
+        // Animate in
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+        });
+
+        console.log(`📂 File loading overlay shown for: ${fileName} (${fileType})`);
+    }
+
+    /**
+     * Hide file loading state
+     */
+    hideFileLoadingState() {
+        if (!this.fileLoadingState.isLoading || !this.fileLoadingState.loadingOverlay) {
+            return;
+        }
+
+        const overlay = this.fileLoadingState.loadingOverlay;
+        
+        // Animate out
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+            if (overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+            }
+        }, 300);
+
+        // Reset state
+        this.fileLoadingState.isLoading = false;
+        this.fileLoadingState.loadingOverlay = null;
+        this.fileLoadingState.currentFileName = null;
+        this.fileLoadingState.currentFileType = null;
+
+        console.log('📂 File loading overlay hidden');
+    }
+
+    /**
+     * Load and prepare SVG icon for file loading overlay
+     * @param {string} iconName - Name of the icon
+     * @param {string} color - Color for the icon
+     * @returns {Promise<string>} SVG HTML
+     */
+    async loadFileLoadingIcon(iconName, color) {
+        try {
+            const response = await fetch(`/assets/icons/${iconName}.svg`);
+            const svgContent = await response.text();
+            
+            // Modify SVG for loading overlay
+            return svgContent
+                .replace(/width="24"/, 'width="48"')
+                .replace(/height="24"/, 'height="48"')
+                .replace(/stroke="[^"]*"/g, `stroke="${color}"`)
+                .replace(/fill="[^"]*"/g, `fill="${color}"`)
+                .replace(/currentColor/g, color);
+        } catch (error) {
+            // Fallback SVG
+            return `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14,2 14,8 20,8"/>
+            </svg>`;
+        }
+    }
+
+    /**
      * Clean up resources and event listeners
      */
     destroy() {
@@ -1588,6 +1846,19 @@ class FileTreeManager {
             this.dropOverlay.parentNode.removeChild(this.dropOverlay);
             this.dropOverlay = null;
         }
+
+        // Clean up file loading overlay
+        if (this.fileLoadingState.loadingOverlay && this.fileLoadingState.loadingOverlay.parentNode) {
+            this.fileLoadingState.loadingOverlay.parentNode.removeChild(this.fileLoadingState.loadingOverlay);
+        }
+
+        // Reset file loading state
+        this.fileLoadingState = {
+            isLoading: false,
+            loadingOverlay: null,
+            currentFileName: null,
+            currentFileType: null
+        };
 
         // Clean up drag state
         this.dragCounter = 0;

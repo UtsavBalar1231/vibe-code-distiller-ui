@@ -32,14 +32,110 @@
     <meta name="msapplication-TileColor" content="#1e1e1e">
     <meta name="apple-mobile-web-app-title" content="vibe-code-distiller">
     <meta name="application-name" content="vibe-code-distiller">
+    
+    <!-- Critical Theme Initialization Script - Applied before body rendering -->
+    <script>
+        (function() {
+            console.log('🎨 Pre-render theme initialization');
+            
+            let theme = 'light'; // Default to light since API returns light
+            
+            try {
+                // Synchronous API call to get theme before body renders
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/api/theme', false);
+                xhr.send();
+                
+                if (xhr.status === 200) {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.success && data.theme) {
+                        theme = data.theme;
+                        localStorage.setItem('app-theme', data.theme);
+                        console.log(`🎨 Theme determined before render: ${data.theme}`);
+                    }
+                }
+            } catch (error) {
+                // Fallback to localStorage or default light
+                const cachedTheme = localStorage.getItem('app-theme');
+                theme = cachedTheme || 'light';
+                console.warn('🎨 Using fallback theme:', theme);
+            }
+            
+            // Store theme for body class application
+            window.INITIAL_THEME_CLASS = theme === 'light' ? 'theme-light' : 'theme-dark';
+            
+            // Inject CSS variables directly to prevent dark theme flash
+            const themeVars = theme === 'light' ? {
+                '--bg-primary': '#ffffff',
+                '--bg-secondary': '#f8f9fa',
+                '--bg-tertiary': '#e9ecef',
+                '--bg-hover': '#f1f3f4',
+                '--bg-active': '#64b5f6',
+                '--text-primary': '#212529',
+                '--text-secondary': '#495057',
+                '--text-muted': '#6c757d',
+                '--text-inverse': '#ffffff',
+                '--border-color': '#dee2e6',
+                '--border-hover': '#adb5bd',
+                '--border-focus': '#0078d4',
+                '--accent-primary': '#64b5f6',
+                '--accent-primary-rgb': '100, 181, 246',
+                '--accent-secondary': '#1565c0',
+                '--icon-filter': 'invert(0) brightness(0.2)'
+            } : {
+                '--bg-primary': '#1e1e1e',
+                '--bg-secondary': '#2d2d30',
+                '--bg-tertiary': '#3e3e42',
+                '--bg-hover': '#404040',
+                '--bg-active': '#4a90e2',
+                '--text-primary': '#cccccc',
+                '--text-secondary': '#9ca3af',
+                '--text-muted': '#6b7280',
+                '--text-inverse': '#1e1e1e',
+                '--border-color': '#484848',
+                '--border-hover': '#6b7280',
+                '--border-focus': '#0078d4',
+                '--accent-primary': '#5ba0f2',
+                '--accent-primary-rgb': '91, 160, 242',
+                '--accent-secondary': '#106ebe',
+                '--icon-filter': 'invert(1) brightness(1)'
+            };
+            
+            // Apply CSS variables immediately via style injection
+            let cssVarsText = ':root {';
+            for (const [key, value] of Object.entries(themeVars)) {
+                cssVarsText += `${key}: ${value};`;
+            }
+            cssVarsText += '}';
+            
+            const style = document.createElement('style');
+            style.textContent = cssVarsText;
+            document.head.appendChild(style);
+            
+            console.log('🎨 CSS variables injected for', theme, 'theme');
+        })();
+    </script>
 </head>
-<body class="theme-dark">
+<body id="app-body">
+    <script>
+        // Apply theme immediately as body renders
+        document.getElementById('app-body').className = window.INITIAL_THEME_CLASS;
+        console.log('🎨 Theme applied at body render:', window.INITIAL_THEME_CLASS);
+    </script>
+    <!-- Theme initialization completed before body render -->
     <!-- Loading Screen -->
     <div id="loading-screen" class="loading-screen">
         <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <h2>vibe-code-distiller</h2>
-            <p>Initializing your development environment...</p>
+            <div class="loading-logo-container">
+                <img src="/assets/icons/android-chrome-512x512-transparent.png" alt="Vibe Code Distiller" class="loading-logo">
+                <div class="loading-spinner-modern">
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                </div>
+            </div>
+            <h1 class="loading-title">VIBE CODE DISTILLER</h1>
+            <p class="loading-subtitle">Initializing...</p>
         </div>
     </div>
 
