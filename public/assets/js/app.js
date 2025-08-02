@@ -221,35 +221,73 @@ class ClaudeCodeWebManager extends EventEmitter {
     // ===== THEME MANAGEMENT =====
     async initializeTheme() {
         try {
-            // Load theme from backend API
+            // Check if theme was already applied during page load
+            const body = document.body;
+            const hasValidTheme = body.classList.contains('theme-light') || body.classList.contains('theme-dark');
+            
+            if (hasValidTheme) {
+                const currentTheme = body.classList.contains('theme-light') ? 'light' : 'dark';
+                console.log(`🎨 Theme already applied during page load: ${currentTheme}`);
+                
+                // Update theme selector to match current theme
+                const themeSelector = DOM.get('theme-selector');
+                if (themeSelector) {
+                    themeSelector.value = currentTheme;
+                }
+                
+                // Verify theme is consistent with server by fetching latest
+                console.log('🎨 Verifying theme consistency with server...');
+                const response = await HTTP.get('/api/theme');
+                if (response.success && response.theme !== currentTheme) {
+                    console.log(`🎨 Theme mismatch detected! Server: ${response.theme}, Current: ${currentTheme}`);
+                    this.applyTheme(response.theme);
+                    console.log(`🎨 Theme synchronized with server: ${response.theme}`);
+                }
+                return;
+            }
+            
+            // If still in loading state, wait for theme to be applied or apply it
+            if (body.classList.contains('theme-loading')) {
+                console.log('🎨 Theme still loading, waiting for initial theme setup...');
+                // Give the initial theme script a chance to complete
+                setTimeout(() => this.initializeTheme(), 100);
+                return;
+            }
+            
+            console.log('🎨 No theme detected, fetching from API...');
+            // Always get theme from API - this is the source of truth
             const response = await HTTP.get('/api/theme');
             
             if (response.success) {
                 this.applyTheme(response.theme);
-                console.log(`🎨 Theme initialized from server: ${response.theme}`);
+                console.log(`🎨 Theme initialized from API: ${response.theme}`);
             } else {
                 throw new Error(response.error || 'Failed to load theme from server');
             }
         } catch (error) {
             console.warn('Failed to load theme from server:', error.message);
-            // Fallback to default light theme if API fails
-            const fallbackTheme = 'light';
-            this.applyTheme(fallbackTheme);
-            console.log(`🎨 Theme initialized with fallback: ${fallbackTheme}`);
+            // Emergency fallback only when API is completely unavailable
+            const emergencyTheme = 'light';
+            this.applyTheme(emergencyTheme);
+            console.log(`🎨 Theme initialized with emergency fallback: ${emergencyTheme}`);
         }
     }
     
     applyTheme(theme) {
         const body = document.body;
         
-        // Remove existing theme classes
-        body.classList.remove('theme-light', 'theme-dark');
+        // Remove existing theme classes including loading state
+        body.classList.remove('theme-light', 'theme-dark', 'theme-loading');
         
         // Apply new theme
         if (theme === 'light') {
             body.classList.add('theme-light');
+        } else {
+            body.classList.add('theme-dark');
         }
-        // Dark theme is the default CSS state (no class needed)
+        
+        // Save to localStorage for instant loading next time
+        localStorage.setItem('app-theme', theme);
         
         // Update theme selector if it exists
         const themeSelector = DOM.get('theme-selector');
@@ -257,7 +295,7 @@ class ClaudeCodeWebManager extends EventEmitter {
             themeSelector.value = theme;
         }
         
-        console.log(`🎨 Theme applied: ${theme}`);
+        console.log(`🎨 Theme applied by app manager: ${theme}`);
     }
     
     async handleThemeChange(theme) {
