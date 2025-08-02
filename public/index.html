@@ -32,8 +32,55 @@
     <meta name="msapplication-TileColor" content="#1e1e1e">
     <meta name="apple-mobile-web-app-title" content="vibe-code-distiller">
     <meta name="application-name" content="vibe-code-distiller">
+    
 </head>
-<body class="theme-dark">
+<body id="app-body" class="theme-loading">
+    <!-- Critical Theme Initialization Script - Always use API as source of truth -->
+    <script>
+        (function() {
+            console.log('🎨 Starting theme initialization - Always using API as source of truth');
+            
+            function applyTheme(theme, source) {
+                const body = document.getElementById('app-body');
+                if (!body) {
+                    console.error('🎨 Body element not found!');
+                    return;
+                }
+                
+                body.className = theme === 'light' ? 'theme-light' : 'theme-dark';
+                console.log(`🎨 Theme applied: ${theme} (from ${source})`, 'Body class:', body.className);
+            }
+            
+            // Always fetch theme from API - this is the source of truth
+            console.log('🎨 Fetching current theme from /api/theme...');
+            fetch('/api/theme')
+                .then(response => {
+                    console.log('🎨 API response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('🎨 API response data:', data);
+                    if (data.success && data.theme) {
+                        applyTheme(data.theme, 'API');
+                        // Save to localStorage for app manager reference (but not as primary source)
+                        localStorage.setItem('app-theme', data.theme);
+                    } else {
+                        console.error('🎨 Invalid API response format:', data);
+                        applyTheme('light', 'fallback-invalid-response');
+                    }
+                })
+                .catch(error => {
+                    console.error('🎨 Failed to fetch theme from API:', error);
+                    // Only use localStorage as emergency fallback when API is completely unavailable
+                    const emergencyTheme = localStorage.getItem('app-theme') || 'light';
+                    console.warn(`🎨 Using emergency fallback theme: ${emergencyTheme}`);
+                    applyTheme(emergencyTheme, 'emergency-fallback');
+                });
+        })();
+    </script>
     <!-- Loading Screen -->
     <div id="loading-screen" class="loading-screen">
         <div class="loading-content">
