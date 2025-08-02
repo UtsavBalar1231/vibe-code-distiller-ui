@@ -12,6 +12,8 @@ class MonacoEditorManager {
         this.decorations = []; // Track current decorations
         this.isNewFile = false; // Track if current file is new
         this.inGitRepo = true; // Track if current file is in Git repository (default true for backward compatibility)
+        this.modelCache = new Map(); // Cache models to avoid recreation
+        this.isOperationInProgress = false; // Prevent concurrent operations
         
         this.init();
     }
@@ -20,6 +22,7 @@ class MonacoEditorManager {
         this.setupEventListeners();
         this.ensureModalHidden();
         this.setupThemeListeners();
+        this.setupGlobalErrorHandling();
     }
 
     ensureModalHidden() {
@@ -85,6 +88,14 @@ class MonacoEditorManager {
             const theme = event.detail?.theme || await this.getCurrentTheme();
             this.updateEditorTheme(theme);
         });
+    }
+    
+    /**
+     * Setup global error handling for Monaco Editor specific errors
+     */
+    setupGlobalErrorHandling() {
+        // Temporarily disabled for debugging - need to see real errors
+        console.log('Global error handling setup (disabled for debugging)');
     }
 
     async getCurrentTheme() {
@@ -175,12 +186,19 @@ class MonacoEditorManager {
 
     async createEditorInstance() {
         try {
+            console.log('🎯 Creating Monaco Editor instance...');
+            
             // Get current theme for Monaco Editor
             const currentTheme = await this.getCurrentTheme();
             const monacoTheme = this.getMonacoTheme(currentTheme);
+            console.log('🎨 Theme detected:', currentTheme, '-> Monaco theme:', monacoTheme);
+            
+            // Check if Monaco Editor container exists
+            const container = document.getElementById('monaco-editor');
+            console.log('💻 Monaco container found:', !!container, 'dimensions:', container?.offsetWidth, 'x', container?.offsetHeight);
             
             // Create Monaco Editor instance
-            this.editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+            this.editor = monaco.editor.create(container, {
                 value: '',
                 language: 'plaintext',
                 theme: monacoTheme,
@@ -198,31 +216,57 @@ class MonacoEditorManager {
                 fontFamily: 'Menlo, Monaco, "Courier New", monospace'
             });
             
-            console.log(`Monaco Editor initialized with theme: ${monacoTheme} (app theme: ${currentTheme})`);
+            console.log('✅ Monaco Editor instance created successfully');
+            console.log('🔍 Editor state:', {
+                hasEditor: !!this.editor,
+                editorValue: this.editor?.getValue(),
+                editorModel: !!this.editor?.getModel()
+            });
 
             // Add editor change listener for diff updates and unsaved changes indicator
             this.editor.onDidChangeModelContent(() => {
-                this.updateDiffDecorations();
-                this.updateUnsavedChangesIndicator();
+                // Use setTimeout to avoid conflicts and ensure stability
+                setTimeout(() => {
+                    try {
+                        if (this.editor && this.editor.getModel() && !this.isOperationInProgress) {
+                            this.updateDiffDecorations();
+                            this.updateUnsavedChangesIndicator();
+                        }
+                    } catch (error) {
+                        // Silently handle errors during content changes to avoid noise
+                        console.debug('Content change handler error (non-critical):', error.message);
+                    }
+                }, 50);
             });
 
             this.isEditorReady = true;
+            console.log('✅ Monaco Editor is ready');
         } catch (error) {
-            console.error('Failed to create Monaco Editor instance:', error);
+            console.error('❌ Failed to create Monaco Editor instance:', error);
             throw error;
         }
     }
 
     async openFile(filePath, fileName) {
+        // Prevent concurrent file operations
+        if (this.isOperationInProgress) {
+            console.log('⚠️ Operation already in progress, skipping');
+            return;
+        }
+        
+        this.isOperationInProgress = true;
+        console.log('🚀 Opening file:', filePath);
+        
         try {
             // Reset state for new file
             this.isNewFile = false;
             this.originalContent = null;
-            this.initialContent = null; // Reset initial content for unsaved changes detection
-            this.inGitRepo = true; // Reset to default state
+            this.initialContent = null;
+            this.inGitRepo = true;
 
             // Initialize Monaco if not ready BEFORE loading file
             if (!this.isEditorReady) {
+                console.log('🔧 Monaco not ready, initializing...');
                 await this.initializeMonaco();
             }
 
@@ -232,12 +276,15 @@ class MonacoEditorManager {
             }
 
             // Load and validate file content BEFORE showing modal
+            console.log('🔍 Loading file content for:', filePath);
             const content = await this.loadFileContent(filePath);
+            console.log('📄 File content loaded, length:', content?.length, 'first 100 chars:', content?.substring(0, 100));
             
             // Load Git original content for diff
             this.originalContent = await this.loadGitOriginalContent(filePath);
 
             // If we get here, file loading was successful - now show editor
+            console.log('📝 Updating editor header and showing modal');
             this.updateEditorHeader(fileName);
             this.showEditor();
 
@@ -249,52 +296,94 @@ class MonacoEditorManager {
 
             // Set editor content and language
             const language = this.getLanguageFromFileName(fileName);
+            console.log('🎨 Detected language:', language, 'for file:', fileName);
             
-            // Create or update model with error handling
+            // Use single-model approach to avoid disposal issues
             try {
-                let model = this.editor.getModel();
-                if (model) {
-                    model.dispose();
-                }
+                console.log('🔧 Using single-model content update approach');
                 
-                // Ensure monaco is available before creating model
+                // Ensure monaco is available
                 if (typeof monaco !== 'undefined' && monaco.editor) {
-                    model = monaco.editor.createModel(content, language);
-                    this.editor.setModel(model);
+                    // Get or create a single persistent model
+                    let model = this.editor.getModel();
+                    
+                    if (!model) {
+                        console.log('📦 Creating initial persistent model');
+                        model = monaco.editor.createModel('', 'plaintext');
+                        this.editor.setModel(model);
+                        console.log('✅ Initial model created and set');
+                    }
+                    
+                    console.log('🔄 Updating model content and language');
+                    
+                    // Update model content without creating new model
+                    model.setValue(content);
+                    
+                    // Update language
+                    monaco.editor.setModelLanguage(model, language);
+                    
+                    console.log('✅ Model updated successfully');
+                    
+                    // Verify the content was set
+                    const editorValue = this.editor.getValue();
+                    console.log('🔍 Editor value after update - length:', editorValue.length, 'first 100 chars:', editorValue.substring(0, 100));
                 } else {
                     throw new Error('Monaco editor not available');
                 }
             } catch (modelError) {
-                console.error('Error creating Monaco model:', modelError);
-                // Fallback: try to set value directly
+                console.error('❌ Error in model update:', modelError);
+                
+                // Final fallback: direct setValue
+                console.log('🔄 Using direct setValue fallback');
                 if (this.editor && this.editor.setValue) {
                     this.editor.setValue(content);
+                    console.log('✅ Direct setValue successful');
                 } else {
                     throw new Error('Cannot set editor content: ' + modelError.message);
                 }
             }
 
             // Apply initial diff decorations and update unsaved changes indicator
+            // Use longer delay to ensure Monaco's services are stable
             setTimeout(() => {
-                this.updateDiffDecorations();
-                this.updateUnsavedChangesIndicator();
-            }, 100);
+                console.log('🎨 Applying decorations and updating indicators...');
+                try {
+                    if (this.editor && this.editor.getModel() && !this.isOperationInProgress) {
+                        this.updateDiffDecorations();
+                        this.updateUnsavedChangesIndicator();
+                    }
+                } catch (error) {
+                    console.warn('Error applying initial decorations:', error);
+                }
+            }, 300);
 
         } catch (error) {
-            console.error('Failed to open file:', error);
+            console.error('❌ Failed to open file:', error);
             
             // Ensure modal is hidden on error
             this.hideModalOnError();
             
             // Show user-friendly error message
             alert('Failed to open file: ' + error.message);
+        } finally {
+            // Always reset operation flag
+            this.isOperationInProgress = false;
         }
     }
 
     async loadFileContent(filePath) {
         try {
+            console.log('🌐 Fetching file content from API...');
             const response = await fetch(`/api/filesystem/preview?path=${encodeURIComponent(filePath)}`);
+            console.log('📡 API response status:', response.status, response.statusText);
+            
             const data = await response.json();
+            console.log('📊 API response data:', {
+                success: data.success,
+                hasFile: !!data.file,
+                isText: data.file?.isText,
+                contentLength: data.file?.content?.length
+            });
 
             if (data.success && data.file && data.file.isText) {
                 return data.file.content;
@@ -302,6 +391,7 @@ class MonacoEditorManager {
                 throw new Error('File is not readable or not a text file');
             }
         } catch (error) {
+            console.error('❌ Error loading file content:', error);
             throw new Error('Failed to load file content: ' + error.message);
         }
     }
@@ -313,7 +403,7 @@ class MonacoEditorManager {
 
             if (data.success) {
                 // Store Git repository status and new file flag
-                this.inGitRepo = data.inGitRepo !== undefined ? data.inGitRepo : true; // Default to true for backward compatibility
+                this.inGitRepo = data.inGitRepo !== undefined ? data.inGitRepo : true;
                 this.isNewFile = data.isNewFile || false;
                 
                 // If file is not in Git repository, return null to disable Git features
@@ -333,6 +423,28 @@ class MonacoEditorManager {
             this.isNewFile = true;
             return null;
         }
+    }
+
+    /**
+     * DEPRECATED: This method is no longer used.
+     * We now use a single persistent model approach to avoid disposal issues.
+     */
+    async safelyDisposeModel() {
+        console.log('⚠️ safelyDisposeModel is deprecated and should not be called');
+    }
+    
+    /**
+     * Check if an error is a Monaco Editor 'Canceled' error
+     * @param {Error} error - The error to check
+     * @returns {boolean} True if it's a Monaco canceled error
+     */
+    isMonacoCanceledError(error) {
+        return error && (
+            error.message === 'Canceled' ||
+            error.message === 'Canceled: Canceled' ||
+            (error.message && error.message.includes('Canceled')) ||
+            error.name === 'Canceled'
+        );
     }
 
     async saveFile() {
@@ -377,22 +489,39 @@ class MonacoEditorManager {
     }
 
     updateDiffDecorations() {
-        // Clear decorations if file is not in Git repository or no original content
-        if (!this.editor || this.originalContent === null || !this.inGitRepo) {
-            if (this.decorations.length > 0) {
-                this.decorations = this.editor.deltaDecorations(this.decorations, []);
+        try {
+            // Clear decorations if file is not in Git repository or no original content
+            if (!this.editor || this.originalContent === null || !this.inGitRepo) {
+                if (this.decorations.length > 0) {
+                    this.decorations = this.editor.deltaDecorations(this.decorations, []);
+                }
+                return;
             }
-            return;
-        }
 
-        const currentContent = this.editor.getValue();
-        const diff = this.computeDiff(this.originalContent, currentContent);
-        
-        // Apply decorations based on diff
-        const newDecorations = this.createDecorations(diff);
-        
-        // Update decorations and track the new ones
-        this.decorations = this.editor.deltaDecorations(this.decorations, newDecorations);
+            const currentContent = this.editor.getValue();
+            const diff = this.computeDiff(this.originalContent, currentContent);
+            
+            // Apply decorations based on diff
+            const newDecorations = this.createDecorations(diff);
+            
+            // Update decorations and track the new ones
+            this.decorations = this.editor.deltaDecorations(this.decorations, newDecorations);
+        } catch (error) {
+            // Handle Monaco-specific 'Canceled' errors silently
+            if (this.isMonacoCanceledError(error)) {
+                console.debug('Diff decorations update was canceled, ignoring error:', error.message);
+            } else {
+                console.warn('Error updating diff decorations:', error);
+                // Clear decorations on error to prevent stale state
+                try {
+                    if (this.editor && this.decorations.length > 0) {
+                        this.decorations = this.editor.deltaDecorations(this.decorations, []);
+                    }
+                } catch (cleanupError) {
+                    console.debug('Could not clean up decorations:', cleanupError.message);
+                }
+            }
+        }
     }
 
     computeDiff(original, current) {
@@ -433,57 +562,79 @@ class MonacoEditorManager {
     }
 
     hasUnsavedChanges() {
-        // Return false if no editor or no initial content to compare with
-        if (!this.editor || this.initialContent === null) {
-            return false;
+        try {
+            // Return false if no editor or no initial content to compare with
+            if (!this.editor || this.initialContent === null) {
+                return false;
+            }
+
+            const currentContent = this.editor.getValue();
+            
+            // Normalize line endings for comparison
+            const normalizeContent = (content) => {
+                return content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            };
+
+            return normalizeContent(currentContent) !== normalizeContent(this.initialContent);
+        } catch (error) {
+            // Handle Monaco-specific 'Canceled' errors silently
+            if (this.isMonacoCanceledError(error)) {
+                console.debug('Unsaved changes check was canceled:', error.message);
+                return false; // Assume no unsaved changes if we can't check
+            } else {
+                console.warn('Error checking for unsaved changes:', error);
+                return false; // Assume no unsaved changes on error to prevent blocking operations
+            }
         }
-
-        const currentContent = this.editor.getValue();
-        
-        // Normalize line endings for comparison
-        const normalizeContent = (content) => {
-            return content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        };
-
-        return normalizeContent(currentContent) !== normalizeContent(this.initialContent);
     }
 
     createDecorations(changes) {
         const decorations = [];
 
+        // Ensure Monaco is available before creating decorations
+        if (typeof monaco === 'undefined' || !monaco.Range) {
+            console.warn('Monaco not available for creating decorations');
+            return decorations;
+        }
+
         changes.forEach(change => {
-            // Skip deleted lines as they don't exist in current content
-            if (change.type === 'deleted') {
-                return;
+            try {
+                // Skip deleted lines as they don't exist in current content
+                if (change.type === 'deleted') {
+                    return;
+                }
+
+                const decoration = {
+                    range: new monaco.Range(change.line, 1, change.line, Number.MAX_SAFE_INTEGER),
+                    options: {}
+                };
+
+                switch (change.type) {
+                    case 'added':
+                        decoration.options = {
+                            isWholeLine: true,
+                            className: 'git-diff-added-line',
+                            glyphMarginClassName: 'git-diff-added-glyph',
+                            marginClassName: 'git-diff-added-margin',
+                            glyphMarginHoverMessage: { value: 'Added line' }
+                        };
+                        break;
+                    case 'modified':
+                        decoration.options = {
+                            isWholeLine: true,
+                            className: 'git-diff-modified-line',
+                            glyphMarginClassName: 'git-diff-modified-glyph', 
+                            marginClassName: 'git-diff-modified-margin',
+                            glyphMarginHoverMessage: { value: 'Modified line' }
+                        };
+                        break;
+                }
+
+                decorations.push(decoration);
+            } catch (error) {
+                // Skip individual decoration creation errors
+                console.debug('Error creating decoration for line', change.line, ':', error.message);
             }
-
-            const decoration = {
-                range: new monaco.Range(change.line, 1, change.line, Number.MAX_SAFE_INTEGER),
-                options: {}
-            };
-
-            switch (change.type) {
-                case 'added':
-                    decoration.options = {
-                        isWholeLine: true,
-                        className: 'git-diff-added-line',
-                        glyphMarginClassName: 'git-diff-added-glyph',
-                        marginClassName: 'git-diff-added-margin',
-                        glyphMarginHoverMessage: { value: 'Added line' }
-                    };
-                    break;
-                case 'modified':
-                    decoration.options = {
-                        isWholeLine: true,
-                        className: 'git-diff-modified-line',
-                        glyphMarginClassName: 'git-diff-modified-glyph', 
-                        marginClassName: 'git-diff-modified-margin',
-                        glyphMarginHoverMessage: { value: 'Modified line' }
-                    };
-                    break;
-            }
-
-            decorations.push(decoration);
         });
 
         return decorations;
@@ -600,17 +751,26 @@ class MonacoEditorManager {
     }
 
     updateUnsavedChangesIndicator() {
-        const statusElement = document.querySelector('#monaco-editor-title .file-status');
-        if (statusElement) {
-            if (this.hasUnsavedChanges()) {
-                statusElement.textContent = '● Unsaved changes';
-                statusElement.style.color = '#ffc107'; // Yellow color to indicate unsaved changes
-            } else {
-                // Only clear if it's showing unsaved changes (don't interfere with save confirmation)
-                if (statusElement.textContent === '● Unsaved changes') {
-                    statusElement.textContent = '';
-                    statusElement.style.color = '';
+        try {
+            const statusElement = document.querySelector('#monaco-editor-title .file-status');
+            if (statusElement) {
+                if (this.hasUnsavedChanges()) {
+                    statusElement.textContent = '● Unsaved changes';
+                    statusElement.style.color = '#ffc107'; // Yellow color to indicate unsaved changes
+                } else {
+                    // Only clear if it's showing unsaved changes (don't interfere with save confirmation)
+                    if (statusElement.textContent === '● Unsaved changes') {
+                        statusElement.textContent = '';
+                        statusElement.style.color = '';
+                    }
                 }
+            }
+        } catch (error) {
+            // Handle Monaco-specific 'Canceled' errors silently
+            if (this.isMonacoCanceledError(error)) {
+                console.debug('Unsaved changes indicator update was canceled:', error.message);
+            } else {
+                console.warn('Error updating unsaved changes indicator:', error);
             }
         }
     }
@@ -639,17 +799,42 @@ class MonacoEditorManager {
     }
 
     showEditor() {
+        console.log('📺 Showing Monaco Editor modal...');
         const modal = document.getElementById('monaco-editor-modal');
         const overlay = document.getElementById('monaco-editor-overlay');
+        
+        console.log('🔍 Modal elements found:', {
+            modal: !!modal,
+            overlay: !!overlay,
+            editor: !!this.editor
+        });
         
         if (modal && overlay) {
             overlay.classList.add('active');
             modal.classList.add('active');
+            console.log('✅ Modal and overlay activated');
             
             // Focus editor
             if (this.editor) {
+                console.log('🎯 Focusing editor...');
                 this.editor.focus();
+                
+                // Force layout update
+                setTimeout(() => {
+                    if (this.editor) {
+                        console.log('🔄 Forcing editor layout update...');
+                        this.editor.layout();
+                        
+                        // Check final state
+                        const finalValue = this.editor.getValue();
+                        console.log('🔍 Final editor state after layout - value length:', finalValue.length);
+                    }
+                }, 100);
+            } else {
+                console.warn('⚠️ No editor instance to focus');
             }
+        } else {
+            console.error('❌ Modal or overlay elements not found');
         }
     }
 
@@ -707,27 +892,48 @@ class MonacoEditorManager {
     }
 
     closeEditor() {
+        console.log('📴 Closing Monaco Editor...');
+        
         const modal = document.getElementById('monaco-editor-modal');
         const overlay = document.getElementById('monaco-editor-overlay');
         
         if (modal && overlay) {
             modal.classList.remove('active');
             overlay.classList.remove('active');
+            console.log('✅ Modal closed');
         }
 
-        // Clear decorations
-        if (this.editor && this.decorations.length > 0) {
-            this.decorations = this.editor.deltaDecorations(this.decorations, []);
+        // Clear decorations safely
+        try {
+            if (this.editor && this.decorations.length > 0) {
+                this.decorations = this.editor.deltaDecorations(this.decorations, []);
+                console.log('✅ Decorations cleared');
+            }
+        } catch (error) {
+            console.warn('Error clearing decorations during editor close:', error);
         }
 
+        // Clear the persistent model content (but don't dispose the model)
+        try {
+            const model = this.editor?.getModel();
+            if (model) {
+                model.setValue('');
+                console.log('✅ Model content cleared');
+            }
+        } catch (error) {
+            console.warn('Error clearing model content:', error);
+        }
+        
         this.currentFile = null;
         this.originalContent = null;
-        this.initialContent = null; // Reset initial content
+        this.initialContent = null;
         this.isNewFile = false;
-        this.inGitRepo = true; // Reset to default state
+        this.inGitRepo = true;
     }
 
     hideModalOnError() {
+        console.log('❌ Hiding modal due to error...');
+        
         // Hide modal and overlay if they're visible
         const modal = document.getElementById('monaco-editor-modal');
         const overlay = document.getElementById('monaco-editor-overlay');
@@ -737,15 +943,19 @@ class MonacoEditorManager {
             overlay.classList.remove('active');
         }
 
-        // Clear any decorations
-        if (this.editor && this.decorations.length > 0) {
-            this.decorations = this.editor.deltaDecorations(this.decorations, []);
+        // Clear any decorations safely
+        try {
+            if (this.editor && this.decorations.length > 0) {
+                this.decorations = this.editor.deltaDecorations(this.decorations, []);
+            }
+        } catch (error) {
+            console.warn('Error clearing decorations during error handling:', error);
         }
 
-        // Reset state but don't clear editor content yet - let closeEditor handle that
+        // Reset state
         this.currentFile = null;
         this.originalContent = null;
-        this.initialContent = null; // Reset initial content
+        this.initialContent = null;
         this.isNewFile = false;
         this.inGitRepo = true;
     }
@@ -753,6 +963,22 @@ class MonacoEditorManager {
     isEditorOpen() {
         const modal = document.getElementById('monaco-editor-modal');
         return modal && modal.classList.contains('active');
+    }
+    
+    /**
+     * Get the current editor state for debugging
+     * @returns {Object} Current state information
+     */
+    getEditorState() {
+        return {
+            isEditorReady: this.isEditorReady,
+            isFileLoading: this.isFileLoading,
+            hasCurrentFile: !!this.currentFile,
+            hasAbortController: !!this.currentAbortController,
+            isEditorOpen: this.isEditorOpen(),
+            hasEditor: !!this.editor,
+            decorationsCount: this.decorations.length
+        };
     }
 }
 

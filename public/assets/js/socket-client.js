@@ -1,5 +1,20 @@
 // ===== SOCKET.IO CLIENT =====
 
+/**
+ * Check if an error is a Monaco Editor 'Canceled' error
+ * @param {Error} error - The error to check
+ * @returns {boolean} True if it's a Monaco canceled error
+ */
+function isMonacoCanceledError(error) {
+    return error && (
+        error.message === 'Canceled' ||
+        error.message === 'Canceled: Canceled' ||
+        (error.message && error.message.includes('Canceled')) ||
+        error.name === 'Canceled' ||
+        (error.stack && error.stack.includes('monaco-editor'))
+    );
+}
+
 class SocketClient extends EventEmitter {
     constructor() {
         super();
@@ -785,7 +800,7 @@ class SocketErrorHandler {
             this.handleConnectionError(error);
         });
         
-        // Global error handler
+        // Global error handler (temporarily re-enabled for debugging)
         window.addEventListener('unhandledrejection', (event) => {
             if (event.reason && event.reason.message) {
                 console.error('Unhandled promise rejection:', event.reason);
