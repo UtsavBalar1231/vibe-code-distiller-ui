@@ -40,14 +40,12 @@
     "monaco-editor": "^0.52.2",
     "morgan": "^1.10.0",
     "multer": "^2.0.1",
-    "ps-tree": "^1.2.0",
     "socket.io": "^4.7.2",
     "systeminformation": "^5.21.7",
     "winston": "^3.10.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1",
-    "socket.io-client": "^4.8.1"
+    "nodemon": "^3.0.1"
   },
   "engines": {
     "node": ">=18.0.0",
