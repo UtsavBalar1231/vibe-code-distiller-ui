@@ -336,7 +336,7 @@ class UploadManager {
         
         if (modal && targetPathElement) {
             targetPathElement.textContent = targetPath;
-            modal.style.display = 'block';
+            modal.style.display = 'flex';
             
             // Clear previous selections
             this.clearSelectedFiles();
