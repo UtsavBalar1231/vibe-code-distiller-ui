@@ -86,7 +86,6 @@ class TTYdTerminalManager {
     init() {
         if (this.isInitialized) return;
 
-        console.log('🚀 Initializing TTYd Terminal Manager...');
         
         // 获取iframe元素
         this.iframe = document.getElementById('ttyd-terminal');
@@ -104,11 +103,9 @@ class TTYdTerminalManager {
 
         // 监听iframe加载
         this.iframe.onload = () => {
-            console.log('✅ TTYd terminal iframe loaded');
             this.isInitialized = true;
             
             // 页面刷新时触发：添加延迟以确保TTYd客户端完全准备好
-            console.log('⏱️ Waiting for TTYd client to be fully ready...');
             setTimeout(() => {
                 this.refreshSessionList();
             }, 2000); // 延迟2秒确保TTYd客户端完全建立连接
@@ -126,7 +123,6 @@ class TTYdTerminalManager {
         // 监听项目管理器事件
         this.setupProjectEventListeners();
 
-        console.log('✅ TTYd Terminal Manager initialized');
     }
 
     setupTTYdURL() {
@@ -137,14 +133,12 @@ class TTYdTerminalManager {
         const baseURL = `${protocol}//${hostname}${port ? ':' + port : ''}`;
         const ttydURL = `${baseURL}/terminal`;
         
-        console.log('🔗 Setting TTYd URL to:', ttydURL);
         
         // 设置iframe的src
         this.iframe.src = ttydURL;
         
         // 初始化时隐藏Iframe，避免显示base-session
         this.iframe.style.display = 'none';
-        console.log('🔈 Hidden iframe during initialization to prevent base-session display');
     }
 
     setupSessionEventListeners() {
@@ -155,7 +149,6 @@ class TTYdTerminalManager {
 
         // 监听session创建事件
         window.socket.onTerminalSessionCreated((data) => {
-            console.log('🎉 Session created event received:', data);
             console.log(`Terminal session created: ${data.sessionName}`);
             
             // 创建新的终端后触发：更新session列表并自动激活新创建的session
@@ -164,7 +157,6 @@ class TTYdTerminalManager {
 
         // 监听session删除事件
         window.socket.onTerminalSessionDeleted((data) => {
-            console.log('🗑️ Session deleted event received:', data);
             console.log(`Terminal session deleted: ${data.sessionName}`);
             
             // 删除某个终端时触发：智能选择下一个要激活的session
@@ -173,7 +165,6 @@ class TTYdTerminalManager {
 
         // 监听session切换事件
         window.socket.onTerminalSessionSwitched((data) => {
-            console.log('🔄 Session switched event received:', data);
             // 成功切换时不显示通知，只更新UI状态
             
             // 更新活跃session
@@ -181,17 +172,14 @@ class TTYdTerminalManager {
             this.updateTabStyles();
             
             // session切换成功后显示iframe，隐藏loading状态，清除切换标记
-            console.log('✅ Session switched successfully, showing terminal iframe');
             this._isSwitchingSession = false;
             this.hideWelcomeScreen();
             this.showIframe();
             
-            console.log('✅ Session switched using tmux command, no iframe refresh needed');
         });
 
         // 监听终端滚动结果事件
         window.socket.on('terminal:scroll-result', (data) => {
-            console.log('📜 Terminal scroll result received:', data);
             this.handleScrollResult(data);
         });
     }
@@ -202,14 +190,12 @@ class TTYdTerminalManager {
             if (window.projectManager) {
                 // Listen for projects loaded event
                 window.projectManager.on('projects_loaded', (projects) => {
-                    console.log('📂 Projects loaded, checking terminal display state...');
                     
                     // If currently showing welcome screen but there are projects,
                     // switch to empty content
                     const welcomeScreen = document.getElementById('welcome-screen');
                     if (welcomeScreen && welcomeScreen.style.display === 'flex') {
                         if (this.sessions.size === 0 && this.hasProjects()) {
-                            console.log('🔄 Switching from welcome screen to terminal empty state (projects available)');
                             this.showTerminalEmptyState();
                         }
                     }
@@ -217,10 +203,8 @@ class TTYdTerminalManager {
 
                 // Listen for project created event to handle auto-terminal creation
                 window.projectManager.on('project_created', (project) => {
-                    console.log('🎉 New project created, terminal will be auto-created');
                 });
 
-                console.log('✅ Project event listeners setup complete');
             } else {
                 // Retry after a short delay
                 setTimeout(waitForProjectManager, 100);
@@ -237,7 +221,6 @@ class TTYdTerminalManager {
         }
 
         try {
-            console.log('🔄 Refreshing session list...', sessionToActivate ? `(will activate: ${sessionToActivate})` : '');
             
             // 获取当前所有的claude-web session
             const sessions = await window.socket.getTerminalSessions();
@@ -261,14 +244,12 @@ class TTYdTerminalManager {
                 });
             });
             
-            console.log('✅ Session list refreshed, found sessions:', Array.from(this.sessions.keys()));
             
             // 重新构建标签页
             this.rebuildTabs();
             
             // 优先激活指定的session (新创建的session)
             if (sessionToActivate && this.sessions.has(sessionToActivate)) {
-                console.log('🎯 Auto-activating newly created session:', sessionToActivate);
                 // 在切换到新创建的session期间显示loading状态
                 this._isSwitchingSession = true;
                 this.showTerminalLoading();
@@ -279,7 +260,6 @@ class TTYdTerminalManager {
             // 如果没有活跃session但有sessions存在，延迟激活第一个(但不在恢复模式下)
             else if (!this.activeSessionName && this.sessions.size > 0 && !this._isRestoring) {
                 const firstSession = Array.from(this.sessions.keys())[0];
-                console.log('⏱️ Delaying auto-switch to first session to ensure TTYd stability...');
                 // 在自动切换期间继续显示loading状态
                 this._isSwitchingSession = true;
                 this.showTerminalLoading();
@@ -287,7 +267,6 @@ class TTYdTerminalManager {
                     this.switchToSession(firstSession);
                 }, 1000); // 额外延迟1秒确保系统稳定
             } else if (this._isRestoring) {
-                console.log('🔄 In restore mode - skipping auto-switch to first session');
                 // 在恢复模式下也显示loading状态
                 this.showTerminalLoading();
             }
@@ -298,22 +277,18 @@ class TTYdTerminalManager {
                 // 如果在恢复模式下没有session，也要清除恢复模式
                 if (this._isRestoring) {
                     this._isRestoring = false;
-                    console.log('✅ No sessions found during restore, disabled restore mode');
                 }
             } else {
                 // 有sessions存在时，检查当前是否已经有活动session
                 if (this.activeSessionName && this.sessions.has(this.activeSessionName) && !this._isSwitchingSession) {
                     // 如果当前有活动session且该session仍然存在，且不在切换过程中，显示iframe
-                    console.log('📋 Sessions found, current active session still exists, showing iframe');
                     this.hideWelcomeScreen();
                     this.showIframe();
                 } else if (!this._isSwitchingSession) {
                     // 如果没有活动session或活动session不存在，且不在切换过程中，显示loading状态等待session切换
-                    console.log('📋 Sessions found, showing loading status until session switch completes');
                     this.showTerminalLoading();
                 } else {
                     // 如果正在切换session过程中，不改变当前显示状态
-                    console.log('📋 Sessions found, but session switching in progress, keeping current state');
                 }
             }
             
@@ -326,7 +301,6 @@ class TTYdTerminalManager {
 
     // 处理session删除事件，智能选择下一个要激活的session
     async handleSessionDeleted(deletedSessionName) {
-        console.log('🧠 Handling intelligent session deletion for:', deletedSessionName);
         
         // 获取删除前的session列表顺序
         const sessionKeys = Array.from(this.sessions.keys());
@@ -340,7 +314,6 @@ class TTYdTerminalManager {
         
         // 如果没有其他session了，显示欢迎屏幕
         if (this.sessions.size === 0) {
-            console.log('📋 No more sessions, showing welcome screen');
             this.showWelcomeOrEmptyScreen();
             return;
         }
@@ -381,7 +354,6 @@ class TTYdTerminalManager {
         
         // 激活选中的session
         if (nextSessionToActivate) {
-            console.log('🎯 Intelligently switching to session:', nextSessionToActivate);
             setTimeout(() => {
                 this.switchToSession(nextSessionToActivate);
             }, 500); // 短暂延迟确保UI更新完成
@@ -458,7 +430,6 @@ class TTYdTerminalManager {
             return;
         }
 
-        console.log('🔄 Switching to session:', sessionName, retryCount > 0 ? `(retry ${retryCount})` : '', skipSocketEvent ? '(skip socket event)' : '');
 
         // Reset copy mode state and stop continuous scrolling when switching sessions
         this.isInCopyMode = false;
@@ -470,7 +441,6 @@ class TTYdTerminalManager {
 
         // 如果已经是当前活动session，只更新UI不发送Socket事件
         if (sessionName === currentSessionName && !retryCount) {
-            console.log('✅ Already active session, updating UI only');
             this.updateTabStyles();
             this.hideWelcomeScreen();
             this.showIframe();
@@ -496,7 +466,6 @@ class TTYdTerminalManager {
             this.showIframe();
         } else {
             // 如果是切换到不同session，先显示loading状态并标记正在切换
-            console.log('🔄 Session switching in progress, showing loading status...');
             this._isSwitchingSession = true;
             this.showTerminalLoading();
         }
@@ -514,7 +483,6 @@ class TTYdTerminalManager {
             
             // 如果Socket.IO未连接且重试次数少于3次，延迟重试
             if (retryCount < 3) {
-                console.log(`⏱️ Retrying session switch in ${(retryCount + 1) * 1000}ms...`);
                 setTimeout(() => {
                     this.switchToSession(sessionName, retryCount + 1, skipSocketEvent);
                 }, (retryCount + 1) * 1000);
@@ -543,10 +511,8 @@ class TTYdTerminalManager {
         );
         
         if (confirmed) {
-            console.log('✅ User confirmed closing session:', sessionName);
             this.closeSession(sessionName);
         } else {
-            console.log('❌ User cancelled closing session:', sessionName);
         }
     }
 
@@ -556,7 +522,6 @@ class TTYdTerminalManager {
             return;
         }
 
-        console.log('🗑️ Closing session:', sessionName);
 
         // 通过Socket.IO请求删除session
         if (window.socket && window.socket.isConnected()) {
@@ -608,7 +573,6 @@ class TTYdTerminalManager {
             behavior: 'smooth'
         });
         
-        console.log('📜 Auto-scrolled to active tab:', activeTab.dataset.sessionName);
     }
 
     // 选择并激活指定的session tab (被project-manager.js调用)
@@ -623,7 +587,6 @@ class TTYdTerminalManager {
             return false;
         }
 
-        console.log('🎯 selectSessionTab called for session:', sessionName);
         
         // Set flag to prevent project auto-selection when triggered by project
         this._skipProjectAutoSelect = true;
@@ -635,7 +598,6 @@ class TTYdTerminalManager {
     }
 
     async createNewTerminal(projectName = null) {
-        console.log('🔧 Creating new terminal session...');
 
         // 检查Socket.IO连接状态
         if (!window.socket || !window.socket.isConnected()) {
@@ -662,7 +624,6 @@ class TTYdTerminalManager {
         );
         
         if (success) {
-            console.log('🎯 Terminal session creation request sent:', sessionName);
             console.log(`Creating terminal session: ${sessionName}`);
             
             // 隐藏欢迎屏幕，显示loading状态等待新session创建完成
@@ -712,7 +673,6 @@ class TTYdTerminalManager {
 
     // Show terminal empty state when there are projects but no sessions
     showTerminalEmptyState() {
-        console.log('📋 Showing terminal empty state (projects available, no sessions)');
         
         // Hide welcome screen
         const welcomeScreen = document.getElementById('welcome-screen');
@@ -869,7 +829,6 @@ class TTYdTerminalManager {
     }
 
     showTerminalLoading() {
-        console.log('💼 Showing terminal loading status...');
         
         // Hide welcome screen
         const welcomeScreen = document.getElementById('welcome-screen');
@@ -899,7 +858,6 @@ class TTYdTerminalManager {
     }
 
     hideTerminalLoading() {
-        console.log('🔄 Hiding terminal loading status...');
         
         // Hide terminal loading state
         const terminalLoadingState = document.getElementById('terminal-loading-state');
@@ -909,7 +867,6 @@ class TTYdTerminalManager {
     }
 
     showDisconnectionMessage() {
-        console.log('🔴 Showing connection lost message in terminal...');
         const welcomeScreen = document.getElementById('welcome-screen');
         if (welcomeScreen) {
             welcomeScreen.style.display = 'flex';
@@ -940,7 +897,6 @@ class TTYdTerminalManager {
     }
 
     showReconnectionMessage() {
-        console.log('🟢 Showing reconnection success message in terminal...');
         const welcomeScreen = document.getElementById('welcome-screen');
         if (welcomeScreen) {
             welcomeScreen.style.display = 'flex';
@@ -972,7 +928,6 @@ class TTYdTerminalManager {
 
 
     showRestartingStatus() {
-        console.log('🔄 Showing TTYd restarting status...');
         const welcomeScreen = document.getElementById('welcome-screen');
         if (welcomeScreen) {
             welcomeScreen.style.display = 'flex';
@@ -1001,16 +956,13 @@ class TTYdTerminalManager {
 
     handleResize() {
         // iframe会自动处理resize，无需特殊处理
-        console.log('📏 Window resized, iframe will auto-adjust');
     }
     
     reloadTerminal() {
-        console.log('🔄 Reloading TTYd terminal iframe...');
         
         if (this.iframe) {
             // Save the current active session before reload
             const currentActiveSession = this.activeSessionName;
-            console.log('💾 Saving current active session for restoration:', currentActiveSession);
             
             // 显示重启状态，避免用户看到base-session
             this.showRestartingStatus();
@@ -1019,7 +971,6 @@ class TTYdTerminalManager {
             this.activeSessionName = null;
             // 设置恢复模式标志，避免自动切换到第一个session
             this._isRestoring = true;
-            console.log('🔄 Cleared activeSessionName and enabled restore mode');
             
             // Force reload the iframe src to pick up new TTYd settings
             const currentSrc = this.iframe.src;
@@ -1028,32 +979,26 @@ class TTYdTerminalManager {
             // Small delay to ensure the src is cleared, then reload and restore session
             setTimeout(() => {
                 this.iframe.src = currentSrc;
-                console.log('✅ TTYd terminal iframe reloaded');
                 
                 // Set up iframe load listener to restore session after reload
                 const restoreSession = () => {
-                    console.log('🎯 TTYd iframe loaded, attempting to restore session:', currentActiveSession);
                     
                     // First refresh session list to ensure we have latest data
                     this.refreshSessionList().then(() => {
                         if (currentActiveSession && this.sessions.has(currentActiveSession)) {
                             // Wait a bit more for TTYd to be fully ready, then restore session
                             setTimeout(() => {
-                                console.log('🔄 Restoring session after TTYd reload:', currentActiveSession);
                                 // 恢复session期间显示loading状态
                                 this._isSwitchingSession = true;
                                 this.showTerminalLoading();
                                 this.switchToSession(currentActiveSession);
                                 // 恢复完成后清除恢复模式标志
                                 this._isRestoring = false;
-                                console.log('✅ Session restore completed, disabled restore mode');
                             }, 1500); // 1.5 second delay to ensure TTYd is stable
                         } else {
-                            console.log('⚠️ No session to restore or session not found');
                             // If the saved session doesn't exist, just refresh the UI
                             if (this.sessions.size > 0) {
                                 const firstSession = Array.from(this.sessions.keys())[0];
-                                console.log('🔄 Falling back to first available session:', firstSession);
                                 // 恢复fallback session期间显示loading状态
                                 this._isSwitchingSession = true;
                                 this.showTerminalLoading();
@@ -1061,11 +1006,9 @@ class TTYdTerminalManager {
                                     this.switchToSession(firstSession);
                                     // 恢复完成后清除恢复模式标志
                                     this._isRestoring = false;
-                                    console.log('✅ Fallback restore completed, disabled restore mode');
                                 }, 1500);
                             } else {
                                 // 没有session可恢复，显示欢迎屏幕
-                                console.log('📋 No sessions to restore, showing welcome screen');
                                 this.showWelcomeOrEmptyScreen();
                                 this._isRestoring = false;
                             }
@@ -1075,7 +1018,6 @@ class TTYdTerminalManager {
                         // 即使失败也要清除恢复模式标志和切换标记
                         this._isRestoring = false;
                         this._isSwitchingSession = false;
-                        console.log('✅ Restore failed, disabled restore mode and switching flag');
                     });
                     
                     // Remove the listener after use
@@ -1090,7 +1032,6 @@ class TTYdTerminalManager {
     }
 
     showNotification(message) {
-        console.log('📢 Notification:', message);
     }
 
     showError(message) {
@@ -1131,11 +1072,9 @@ class TTYdTerminalManager {
         // Extract project name from session name
         const projectName = this.extractProjectNameFromSessionName(sessionName);
         if (!projectName) {
-            console.log('🔍 No project name found for session:', sessionName, '(likely a temporary terminal)');
             return;
         }
         
-        console.log(`🎯 Auto-selecting project "${projectName}" for terminal session:`, sessionName);
         
         // Select the corresponding project
         window.projectManager.selectProjectByName(projectName);
@@ -1502,10 +1441,8 @@ class TTYdTerminalManager {
     // Note: Page up/down buttons use WebSocket scrolling, not this method
     async handleMobileKeyPress(button) {
         const key = button.dataset.key;
-        console.log('🚀 Handling mobile key press via API:', key);
         
         const activeSession = this.getActiveSession();
-        console.log('🖥️ Active session:', activeSession);
         
         if (!activeSession) {
             console.warn('⚠️ No active terminal session');
@@ -1522,13 +1459,11 @@ class TTYdTerminalManager {
                     key: 'c',
                     modifiers: { ctrl: true }
                 };
-                console.log('📡 Sending Ctrl+C combination with modifiers to API:', requestBody);
             } else {
                 requestBody = {
                     sessionName: activeSession.name,
                     key: key
                 };
-                console.log('📡 Sending key to API:', requestBody);
             }
             
             const response = await fetch('/api/terminal/send-key', {
@@ -1537,7 +1472,6 @@ class TTYdTerminalManager {
                 body: JSON.stringify(requestBody)
             });
             
-            console.log('📥 API response status:', response.status);
             
             if (!response.ok) {
                 const errorText = await response.text();
@@ -1546,7 +1480,6 @@ class TTYdTerminalManager {
             }
             
             const result = await response.json();
-            console.log('✅ Mobile key sent successfully:', result);
             
         } catch (error) {
             console.error('❌ Failed to send mobile key:', error);
@@ -1600,7 +1533,6 @@ class TTYdTerminalManager {
                     document.body.focus();
                 }
                 
-                console.log('Prevented focus on scroll button:', target.id);
                 return false;
             }
             
@@ -1617,7 +1549,6 @@ class TTYdTerminalManager {
                     document.body.focus();
                 }
                 
-                console.log('Prevented focus during scroll button interaction');
                 return false;
             }
         }, true);
@@ -1665,7 +1596,6 @@ class TTYdTerminalManager {
             }
         }, { passive: false });
         
-        console.log('✅ Global focus management for scroll buttons initialized');
     }
 
     // Create hidden input element for aggressive keyboard hiding
@@ -1893,7 +1823,6 @@ class TTYdTerminalManager {
         this.scrollStartTime = Date.now();
         this.currentScrollLevel = 0;
         
-        console.log(`🚀 Starting enhanced scroll ${direction} - Multi-level acceleration enabled`);
         
         // Immediate first scroll for instant feedback
         this.scrollTerminalWithRetry(direction, this.scrollLevels[0].mode);
@@ -1922,7 +1851,6 @@ class TTYdTerminalManager {
         const scrollConfig = this.scrollLevels[level];
         this.currentScrollLevel = level;
         
-        console.log(`⚡ Scroll level ${level}: ${scrollConfig.description} (${scrollConfig.interval}ms = ${(1000/scrollConfig.interval).toFixed(1)} lines/sec)`);
         
         // Start scrolling at current level
         this.scrollInterval = setInterval(() => {
@@ -1955,10 +1883,6 @@ class TTYdTerminalManager {
         }
         
         // Log final performance stats
-        if (this.scrollStartTime && this.scrollDirection) {
-            const duration = Date.now() - this.scrollStartTime;
-            console.log(`🏁 Scroll ${this.scrollDirection} stopped after ${duration}ms at level ${this.currentScrollLevel}`);
-        }
         
         // Reset scroll state
         this.scrollDirection = null;
@@ -1969,7 +1893,6 @@ class TTYdTerminalManager {
     // Handle WebSocket scroll result
     handleScrollResult(data) {
         if (data.success) {
-            console.log('✅ Terminal scroll via WebSocket successful:', data);
             
             // Mark as in copy mode for scroll actions
             if (data.direction || data.action === 'scroll') {
@@ -1982,7 +1905,6 @@ class TTYdTerminalManager {
                 this.isInCopyMode = false;
                 this.hideCopyModeExitButton();
                 this.stopContinuousScroll();
-                console.log('✅ Exited copy mode via WebSocket');
             }
         } else {
             console.error('❌ Terminal scroll via WebSocket failed:', data);
@@ -2010,7 +1932,6 @@ class TTYdTerminalManager {
         // Try WebSocket first for better performance
         if (window.socket && window.socket.isConnected()) {
             try {
-                console.log('📡 Using WebSocket for terminal scroll:', { direction, mode });
                 
                 // Emit WebSocket event
                 window.socket.socket.emit('terminal-scroll', {
@@ -2031,7 +1952,6 @@ class TTYdTerminalManager {
         
         // HTTP fallback
         try {
-            console.log('🌐 Using HTTP fallback for terminal scroll:', { direction, mode });
             
             const response = await fetch('/api/terminal/scroll', {
                 method: 'POST',
@@ -2053,7 +1973,6 @@ class TTYdTerminalManager {
             this.isInCopyMode = true;
             this.showCopyModeExitButton();
             
-            console.log('✅ Terminal scroll via HTTP successful');
             
         } catch (error) {
             console.error('❌ Failed to scroll terminal via HTTP:', error);
@@ -2080,7 +1999,6 @@ class TTYdTerminalManager {
         // Try WebSocket first for better performance
         if (window.socket && window.socket.isConnected()) {
             try {
-                console.log('📡 Using WebSocket for go to bottom and exit');
                 
                 // Emit WebSocket event
                 window.socket.socket.emit('terminal-go-to-bottom', {
@@ -2099,7 +2017,6 @@ class TTYdTerminalManager {
         
         // HTTP fallback
         try {
-            console.log('🌐 Using HTTP fallback for go to bottom and exit');
             
             const response = await fetch('/api/terminal/go-to-bottom-and-exit', {
                 method: 'POST',
@@ -2119,7 +2036,6 @@ class TTYdTerminalManager {
                 throw new Error(result.error || 'Failed to go to bottom and exit');
             }
             
-            console.log('✅ Go to bottom and exit via HTTP successful');
             
         } catch (error) {
             console.error('❌ Failed to go to bottom and exit copy mode via HTTP:', error);

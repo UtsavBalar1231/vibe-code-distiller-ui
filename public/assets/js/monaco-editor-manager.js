@@ -94,8 +94,7 @@ class MonacoEditorManager {
      * Setup global error handling for Monaco Editor specific errors
      */
     setupGlobalErrorHandling() {
-        // Temporarily disabled for debugging - need to see real errors
-        console.log('Global error handling setup (disabled for debugging)');
+        // Global error handling is available but currently disabled
     }
 
     async getCurrentTheme() {
@@ -124,7 +123,6 @@ class MonacoEditorManager {
         if (this.editor && typeof monaco !== 'undefined') {
             const monacoTheme = this.getMonacoTheme(appTheme);
             monaco.editor.setTheme(monacoTheme);
-            console.log(`Monaco Editor theme updated to: ${monacoTheme} (app theme: ${appTheme})`);
         }
     }
 
@@ -186,16 +184,13 @@ class MonacoEditorManager {
 
     async createEditorInstance() {
         try {
-            console.log('🎯 Creating Monaco Editor instance...');
             
             // Get current theme for Monaco Editor
             const currentTheme = await this.getCurrentTheme();
             const monacoTheme = this.getMonacoTheme(currentTheme);
-            console.log('🎨 Theme detected:', currentTheme, '-> Monaco theme:', monacoTheme);
             
             // Check if Monaco Editor container exists
             const container = document.getElementById('monaco-editor');
-            console.log('💻 Monaco container found:', !!container, 'dimensions:', container?.offsetWidth, 'x', container?.offsetHeight);
             
             // Create Monaco Editor instance
             this.editor = monaco.editor.create(container, {
@@ -216,12 +211,6 @@ class MonacoEditorManager {
                 fontFamily: 'Menlo, Monaco, "Courier New", monospace'
             });
             
-            console.log('✅ Monaco Editor instance created successfully');
-            console.log('🔍 Editor state:', {
-                hasEditor: !!this.editor,
-                editorValue: this.editor?.getValue(),
-                editorModel: !!this.editor?.getModel()
-            });
 
             // Add editor change listener for diff updates and unsaved changes indicator
             this.editor.onDidChangeModelContent(() => {
@@ -240,7 +229,6 @@ class MonacoEditorManager {
             });
 
             this.isEditorReady = true;
-            console.log('✅ Monaco Editor is ready');
         } catch (error) {
             console.error('❌ Failed to create Monaco Editor instance:', error);
             throw error;
@@ -250,12 +238,10 @@ class MonacoEditorManager {
     async openFile(filePath, fileName) {
         // Prevent concurrent file operations
         if (this.isOperationInProgress) {
-            console.log('⚠️ Operation already in progress, skipping');
             return;
         }
         
         this.isOperationInProgress = true;
-        console.log('🚀 Opening file:', filePath);
         
         try {
             // Reset state for new file
@@ -266,7 +252,6 @@ class MonacoEditorManager {
 
             // Initialize Monaco if not ready BEFORE loading file
             if (!this.isEditorReady) {
-                console.log('🔧 Monaco not ready, initializing...');
                 await this.initializeMonaco();
             }
 
@@ -276,15 +261,12 @@ class MonacoEditorManager {
             }
 
             // Load and validate file content BEFORE showing modal
-            console.log('🔍 Loading file content for:', filePath);
             const content = await this.loadFileContent(filePath);
-            console.log('📄 File content loaded, length:', content?.length, 'first 100 chars:', content?.substring(0, 100));
             
             // Load Git original content for diff
             this.originalContent = await this.loadGitOriginalContent(filePath);
 
             // If we get here, file loading was successful - now show editor
-            console.log('📝 Updating editor header and showing modal');
             this.updateEditorHeader(fileName);
             this.showEditor();
 
@@ -296,11 +278,9 @@ class MonacoEditorManager {
 
             // Set editor content and language
             const language = this.getLanguageFromFileName(fileName);
-            console.log('🎨 Detected language:', language, 'for file:', fileName);
             
             // Use single-model approach to avoid disposal issues
             try {
-                console.log('🔧 Using single-model content update approach');
                 
                 // Ensure monaco is available
                 if (typeof monaco !== 'undefined' && monaco.editor) {
@@ -308,13 +288,10 @@ class MonacoEditorManager {
                     let model = this.editor.getModel();
                     
                     if (!model) {
-                        console.log('📦 Creating initial persistent model');
                         model = monaco.editor.createModel('', 'plaintext');
                         this.editor.setModel(model);
-                        console.log('✅ Initial model created and set');
                     }
                     
-                    console.log('🔄 Updating model content and language');
                     
                     // Update model content without creating new model
                     model.setValue(content);
@@ -322,11 +299,7 @@ class MonacoEditorManager {
                     // Update language
                     monaco.editor.setModelLanguage(model, language);
                     
-                    console.log('✅ Model updated successfully');
                     
-                    // Verify the content was set
-                    const editorValue = this.editor.getValue();
-                    console.log('🔍 Editor value after update - length:', editorValue.length, 'first 100 chars:', editorValue.substring(0, 100));
                 } else {
                     throw new Error('Monaco editor not available');
                 }
@@ -334,10 +307,8 @@ class MonacoEditorManager {
                 console.error('❌ Error in model update:', modelError);
                 
                 // Final fallback: direct setValue
-                console.log('🔄 Using direct setValue fallback');
                 if (this.editor && this.editor.setValue) {
                     this.editor.setValue(content);
-                    console.log('✅ Direct setValue successful');
                 } else {
                     throw new Error('Cannot set editor content: ' + modelError.message);
                 }
@@ -346,7 +317,6 @@ class MonacoEditorManager {
             // Apply initial diff decorations and update unsaved changes indicator
             // Use longer delay to ensure Monaco's services are stable
             setTimeout(() => {
-                console.log('🎨 Applying decorations and updating indicators...');
                 try {
                     if (this.editor && this.editor.getModel() && !this.isOperationInProgress) {
                         this.updateDiffDecorations();
@@ -373,17 +343,9 @@ class MonacoEditorManager {
 
     async loadFileContent(filePath) {
         try {
-            console.log('🌐 Fetching file content from API...');
             const response = await fetch(`/api/filesystem/preview?path=${encodeURIComponent(filePath)}`);
-            console.log('📡 API response status:', response.status, response.statusText);
             
             const data = await response.json();
-            console.log('📊 API response data:', {
-                success: data.success,
-                hasFile: !!data.file,
-                isText: data.file?.isText,
-                contentLength: data.file?.content?.length
-            });
 
             if (data.success && data.file && data.file.isText) {
                 return data.file.content;
@@ -430,7 +392,6 @@ class MonacoEditorManager {
      * We now use a single persistent model approach to avoid disposal issues.
      */
     async safelyDisposeModel() {
-        console.log('⚠️ safelyDisposeModel is deprecated and should not be called');
     }
     
     /**
@@ -799,42 +760,25 @@ class MonacoEditorManager {
     }
 
     showEditor() {
-        console.log('📺 Showing Monaco Editor modal...');
         const modal = document.getElementById('monaco-editor-modal');
         const overlay = document.getElementById('monaco-editor-overlay');
         
-        console.log('🔍 Modal elements found:', {
-            modal: !!modal,
-            overlay: !!overlay,
-            editor: !!this.editor
-        });
         
         if (modal && overlay) {
             overlay.classList.add('active');
             modal.classList.add('active');
-            console.log('✅ Modal and overlay activated');
             
             // Focus editor
             if (this.editor) {
-                console.log('🎯 Focusing editor...');
                 this.editor.focus();
                 
                 // Force layout update
                 setTimeout(() => {
                     if (this.editor) {
-                        console.log('🔄 Forcing editor layout update...');
                         this.editor.layout();
-                        
-                        // Check final state
-                        const finalValue = this.editor.getValue();
-                        console.log('🔍 Final editor state after layout - value length:', finalValue.length);
                     }
                 }, 100);
-            } else {
-                console.warn('⚠️ No editor instance to focus');
             }
-        } else {
-            console.error('❌ Modal or overlay elements not found');
         }
     }
 
@@ -892,7 +836,6 @@ class MonacoEditorManager {
     }
 
     closeEditor() {
-        console.log('📴 Closing Monaco Editor...');
         
         const modal = document.getElementById('monaco-editor-modal');
         const overlay = document.getElementById('monaco-editor-overlay');
@@ -900,14 +843,12 @@ class MonacoEditorManager {
         if (modal && overlay) {
             modal.classList.remove('active');
             overlay.classList.remove('active');
-            console.log('✅ Modal closed');
         }
 
         // Clear decorations safely
         try {
             if (this.editor && this.decorations.length > 0) {
                 this.decorations = this.editor.deltaDecorations(this.decorations, []);
-                console.log('✅ Decorations cleared');
             }
         } catch (error) {
             console.warn('Error clearing decorations during editor close:', error);
@@ -918,7 +859,6 @@ class MonacoEditorManager {
             const model = this.editor?.getModel();
             if (model) {
                 model.setValue('');
-                console.log('✅ Model content cleared');
             }
         } catch (error) {
             console.warn('Error clearing model content:', error);
@@ -932,7 +872,6 @@ class MonacoEditorManager {
     }
 
     hideModalOnError() {
-        console.log('❌ Hiding modal due to error...');
         
         // Hide modal and overlay if they're visible
         const modal = document.getElementById('monaco-editor-modal');

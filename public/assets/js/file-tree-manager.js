@@ -160,7 +160,6 @@ class FileTreeManager {
     clearProjectHighlight() {
         const prevHighlighted = document.querySelectorAll('.file-tree-node.selected-project');
         prevHighlighted.forEach(node => node.classList.remove('selected-project'));
-        console.log('🧹 Cleared project highlighting');
     }
 
     /**
@@ -315,7 +314,6 @@ class FileTreeManager {
             }, 300);
         }, 1000);
         
-        console.log(`📢 Professional notification shown: ${message} (${type}, theme: ${currentTheme})`);
     }
 
 
@@ -324,11 +322,8 @@ class FileTreeManager {
      * Shows only root directory content, all folders collapsed
      */
     async refreshFullTree() {
-        console.log('🔄 Starting tree refresh to root directory...');
-        
         // Clear all expanded folders state
         this.expandedFolders.clear();
-        console.log('🗂️ Cleared all expanded folders');
         
         // Clear selected project highlighting
         this.clearProjectHighlight();
@@ -339,13 +334,11 @@ class FileTreeManager {
         try {
             // Load only the root directory tree
             await this.loadFileTree();
-            console.log('📁 Root directory loaded');
             
             // Ensure scroll is at top after loading
             const treeContainer = document.getElementById('file-tree-container');
             if (treeContainer) {
                 treeContainer.scrollTop = 0;
-                console.log('📌 Scroll reset to top');
             }
             
             // Show success notification
@@ -356,7 +349,6 @@ class FileTreeManager {
                 detail: { action: 'treeRefreshed' }
             }));
             
-            console.log('✅ Tree refresh to root completed successfully');
             
         } catch (error) {
             console.error('❌ Tree refresh failed:', error);
@@ -864,7 +856,6 @@ class FileTreeManager {
     async openFileInEditor(filePath, fileName) {
         // Prevent multiple file loading operations
         if (this.isFileLoading()) {
-            console.log('🚫 File loading already in progress, ignoring click');
             return;
         }
 
@@ -1922,7 +1913,6 @@ class FileTreeManager {
             overlay.style.opacity = '1';
         });
 
-        console.log(`📂 File loading overlay shown for: ${fileName} (${fileType})`);
     }
 
     /**
@@ -1949,7 +1939,6 @@ class FileTreeManager {
         this.fileLoadingState.currentFileName = null;
         this.fileLoadingState.currentFileType = null;
 
-        console.log('📂 File loading overlay hidden');
     }
 
     /**

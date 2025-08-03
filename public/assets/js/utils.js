@@ -792,28 +792,6 @@ class ModalManager {
     }
 }
 
-/**
- * Theme Manager
- */
-class ThemeManager {
-    constructor() {
-        // Force dark theme only
-        this.currentTheme = 'dark';
-        this.applyTheme('dark');
-    }
-    
-    applyTheme(theme) {
-        // Always apply dark theme regardless of input
-        document.body.className = document.body.className.replace(/theme-\w+/g, '');
-        document.body.classList.add('theme-dark');
-        this.currentTheme = 'dark';
-        Storage.set('theme', 'dark');
-    }
-    
-    getTheme() {
-        return 'dark';
-    }
-}
 
 /**
  * Utility Functions
@@ -929,33 +907,6 @@ const Utils = {
     
     // Wait for specified time
     wait: (ms) => new Promise(resolve => setTimeout(resolve, ms)),
-    
-    // Validate email
-    isValidEmail: (email) => {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
-    },
-    
-    // Parse query string
-    parseQuery: (queryString = window.location.search) => {
-        const params = new URLSearchParams(queryString);
-        const result = {};
-        for (const [key, value] of params) {
-            result[key] = value;
-        }
-        return result;
-    },
-    
-    // Build query string
-    buildQuery: (params) => {
-        const searchParams = new URLSearchParams();
-        Object.entries(params).forEach(([key, value]) => {
-            if (value !== null && value !== undefined) {
-                searchParams.append(key, value);
-            }
-        });
-        return searchParams.toString();
-    }
 };
 
 /**
@@ -1021,7 +972,6 @@ class KeyboardManager {
 // Global instances
 window.notifications = new NotificationManager();
 window.modals = new ModalManager();
-window.theme = new ThemeManager();
 window.keyboard = new KeyboardManager();
 
 // Make utilities globally available

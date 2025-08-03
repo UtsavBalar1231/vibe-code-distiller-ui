@@ -342,7 +342,12 @@ class ImageManager {
 
     showNotification(message, type = 'info') {
         // Only log to console, no UI notifications
-        console.log(`[${type.toUpperCase()}] ${message}`);
+        if (type === 'error') {
+            console.error(message);
+        } else if (type === 'warning') {
+            console.warn(message);
+        }
+        // Remove regular console.log for info and success messages
     }
 }
 

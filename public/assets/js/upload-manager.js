@@ -783,7 +783,6 @@ class UploadManager {
             }, 300);
         }, 1500);
         
-        console.log(`🗑️ Delete success notification shown: ${typeText} "${itemName}" deleted (theme: ${currentTheme})`);
     }
 
     /**
