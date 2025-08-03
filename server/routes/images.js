@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs-extra');
 const router = express.Router();
+const { asyncHandler } = require('../middleware/error-handler');
 const logger = require('../utils/logger');
 const { body, param, validationResult } = require('express-validator');
 const config = require('config');
@@ -64,8 +65,7 @@ const generateUniqueFilename = async (dir, originalName) => {
 // Upload image to project
 router.post('/upload', upload.single('image'), [
   body('projectId').notEmpty().withMessage('Project ID is required')
-], async (req, res) => {
-  try {
+], asyncHandler(async (req, res) => {
     // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -126,22 +126,12 @@ router.post('/upload', upload.single('image'), [
         mimetype: req.file.mimetype
       }
     });
-
-  } catch (error) {
-    logger.error('Error uploading image:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to upload image',
-      error: error.message
-    });
-  }
-});
+}));
 
 // Get images list for a project
 router.get('/list/:projectId', [
   param('projectId').notEmpty().withMessage('Project ID is required')
-], async (req, res) => {
-  try {
+], asyncHandler(async (req, res) => {
     // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -202,23 +192,13 @@ router.get('/list/:projectId', [
       success: true,
       data: images
     });
-
-  } catch (error) {
-    logger.error('Error listing images:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to list images',
-      error: error.message
-    });
-  }
-});
+}));
 
 // Delete an image
 router.delete('/:projectId/:filename', [
   param('projectId').notEmpty().withMessage('Project ID is required'),
   param('filename').notEmpty().withMessage('Filename is required')
-], async (req, res) => {
-  try {
+], asyncHandler(async (req, res) => {
     // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -263,23 +243,13 @@ router.delete('/:projectId/:filename', [
       success: true,
       message: 'Image deleted successfully'
     });
-
-  } catch (error) {
-    logger.error('Error deleting image:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete image',
-      error: error.message
-    });
-  }
-});
+}));
 
 // Serve image files
 router.get('/serve/:projectId/:filename', [
   param('projectId').notEmpty().withMessage('Project ID is required'),
   param('filename').notEmpty().withMessage('Filename is required')
-], async (req, res) => {
-  try {
+], asyncHandler(async (req, res) => {
     const { projectId, filename } = req.params;
     const projectRoot = getProjectRoot();
     const filePath = path.join(projectRoot, projectId, '.images', filename);
@@ -308,15 +278,6 @@ router.get('/serve/:projectId/:filename', [
     // Stream file
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
-
-  } catch (error) {
-    logger.error('Error serving image:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to serve image',
-      error: error.message
-    });
-  }
-});
+}));
 
 module.exports = router;
