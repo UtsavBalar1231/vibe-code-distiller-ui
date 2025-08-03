@@ -917,10 +917,13 @@ class SocketManager {
 function setupSocketHandlers(io) {
   const socketManager = new SocketManager(io);
   
-  // Broadcast system status periodically
+  // Broadcast system status periodically (optimized for Raspberry Pi)
   setInterval(() => {
-    socketManager.broadcastSystemStatus();
-  }, 30000); // Every 30 seconds
+    // Only broadcast if there are connected clients to save resources
+    if (io.engine.clientsCount > 0) {
+      socketManager.broadcastSystemStatus();
+    }
+  }, 60000); // Every 60 seconds (reduced frequency for better performance)
 
   // Store socket manager on io instance for external access
   io.socketManager = socketManager;

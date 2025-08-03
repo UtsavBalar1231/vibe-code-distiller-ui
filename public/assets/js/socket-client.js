@@ -63,7 +63,6 @@ class SocketClient extends EventEmitter {
             this.updateConnectionStatus();
             this.emit('connected');
             
-            console.log('🔌 Socket connected successfully, ID:', this.socket.id);
         });
         
         this.socket.on('disconnect', (reason) => {
@@ -186,23 +185,19 @@ class SocketClient extends EventEmitter {
         
         // Terminal session events
         this.socket.on('terminal:session-created', (data) => {
-            console.log('Terminal session created:', data);
             this.emit('terminal:session-created', data);
         });
         
         this.socket.on('terminal:session-deleted', (data) => {
-            console.log('Terminal session deleted:', data);
             this.emit('terminal:session-deleted', data);
         });
         
         this.socket.on('terminal:session-switched', (data) => {
-            console.log('Terminal session switched:', data);
             this.emit('terminal:session-switched', data);
         });
         
         // Terminal scroll events
         this.socket.on('terminal-scroll-result', (data) => {
-            console.log('Terminal scroll result:', data);
             this.emit('terminal:scroll-result', data);
         });
         
@@ -680,13 +675,6 @@ class SocketClient extends EventEmitter {
     }
     
     
-    // Debugging methods
-    enableDebugLogs() {
-        this.socket.on('connect', () => {});
-        this.socket.on('disconnect', (reason) => {});
-        this.socket.onAny((event, ...args) => {
-        });
-    }
     
     getDebugInfo() {
         return {
@@ -755,8 +743,6 @@ class SocketClient extends EventEmitter {
         
         state.status = 'ready';
         state.lastActivity = Date.now();
-        
-        
         // Execute queued callbacks
         while (state.readyCallbacks.length > 0) {
             const { callback, timeout } = state.readyCallbacks.shift();
@@ -897,8 +883,7 @@ class ConnectionMonitor {
             const timeSinceLastPong = now - this.lastPong;
             
             if (timeSinceLastPong > this.pingTimeout) {
-                // Log connection issue but DO NOT force disconnect for persistent terminal sessions
-                console.warn('⚠️ Connection heartbeat timeout detected, but preserving connection for terminal persistence');
+                // Connection heartbeat timeout detected, but preserving connection for terminal persistence
                 // Reset lastPong to prevent repeated warnings
                 this.lastPong = now;
             }

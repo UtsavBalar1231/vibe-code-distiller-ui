@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs').promises;
 const multer = require('multer');
-const { AppError } = require('../middleware/error-handler');
+const { AppError, asyncHandler } = require('../middleware/error-handler');
 const { ERROR_CODES } = require('../utils/constants');
 const { isText, isBinary } = require('istextorbinary');
 
@@ -286,8 +286,7 @@ async function getFileInfo(filePath, fileName) {
  * Browse filesystem at absolute path
  * GET /api/filesystem/browse?path=/absolute/path&showHidden=true
  */
-router.get('/browse', async (req, res, next) => {
-    try {
+router.get('/browse', asyncHandler(async (req, res) => {
         const requestedPath = req.query.path || '/';
         const showHidden = req.query.showHidden === 'true';
         
@@ -352,18 +351,13 @@ router.get('/browse', async (req, res, next) => {
             },
             timestamp: new Date().toISOString()
         });
-        
-    } catch (error) {
-        next(error);
-    }
-});
+}));
 
 /**
  * Get file preview for absolute path
  * GET /api/filesystem/preview?path=/absolute/path/to/file
  */
-router.get('/preview', async (req, res, next) => {
-    try {
+router.get('/preview', asyncHandler(async (req, res) => {
         const requestedPath = req.query.path;
         
         if (!requestedPath) {
@@ -421,18 +415,13 @@ router.get('/preview', async (req, res, next) => {
             },
             timestamp: new Date().toISOString()
         });
-        
-    } catch (error) {
-        next(error);
-    }
-});
+}));
 
 /**
  * Download file from absolute path
  * GET /api/filesystem/download?path=/absolute/path/to/file
  */
-router.get('/download', async (req, res, next) => {
-    try {
+router.get('/download', asyncHandler(async (req, res) => {
         const requestedPath = req.query.path;
         
         if (!requestedPath) {
@@ -463,19 +452,14 @@ router.get('/download', async (req, res, next) => {
         // Stream the file
         const readStream = require('fs').createReadStream(fullPath);
         readStream.pipe(res);
-        
-    } catch (error) {
-        next(error);
-    }
-});
+}));
 
 /**
  * Save file content to absolute path
  * PUT /api/filesystem/save
  * Body: { path: string, content: string }
  */
-router.put('/save', async (req, res, next) => {
-    try {
+router.put('/save', asyncHandler(async (req, res) => {
         const { path: filePath, content } = req.body;
         
         if (!filePath) {
@@ -517,19 +501,14 @@ router.put('/save', async (req, res, next) => {
             },
             timestamp: new Date().toISOString()
         });
-        
-    } catch (error) {
-        next(error);
-    }
-});
+}));
 
 /**
  * Upload files to filesystem path
  * POST /api/filesystem/upload
  * Body: FormData with files and targetPath
  */
-router.post('/upload', upload.array('files', 10), async (req, res, next) => {
-    try {
+router.post('/upload', upload.array('files', 10), asyncHandler(async (req, res) => {
         const { targetPath } = req.body;
         
         if (!targetPath) {
@@ -612,19 +591,14 @@ router.post('/upload', upload.array('files', 10), async (req, res, next) => {
         }
         
         res.json(response);
-        
-    } catch (error) {
-        next(error);
-    }
-});
+}));
 
 /**
  * Delete file or directory at absolute path
  * DELETE /api/filesystem/delete
  * Body: { path: string, type?: string }
  */
-router.delete('/delete', async (req, res, next) => {
-    try {
+router.delete('/delete', asyncHandler(async (req, res) => {
         const { path: filePath, type } = req.body;
         
         if (!filePath) {
@@ -693,11 +667,7 @@ router.delete('/delete', async (req, res, next) => {
                 throw new AppError(`Failed to delete ${actualType}: ${error.message}`, 500, ERROR_CODES.INTERNAL_ERROR);
             }
         }
-        
-    } catch (error) {
-        next(error);
-    }
-});
+}));
 
 
 module.exports = router;

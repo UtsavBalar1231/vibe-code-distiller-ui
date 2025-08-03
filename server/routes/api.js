@@ -3,6 +3,7 @@ const config = require('config');
 const router = express.Router();
 const logger = require('../utils/logger');
 const { SUCCESS_MESSAGES } = require('../utils/constants');
+const { asyncHandler } = require('../middleware/error-handler');
 const path = require('path');
 const fs = require('fs').promises;
 const TmuxUtils = require('../utils/tmux-utils');
@@ -331,7 +332,7 @@ router.post('/notification', (req, res) => {
 });
 
 // Get all claude-web sessions
-router.get('/sessions', async (req, res) => {
+router.get('/sessions', asyncHandler(async (req, res) => {
   try {
     const sessions = await TmuxUtils.listSessions();
     const sessionInfos = [];
@@ -366,10 +367,10 @@ router.get('/sessions', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // Delete a session
-router.delete('/sessions/:sessionName', async (req, res) => {
+router.delete('/sessions/:sessionName', asyncHandler(async (req, res) => {
   try {
     const { sessionName } = req.params;
     
@@ -420,10 +421,10 @@ router.delete('/sessions/:sessionName', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // Send text input to a terminal session
-router.post('/terminal/send-input', async (req, res) => {
+router.post('/terminal/send-input', asyncHandler(async (req, res) => {
   try {
     const { sessionName, text } = req.body;
     
@@ -518,10 +519,10 @@ router.post('/terminal/send-input', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // Terminal scrolling API
-router.post('/terminal/scroll', async (req, res) => {
+router.post('/terminal/scroll', asyncHandler(async (req, res) => {
   try {
     const { sessionName, direction, mode = 'page' } = req.body;
     
@@ -589,10 +590,10 @@ router.post('/terminal/scroll', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // Exit copy mode API (used by frontend auto-exit timer)
-router.post('/terminal/exit-copy-mode', async (req, res) => {
+router.post('/terminal/exit-copy-mode', asyncHandler(async (req, res) => {
   try {
     const { sessionName } = req.body;
     
@@ -626,10 +627,10 @@ router.post('/terminal/exit-copy-mode', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // Go to bottom and exit copy mode API
-router.post('/terminal/go-to-bottom-and-exit', async (req, res) => {
+router.post('/terminal/go-to-bottom-and-exit', asyncHandler(async (req, res) => {
   try {
     const { sessionName } = req.body;
     
@@ -686,10 +687,10 @@ router.post('/terminal/go-to-bottom-and-exit', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // Send special key to terminal session
-router.post('/terminal/send-key', async (req, res) => {
+router.post('/terminal/send-key', asyncHandler(async (req, res) => {
   try {
     const { sessionName, key, modifiers = {} } = req.body;
     
@@ -782,10 +783,10 @@ router.post('/terminal/send-key', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // Get documentation markdown content
-router.get('/documentation', async (req, res) => {
+router.get('/documentation', asyncHandler(async (req, res) => {
   try {
     // Define the markdown file to serve - DISTILLER.md from docs directory
     const markdownFile = 'DISTILLER.md';
@@ -821,10 +822,10 @@ router.get('/documentation', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // Serve documentation images
-router.get('/documentation/images/:filename', async (req, res) => {
+router.get('/documentation/images/:filename', asyncHandler(async (req, res) => {
   try {
     const { filename } = req.params;
     
@@ -866,7 +867,7 @@ router.get('/documentation/images/:filename', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // Helper function to format uptime
 function formatUptime(seconds) {

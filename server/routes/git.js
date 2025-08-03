@@ -3,7 +3,7 @@ const router = express.Router();
 const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const { AppError } = require('../middleware/error-handler');
+const { AppError, asyncHandler } = require('../middleware/error-handler');
 const { ERROR_CODES } = require('../utils/constants');
 
 /**
@@ -50,7 +50,7 @@ function findGitRepository(filePath) {
  * Get original file content from Git HEAD
  * GET /api/git/original-content/:path
  */
-router.get('/original-content/*', async (req, res, next) => {
+router.get('/original-content/*', asyncHandler(async (req, res, next) => {
     try {
         // Extract and decode the file path from the URL parameter
         const filePath = '/' + decodeURIComponent(req.params[0]);
@@ -120,13 +120,13 @@ router.get('/original-content/*', async (req, res, next) => {
             next(new AppError('Failed to get original file content', 500, ERROR_CODES.INTERNAL_ERROR));
         }
     }
-});
+}));
 
 /**
  * Get Git diff for a file
  * GET /api/git/diff/:path
  */
-router.get('/diff/*', async (req, res, next) => {
+router.get('/diff/*', asyncHandler(async (req, res, next) => {
     try {
         // Extract and decode the file path from the URL parameter
         const filePath = '/' + decodeURIComponent(req.params[0]);
@@ -194,13 +194,13 @@ router.get('/diff/*', async (req, res, next) => {
             next(new AppError('Failed to get file diff', 500, ERROR_CODES.INTERNAL_ERROR));
         }
     }
-});
+}));
 
 /**
  * Get Git status for a file or directory
  * GET /api/git/status/:path
  */
-router.get('/status/*', async (req, res, next) => {
+router.get('/status/*', asyncHandler(async (req, res, next) => {
     try {
         // Extract and decode the file path from the URL parameter
         const filePath = '/' + decodeURIComponent(req.params[0]);
@@ -276,6 +276,6 @@ router.get('/status/*', async (req, res, next) => {
             next(new AppError('Failed to get file status', 500, ERROR_CODES.INTERNAL_ERROR));
         }
     }
-});
+}));
 
 module.exports = router;

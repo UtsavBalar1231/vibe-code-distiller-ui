@@ -336,7 +336,7 @@ class UploadManager {
         
         if (modal && targetPathElement) {
             targetPathElement.textContent = targetPath;
-            modal.style.display = 'block';
+            modal.style.display = 'flex';
             
             // Clear previous selections
             this.clearSelectedFiles();
@@ -783,7 +783,6 @@ class UploadManager {
             }, 300);
         }, 1500);
         
-        console.log(`🗑️ Delete success notification shown: ${typeText} "${itemName}" deleted (theme: ${currentTheme})`);
     }
 
     /**

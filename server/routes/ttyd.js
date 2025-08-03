@@ -2,6 +2,7 @@ const express = require('express');
 const config = require('config');
 const fs = require('fs-extra');
 const path = require('path');
+const { asyncHandler } = require('../middleware/error-handler');
 const logger = require('../utils/logger');
 const ttydService = require('../services/ttyd-service');
 
@@ -10,28 +11,18 @@ const router = express.Router();
 /**
  * Get TTYd service status
  */
-router.get('/status', async (req, res) => {
-    try {
+router.get('/status', asyncHandler(async (req, res) => {
         const status = ttydService.getStatus();
         res.json({
             success: true,
             data: status
         });
-    } catch (error) {
-        logger.error('Failed to get TTYd status:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to get TTYd status',
-            details: error.message
-        });
-    }
-});
+}));
 
 /**
  * Update TTYd configuration
  */
-router.post('/config', async (req, res) => {
-    try {
+router.post('/config', asyncHandler(async (req, res) => {
         const { fontSize, port, theme } = req.body;
         
         // Validate input
@@ -84,22 +75,12 @@ router.post('/config', async (req, res) => {
                 theme: currentStatus.theme
             }
         });
-        
-    } catch (error) {
-        logger.error('Failed to update TTYd configuration:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to update TTYd configuration',
-            details: error.message
-        });
-    }
-});
+}));
 
 /**
  * Restart TTYd service manually
  */
-router.post('/restart', async (req, res) => {
-    try {
+router.post('/restart', asyncHandler(async (req, res) => {
         logger.info('Manual TTYd service restart requested');
         await ttydService.restart();
         
@@ -107,22 +88,12 @@ router.post('/restart', async (req, res) => {
             success: true,
             message: 'TTYd service restarted successfully'
         });
-        
-    } catch (error) {
-        logger.error('Failed to restart TTYd service:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to restart TTYd service',
-            details: error.message
-        });
-    }
-});
+}));
 
 /**
  * Start TTYd service
  */
-router.post('/start', async (req, res) => {
-    try {
+router.post('/start', asyncHandler(async (req, res) => {
         const started = await ttydService.start();
         
         if (started) {
@@ -136,44 +107,24 @@ router.post('/start', async (req, res) => {
                 error: 'TTYd service is already running'
             });
         }
-        
-    } catch (error) {
-        logger.error('Failed to start TTYd service:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to start TTYd service',
-            details: error.message
-        });
-    }
-});
+}));
 
 /**
  * Stop TTYd service
  */
-router.post('/stop', async (req, res) => {
-    try {
+router.post('/stop', asyncHandler(async (req, res) => {
         const stopped = await ttydService.stop();
         
         res.json({
             success: true,
             message: stopped ? 'TTYd service stopped successfully' : 'TTYd service was not running'
         });
-        
-    } catch (error) {
-        logger.error('Failed to stop TTYd service:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to stop TTYd service',
-            details: error.message
-        });
-    }
-});
+}));
 
 /**
  * Get TTYd configuration
  */
-router.get('/config', async (req, res) => {
-    try {
+router.get('/config', asyncHandler(async (req, res) => {
         const status = ttydService.getStatus();
         const staticConfig = ttydService.getStaticConfig();
         
@@ -188,15 +139,6 @@ router.get('/config', async (req, res) => {
                 arguments: staticConfig.arguments      // Static config
             }
         });
-        
-    } catch (error) {
-        logger.error('Failed to get TTYd configuration:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to get TTYd configuration',
-            details: error.message
-        });
-    }
-});
+}));
 
 module.exports = router;

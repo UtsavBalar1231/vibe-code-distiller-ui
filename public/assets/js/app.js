@@ -546,19 +546,15 @@ class ClaudeCodeWebManager extends EventEmitter {
             detail: { theme }
         }));
         
-        // Update TTYd terminal theme
+        // Update TTYd terminal theme and refresh page
         try {
             const response = await HTTP.post('/api/ttyd/config', { theme });
             if (response.success) {
-                console.log('TTYd theme updated successfully');
-                // Update TTYd status after configuration change
-                this.updateTTYdStatus();
-                // Reload the terminal iframe to reflect changes
-                if (window.terminalManager) {
-                    setTimeout(() => {
-                        window.terminalManager.reloadTerminal();
-                    }, 2000);
-                }
+                console.log('TTYd theme updated successfully, refreshing page...');
+                // Directly refresh the page to load new theme and restarted ttyd
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
             } else {
                 console.error(`Failed to update TTYd theme: ${response.error}`);
             }
@@ -575,10 +571,10 @@ class ClaudeCodeWebManager extends EventEmitter {
     
     
     initializeSystemMonitoring() {
-        // Update system metrics periodically
+        // Update system metrics periodically (optimized for Raspberry Pi)
         setInterval(() => {
             this.updateSystemMetrics();
-        }, 5000);
+        }, 15000); // Reduced from 5s to 15s for better performance
         
         // Initial update
         this.updateSystemMetrics();

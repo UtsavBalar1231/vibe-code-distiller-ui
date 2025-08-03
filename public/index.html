@@ -33,39 +33,15 @@
     <meta name="apple-mobile-web-app-title" content="vibe-code-distiller">
     <meta name="application-name" content="vibe-code-distiller">
     
-    <!-- Critical Theme Initialization Script - Applied before body rendering -->
+    <!-- Optimized Theme Initialization Script - Non-blocking async approach -->
     <script>
         (function() {
-            console.log('🎨 Pre-render theme initialization');
+            // Immediately use cached theme or default to prevent flash
+            const cachedTheme = localStorage.getItem('app-theme') || 'dark';
+            window.INITIAL_THEME_CLASS = cachedTheme === 'light' ? 'theme-light' : 'theme-dark';
             
-            let theme = 'light'; // Default to light since API returns light
-            
-            try {
-                // Synchronous API call to get theme before body renders
-                const xhr = new XMLHttpRequest();
-                xhr.open('GET', '/api/theme', false);
-                xhr.send();
-                
-                if (xhr.status === 200) {
-                    const data = JSON.parse(xhr.responseText);
-                    if (data.success && data.theme) {
-                        theme = data.theme;
-                        localStorage.setItem('app-theme', data.theme);
-                        console.log(`🎨 Theme determined before render: ${data.theme}`);
-                    }
-                }
-            } catch (error) {
-                // Fallback to localStorage or default light
-                const cachedTheme = localStorage.getItem('app-theme');
-                theme = cachedTheme || 'light';
-                console.warn('🎨 Using fallback theme:', theme);
-            }
-            
-            // Store theme for body class application
-            window.INITIAL_THEME_CLASS = theme === 'light' ? 'theme-light' : 'theme-dark';
-            
-            // Inject CSS variables directly to prevent dark theme flash
-            const themeVars = theme === 'light' ? {
+            // Apply cached theme CSS variables immediately
+            const themeVars = cachedTheme === 'light' ? {
                 '--bg-primary': '#ffffff',
                 '--bg-secondary': '#f8f9fa',
                 '--bg-tertiary': '#e9ecef',
@@ -101,7 +77,6 @@
                 '--icon-filter': 'invert(1) brightness(1)'
             };
             
-            // Apply CSS variables immediately via style injection
             let cssVarsText = ':root {';
             for (const [key, value] of Object.entries(themeVars)) {
                 cssVarsText += `${key}: ${value};`;
@@ -112,7 +87,22 @@
             style.textContent = cssVarsText;
             document.head.appendChild(style);
             
-            console.log('🎨 CSS variables injected for', theme, 'theme');
+            // Async theme sync with server after page load
+            window.addEventListener('DOMContentLoaded', function() {
+                fetch('/api/theme')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.theme && data.theme !== cachedTheme) {
+                            localStorage.setItem('app-theme', data.theme);
+                            if (window.App && window.App.applyTheme) {
+                                window.App.applyTheme(data.theme);
+                            }
+                        }
+                    })
+                    .catch(() => {
+                        // Silently fail - cached theme is already applied
+                    });
+            });
         })();
     </script>
 </head>
@@ -120,7 +110,6 @@
     <script>
         // Apply theme immediately as body renders
         document.getElementById('app-body').className = window.INITIAL_THEME_CLASS;
-        console.log('🎨 Theme applied at body render:', window.INITIAL_THEME_CLASS);
     </script>
     <!-- Theme initialization completed before body render -->
     <!-- Loading Screen -->
