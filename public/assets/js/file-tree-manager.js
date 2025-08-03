@@ -88,6 +88,16 @@ class FileTreeManager {
             }
         });
 
+        // Listen for theme changes to update image viewer modal if open
+        document.addEventListener('themeChanged', async (event) => {
+            const existingModal = document.getElementById('image-viewer-overlay');
+            if (existingModal) {
+                // Theme changed while modal is open, update the modal styles
+                const theme = event.detail?.theme || await this.getCurrentTheme();
+                this.updateImageModalTheme(existingModal, theme);
+            }
+        });
+
     }
 
     /**
@@ -925,12 +935,16 @@ class FileTreeManager {
      * @param {Object} imageFile - Image file data from API
      * @param {string} fileName - Name of the image file
      */
-    showImageModal(imageFile, fileName) {
+    async showImageModal(imageFile, fileName) {
         // Remove existing image modal if any
         const existingModal = document.getElementById('image-viewer-overlay');
         if (existingModal) {
             existingModal.remove();
         }
+
+        // Get current theme and colors
+        const currentTheme = await this.getCurrentTheme();
+        const colors = this.getImageViewerThemeColors(currentTheme);
 
         // Create modal overlay
         const overlay = document.createElement('div');
@@ -955,7 +969,7 @@ class FileTreeManager {
         const modal = document.createElement('div');
         modal.className = 'image-viewer-modal';
         modal.style.cssText = `
-            background: #ffffff;
+            background: ${colors.modalBackground};
             border-radius: 8px;
             max-width: 90vw;
             max-height: 90vh;
@@ -964,7 +978,7 @@ class FileTreeManager {
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            border: 1px solid #e0e0e0;
+            border: 1px solid ${colors.borderColor};
         `;
 
         // Create header similar to Monaco Editor
@@ -975,8 +989,8 @@ class FileTreeManager {
             align-items: center;
             justify-content: space-between;
             padding: 12px 16px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
+            background: ${colors.headerBackground};
+            border-bottom: 1px solid ${colors.borderColor};
             min-height: 48px;
         `;
 
@@ -994,14 +1008,14 @@ class FileTreeManager {
         const fileNameSpan = document.createElement('span');
         fileNameSpan.textContent = fileName;
         fileNameSpan.style.cssText = `
-            color: #333333;
+            color: ${colors.primaryText};
             font-weight: 500;
         `;
 
         const fileInfo = document.createElement('span');
         fileInfo.textContent = `${imageFile.mimeType} • ${this.formatFileSize(imageFile.size)}`;
         fileInfo.style.cssText = `
-            color: #666666;
+            color: ${colors.secondaryText};
             font-size: 12px;
             margin-left: 8px;
         `;
@@ -1009,7 +1023,7 @@ class FileTreeManager {
         const shortcutHint = document.createElement('span');
         shortcutHint.textContent = 'Press ESC to close';
         shortcutHint.style.cssText = `
-            color: #999999;
+            color: ${colors.tertiaryText};
             font-size: 11px;
             margin-left: 12px;
             font-style: italic;
@@ -1028,12 +1042,14 @@ class FileTreeManager {
         `;
 
         const closeButton = document.createElement('button');
-        closeButton.innerHTML = '<img src="/assets/icons/x.svg" alt="Close" class="icon" style="width: 14px; height: 14px;">';
+        closeButton.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 18L18 6M6 6L18 18" stroke="${colors.secondaryText}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
         closeButton.title = 'Close Image Viewer (Esc)';
         closeButton.style.cssText = `
             background: none;
             border: none;
-            color: #666666;
+            color: ${colors.secondaryText};
             font-size: 16px;
             cursor: pointer;
             padding: 4px 8px;
@@ -1041,12 +1057,16 @@ class FileTreeManager {
             transition: all 0.2s ease;
         `;
         closeButton.onmouseover = () => {
-            closeButton.style.background = '#e9ecef';
-            closeButton.style.color = '#333333';
+            closeButton.style.background = colors.buttonHoverBackground;
+            closeButton.style.color = colors.buttonHoverText;
+            const svg = closeButton.querySelector('svg path');
+            if (svg) svg.setAttribute('stroke', colors.buttonHoverText);
         };
         closeButton.onmouseout = () => {
             closeButton.style.background = 'none';
-            closeButton.style.color = '#666666';
+            closeButton.style.color = colors.secondaryText;
+            const svg = closeButton.querySelector('svg path');
+            if (svg) svg.setAttribute('stroke', colors.secondaryText);
         };
 
         headerActions.appendChild(closeButton);
@@ -1061,7 +1081,7 @@ class FileTreeManager {
             align-items: center;
             justify-content: center;
             padding: 20px;
-            background: #ffffff;
+            background: ${colors.imageBackground};
             overflow: auto;
             position: relative;
             min-height: 300px;
@@ -1074,7 +1094,7 @@ class FileTreeManager {
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            color: #666666;
+            color: ${colors.secondaryText};
             font-size: 14px;
         `;
         loadingIndicator.textContent = 'Loading image...';
@@ -1214,6 +1234,131 @@ class FileTreeManager {
         const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    /**
+     * Get current theme from backend API
+     * @returns {Promise<string>} Theme name ('light' or 'dark')
+     */
+    async getCurrentTheme() {
+        try {
+            const response = await HTTP.get('/api/theme');
+            if (response.success) {
+                return response.theme;
+            } else {
+                console.warn('Failed to get theme from server:', response.error);
+                return 'light'; // fallback
+            }
+        } catch (error) {
+            console.warn('Error fetching theme:', error);
+            return 'light'; // fallback
+        }
+    }
+
+    /**
+     * Get theme-specific colors for image viewer modal
+     * @param {string} theme - Theme name ('light' or 'dark')
+     * @returns {Object} Color scheme object
+     */
+    getImageViewerThemeColors(theme) {
+        if (theme === 'dark') {
+            return {
+                modalBackground: '#2d2d30',
+                headerBackground: '#252526',
+                borderColor: '#404040',
+                primaryText: '#e6e6e6',
+                secondaryText: '#a8a8a8',
+                tertiaryText: '#666666',
+                imageBackground: '#1e1e1e',
+                buttonHoverBackground: '#404040',
+                buttonHoverText: '#e6e6e6'
+            };
+        } else {
+            return {
+                modalBackground: '#ffffff',
+                headerBackground: '#f8f9fa',
+                borderColor: '#e0e0e0',
+                primaryText: '#333333',
+                secondaryText: '#666666',
+                tertiaryText: '#999999',
+                imageBackground: '#ffffff',
+                buttonHoverBackground: '#e9ecef',
+                buttonHoverText: '#333333'
+            };
+        }
+    }
+
+    /**
+     * Update the theme of an existing image modal
+     * @param {HTMLElement} modalOverlay - The modal overlay element
+     * @param {string} theme - Theme name ('light' or 'dark')
+     */
+    updateImageModalTheme(modalOverlay, theme) {
+        const colors = this.getImageViewerThemeColors(theme);
+        
+        // Update modal content background
+        const modal = modalOverlay.querySelector('.image-viewer-modal');
+        if (modal) {
+            modal.style.background = colors.modalBackground;
+            modal.style.borderColor = colors.borderColor;
+        }
+        
+        // Update header
+        const header = modalOverlay.querySelector('.image-viewer-header');
+        if (header) {
+            header.style.background = colors.headerBackground;
+            header.style.borderBottomColor = colors.borderColor;
+        }
+        
+        // Update text colors
+        const fileNameSpan = header?.querySelector('span:nth-child(2)');
+        if (fileNameSpan) {
+            fileNameSpan.style.color = colors.primaryText;
+        }
+        
+        const fileInfo = header?.querySelector('span:nth-child(3)');
+        if (fileInfo) {
+            fileInfo.style.color = colors.secondaryText;
+        }
+        
+        const shortcutHint = header?.querySelector('span:nth-child(4)');
+        if (shortcutHint) {
+            shortcutHint.style.color = colors.tertiaryText;
+        }
+        
+        // Update close button
+        const closeButton = header?.querySelector('button');
+        if (closeButton) {
+            closeButton.style.color = colors.secondaryText;
+            // Update SVG stroke color
+            const svg = closeButton.querySelector('svg path');
+            if (svg) svg.setAttribute('stroke', colors.secondaryText);
+            
+            closeButton.onmouseover = () => {
+                closeButton.style.background = colors.buttonHoverBackground;
+                closeButton.style.color = colors.buttonHoverText;
+                const svg = closeButton.querySelector('svg path');
+                if (svg) svg.setAttribute('stroke', colors.buttonHoverText);
+            };
+            closeButton.onmouseout = () => {
+                closeButton.style.background = 'none';
+                closeButton.style.color = colors.secondaryText;
+                const svg = closeButton.querySelector('svg path');
+                if (svg) svg.setAttribute('stroke', colors.secondaryText);
+            };
+        }
+        
+        // Update image container background
+        const imageContainer = modal?.querySelector('div:last-child');
+        if (imageContainer) {
+            imageContainer.style.background = colors.imageBackground;
+        }
+        
+        // Update loading indicator if present
+        const loadingIndicator = imageContainer?.querySelector('div');
+        if (loadingIndicator && loadingIndicator.textContent?.includes('Loading')) {
+            loadingIndicator.style.color = colors.secondaryText;
+        }
     }
 
 
