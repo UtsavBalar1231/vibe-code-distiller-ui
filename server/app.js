@@ -187,6 +187,50 @@ const dynamicTTYdProxy = (req, res, next) => {
 // Register TTYd proxy route early
 app.use('/terminal', dynamicTTYdProxy);
 
+// Code-server proxy route - Dynamic proxy for VSCode access
+const dynamicCodeServerProxy = (req, res, next) => {
+  const proxy = createProxyMiddleware({
+    target: 'http://127.0.0.1:8081',
+    changeOrigin: true,
+    pathRewrite: {
+      '^/vscode': '',
+    },
+    ws: false, // WebSocket handling will be done separately in the upgrade event
+    logLevel: 'silent',
+    timeout: 30000,
+    proxyTimeout: 30000,
+    secure: false,
+    onProxyReq: (proxyReq, req, res) => {
+      // Set proper forwarding headers
+      proxyReq.setHeader('X-Forwarded-For', req.ip || req.connection.remoteAddress);
+      proxyReq.setHeader('X-Forwarded-Proto', 'http');
+      proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+    },
+    onError: (err, req, res) => {
+      logger.error('Code-server proxy error:', { 
+        error: err.message, 
+        url: req.url, 
+        method: req.method,
+        stack: err.stack 
+      });
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Code-server service unavailable', details: err.message });
+      }
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      // Remove conflicting security headers that might interfere with code-server
+      delete proxyRes.headers['x-frame-options'];
+      delete proxyRes.headers['content-security-policy'];
+      delete proxyRes.headers['x-content-type-options'];
+    }
+  });
+  
+  return proxy(req, res, next);
+};
+
+// Register code-server proxy route
+app.use('/vscode', dynamicCodeServerProxy);
+
 // API routes (no authentication required)
 app.use('/api', apiRoutes);
 app.use('/api/projects', projectRoutes);
@@ -391,10 +435,10 @@ const startServer = async () => {
       process.exit(1);
     }
     
-    // Manual WebSocket upgrade handling to avoid conflicts between Socket.IO and ttyd
+    // Manual WebSocket upgrade handling to avoid conflicts between Socket.IO, ttyd, and code-server
     server.on('upgrade', (request, socket, head) => {
       const pathname = request.url;
-      logger.debug('WebSocket upgrade request:', { pathname, headers: request.headers });
+      logger.debug('WebSocket upgrade request:', { pathname });
       
       if (pathname.startsWith('/terminal')) {
         // Forward terminal WebSocket upgrades to ttyd
@@ -414,10 +458,36 @@ const startServer = async () => {
         });
         
         wsProxy.upgrade(request, socket, head);
-      } else {
+      } else if (pathname.startsWith('/vscode')) {
+        // Forward code-server WebSocket upgrades to code-server
+        logger.debug('Forwarding code-server WebSocket upgrade to code-server');
+        
+        // Create a proxy for WebSocket upgrade to code-server
+        const { createProxyMiddleware } = require('http-proxy-middleware');
+        const wsProxy = createProxyMiddleware({
+          target: 'http://127.0.0.1:8081',
+          changeOrigin: true,
+          pathRewrite: {
+            '^/vscode': '', // remove /vscode prefix when forwarding to code-server
+          },
+          ws: true,
+          logLevel: 'silent',
+          onError: (err, req, socket) => {
+            logger.error('Code-server WebSocket proxy error:', { error: err.message, url: req.url });
+            if (socket && !socket.destroyed) {
+              socket.destroy();
+            }
+          }
+        });
+        
+        wsProxy.upgrade(request, socket, head);
+      } else if (pathname.startsWith('/socket.io/')) {
         // Let Socket.IO handle its own WebSocket upgrades
-        logger.debug('Letting Socket.IO handle WebSocket upgrade');
-        // Socket.IO will handle its own upgrade events
+        logger.debug('Letting Socket.IO handle WebSocket upgrade for:', pathname);
+      } else {
+        // Unknown WebSocket upgrade request
+        logger.warn('Unknown WebSocket upgrade request:', { pathname });
+        socket.destroy();
       }
     });
     
