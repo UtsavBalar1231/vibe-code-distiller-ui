@@ -1,0 +1,46 @@
+Source: claude-code-web-manager
+Section: web
+Priority: optional
+Maintainer: PamirAI Incorporated <founders@pamir.ai>
+Build-Depends: debhelper (>= 13),
+               npm,
+               curl,
+               wget
+Standards-Version: 4.6.2
+Homepage: https://github.com/claude-code/web-manager
+Vcs-Git: https://github.com/claude-code/web-manager.git
+Vcs-Browser: https://github.com/claude-code/web-manager
+
+Package: claude-code-web-manager
+Architecture: arm64
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         npm,
+         tmux,
+         curl,
+         lsof,
+         adduser,
+         sudo
+Recommends: git,
+            i2c-tools,
+            raspi-gpio,
+            rpi.gpio-common
+Suggests: code-server,
+          claude-code-cli
+Description: Web interface for managing Claude Code CLI projects
+ Claude Code Web Manager provides a professional web interface for managing
+ Claude Code CLI projects on Raspberry Pi.
+ .
+ Features include:
+  * Browser-based terminal interface using TTYd
+  * Persistent tmux sessions for continuous development
+  * Real-time project management and file operations
+  * Monaco Editor integration for code editing
+  * WebSocket-based real-time updates
+  * Mobile-optimized responsive design
+  * System monitoring and status reporting
+  * Hardware integration support for Raspberry Pi GPIO
+  * Multi-device development continuity
+ .
+ The application runs as the 'distiller' system user with appropriate
+ permissions for hardware access and system integration.

@@ -1,0 +1,145 @@
+#!/bin/bash
+# postinst script for claude-code-web-manager
+
+set -e
+
+case "$1" in
+configure)
+	# Create distiller system user with comprehensive permissions
+	if ! getent passwd distiller >/dev/null 2>&1; then
+		echo "Creating distiller system user..."
+		adduser --system --group --home /home/distiller --shell /bin/bash distiller
+
+		# Create home directory if it doesn't exist
+		if [ ! -d /opt ]; then
+			mkdir -p /opt
+			chown distiller:distiller /opt
+			chmod 755 /opt
+		fi
+
+		# Create projects directory
+		mkdir -p /opt/claude-code-web-manager/projects
+		chown distiller:distiller /opt/claude-code-web-manager/projects
+		chmod 755 /opt/claude-code-web-manager/projects
+	fi
+
+	# Add distiller to hardware access groups (for Raspberry Pi)
+	usermod -a -G sudo,gpio,dialout,i2c,spi,audio,video distiller 2>/dev/null || true
+
+	# Set up directory ownership and permissions
+	chown -R distiller:distiller /opt/claude-code-web-manager
+	chown -R distiller:distiller /var/log/claude-code-web-manager
+	chown -R distiller:distiller /var/lib/claude-code-web-manager
+	chown distiller:distiller /etc/claude-code-web-manager
+
+	# Set proper permissions
+	chmod 755 /opt/claude-code-web-manager
+	chmod 755 /var/log/claude-code-web-manager
+	chmod 755 /var/lib/claude-code-web-manager
+	chmod 755 /etc/claude-code-web-manager
+
+	# Make TTYd binary executable
+	if [ -f /opt/claude-code-web-manager/ttyd.aarch64 ]; then
+		chmod 755 /opt/claude-code-web-manager/ttyd.aarch64
+	fi
+	if [ -f /opt/claude-code-web-manager/ttyd.x86_64 ]; then
+		chmod 755 /opt/claude-code-web-manager/ttyd.x86_64
+	fi
+
+	# Configure sudoers for distiller user (specific commands only)
+	if [ -d /etc/sudoers.d ]; then
+		cat >/etc/sudoers.d/distiller <<'EOF'
+# Allow distiller user to manage system services and hardware
+distiller ALL=(ALL) NOPASSWD: /bin/systemctl start claude-code-web-manager
+distiller ALL=(ALL) NOPASSWD: /bin/systemctl stop claude-code-web-manager
+distiller ALL=(ALL) NOPASSWD: /bin/systemctl restart claude-code-web-manager
+distiller ALL=(ALL) NOPASSWD: /bin/systemctl status claude-code-web-manager
+distiller ALL=(ALL) NOPASSWD: /usr/bin/raspi-gpio get
+distiller ALL=(ALL) NOPASSWD: /usr/bin/raspi-gpio set *
+distiller ALL=(ALL) NOPASSWD: /usr/bin/i2cdetect *
+distiller ALL=(ALL) NOPASSWD: /usr/bin/i2cget *
+distiller ALL=(ALL) NOPASSWD: /usr/bin/i2cset *
+EOF
+		chmod 440 /etc/sudoers.d/distiller
+	fi
+
+	# Create log rotation configuration
+	cat >/etc/logrotate.d/claude-code-web-manager <<'EOF'
+/var/log/claude-code-web-manager/*.log {
+    daily
+    missingok
+    rotate 14
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    create 644 distiller distiller
+}
+EOF
+
+	# Ensure proper Node.js environment for distiller user
+	if [ ! -f $HOME/.bashrc ]; then
+		cat >$HOME/.bashrc <<'EOF'
+# ~/.bashrc: executed by bash(1) for non-login shells
+
+# Source global definitions if they exist
+if [ -f /etc/bashrc ]; then
+    . /etc/bashrc
+fi
+
+# User specific environment and startup programs
+PATH=$PATH:$HOME/.local/bin:/opt/claude-code-web-manager
+
+# NVM configuration (if installed)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+
+# Claude Code Web Manager aliases
+alias ccwm-start='sudo systemctl start claude-code-web-manager'
+alias ccwm-stop='sudo systemctl stop claude-code-web-manager'
+alias ccwm-restart='sudo systemctl restart claude-code-web-manager'
+alias ccwm-status='sudo systemctl status claude-code-web-manager'
+alias ccwm-logs='journalctl -u claude-code-web-manager -f'
+EOF
+		chown distiller:distiller $HOME/.bashrc
+		chmod 644 $HOME/.bashrc
+	fi
+
+	# Install PM2 for process management if Node.js is available
+	if command -v npm >/dev/null 2>&1; then
+		echo "Installing PM2 process manager..."
+		sudo -u distiller bash -c 'cd /opt/claude-code-web-manager && npm install -g pm2' 2>/dev/null || true
+	fi
+
+	# Reload systemd daemon and enable service
+	systemctl daemon-reload
+	systemctl enable claude-code-web-manager.service
+
+	echo "Claude Code Web Manager has been installed successfully!"
+	echo ""
+	echo "Service management commands:"
+	echo "  sudo systemctl start claude-code-web-manager    # Start the service"
+	echo "  sudo systemctl stop claude-code-web-manager     # Stop the service"
+	echo "  sudo systemctl restart claude-code-web-manager  # Restart the service"
+	echo "  sudo systemctl status claude-code-web-manager   # Check status"
+	echo ""
+	echo "The web interface will be available at:"
+	echo "  http://localhost:3000"
+	echo "  http://$(hostname -I | awk '{print $1}' 2>/dev/null || echo 'YOUR_IP'):3000"
+	echo ""
+	echo "To start the service now, run:"
+	echo "  sudo systemctl start claude-code-web-manager"
+	;;
+
+abort-upgrade | abort-remove | abort-deconfigure) ;;
+
+*)
+	echo "postinst called with unknown argument \`$1'" >&2
+	exit 1
+	;;
+esac
+
+#DEBHELPER#
+
+exit 0

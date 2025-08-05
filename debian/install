@@ -1,0 +1,8 @@
+# Debian install file for claude-code-web-manager
+# This file is not strictly necessary as we handle installation in debian/rules
+# but kept for completeness and future customization
+
+# Application files are installed by debian/rules override_dh_auto_install
+# Configuration files are installed to /etc/claude-code-web-manager/
+# Log directory is created at /var/log/claude-code-web-manager/
+# Data directory is created at /var/lib/claude-code-web-manager/

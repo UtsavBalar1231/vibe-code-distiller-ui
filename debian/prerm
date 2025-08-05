@@ -1,0 +1,38 @@
+#!/bin/bash
+# prerm script for claude-code-web-manager
+
+set -e
+
+case "$1" in
+remove | upgrade | deconfigure)
+	# Stop the service if it's running
+	if systemctl is-active --quiet claude-code-web-manager.service; then
+		echo "Stopping Claude Code Web Manager service..."
+		systemctl stop claude-code-web-manager.service
+	fi
+
+	# Disable the service
+	if systemctl is-enabled --quiet claude-code-web-manager.service; then
+		echo "Disabling Claude Code Web Manager service..."
+		systemctl disable claude-code-web-manager.service
+	fi
+
+	# Stop PM2 processes for distiller user if they exist
+	if getent passwd distiller >/dev/null 2>&1; then
+		sudo -u distiller bash -c 'pm2 stop all 2>/dev/null || true'
+		sudo -u distiller bash -c 'pm2 delete all 2>/dev/null || true'
+		sudo -u distiller bash -c 'pm2 kill 2>/dev/null || true'
+	fi
+	;;
+
+failed-upgrade) ;;
+
+*)
+	echo "prerm called with unknown argument \`$1'" >&2
+	exit 1
+	;;
+esac
+
+#DEBHELPER#
+
+exit 0

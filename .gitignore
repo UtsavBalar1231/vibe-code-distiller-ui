@@ -141,6 +141,18 @@ coverage/
 build/
 dist/
 
+# Debian packaging artifacts
+*.deb
+*.changes
+*.buildinfo
+*.dsc
+*.tar.xz
+*.tar.gz
+debian/files
+debian/debhelper-build-stamp
+debian/claude-code-web-manager/
+debian/.debhelper/
+
 # Runtime files
 *.sock
 *.socket
