@@ -1,0 +1,107 @@
+Claude Code Web Manager for Debian
+===================================
+
+This package provides a web-based interface for managing Claude Code CLI projects
+on Raspberry Pi and other ARM64/x64 Linux systems.
+
+System User
+-----------
+
+The application runs as the 'distiller' system user, which is automatically created
+during installation with the following permissions:
+
+- Primary group: distiller
+- Additional groups: sudo, gpio, dialout, i2c, spi, audio, video
+- Home directory: /opt
+- Shell: /bin/bash
+
+This user has comprehensive hardware access permissions suitable for Raspberry Pi
+development and GPIO operations.
+
+Installation Directories
+------------------------
+
+- Application: /opt/claude-code-web-manager/
+- Configuration: /etc/claude-code-web-manager/
+- Logs: /var/log/claude-code-web-manager/
+- Data: /var/lib/claude-code-web-manager/
+- Projects: /opt/claude-code-web-manager/projects/
+
+Service Management
+------------------
+
+The application is managed by systemd:
+
+  sudo systemctl start claude-code-web-manager
+  sudo systemctl stop claude-code-web-manager
+  sudo systemctl restart claude-code-web-manager
+  sudo systemctl status claude-code-web-manager
+
+Web Interface
+-------------
+
+After installation and service start, the web interface is available at:
+
+- http://localhost:3000
+- http://YOUR_RASPBERRY_PI_IP:3000
+
+Default Configuration
+---------------------
+
+The default configuration can be found in:
+/etc/claude-code-web-manager/default.json
+
+Key settings:
+- Server port: 3000
+- TTYd port: 7681
+- Projects directory: /opt/claude-code-web-manager/projects
+
+Hardware Features
+-----------------
+
+This package includes support for Raspberry Pi hardware features:
+
+- GPIO access through raspi-gpio and direct /dev/gpiomem
+- I2C device access through /dev/i2c-* devices
+- SPI device access through /dev/spidev* devices
+- Serial device access through /dev/ttyUSB*, /dev/ttyACM*, /dev/ttyAMA*
+- Audio and video device access
+
+The distiller user has appropriate group memberships and sudo permissions
+for hardware operations.
+
+Troubleshooting
+---------------
+
+1. Check service status:
+   sudo systemctl status claude-code-web-manager
+
+2. View service logs:
+   sudo journalctl -u claude-code-web-manager -f
+
+3. Check if ports are available:
+   sudo lsof -i :3000
+   sudo lsof -i :7681
+
+4. Verify user permissions:
+   groups distiller
+
+5. Test TTYd binary:
+   sudo -u distiller /opt/claude-code-web-manager/ttyd.aarch64 --version
+
+Security Notes
+--------------
+
+The distiller user has sudo privileges for specific system operations required
+for hardware access and service management. The sudoers configuration is
+restrictive and only allows necessary commands.
+
+The systemd service runs with appropriate security restrictions while
+maintaining hardware access capabilities.
+
+For production deployments, consider:
+- Configuring a firewall to limit access to ports 3000 and 7681
+- Setting up HTTPS with a reverse proxy
+- Configuring authentication if needed
+
+ -- PamirAI Incorporated <founders@pamir.ai>

@@ -1,0 +1,54 @@
+[Unit]
+Description=Claude Code Web Manager
+Documentation=https://github.com/pamir-ai/vibe-code-distiller-ui
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/opt
+
+[Service]
+Type=forking
+User=distiller
+Group=distiller
+WorkingDirectory=/opt/claude-code-web-manager
+ExecStart=/usr/bin/npm run pm2:start
+ExecReload=/usr/bin/npm run pm2:restart
+ExecStop=/usr/bin/npm run pm2:stop
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Environment
+Environment="NODE_ENV=production"
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:%h/.local/bin"
+Environment="PM2_HOME=/opt/.pm2"
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=claude-code-web-manager
+
+# Security settings (balanced for hardware access)
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=no
+ReadWritePaths=/opt/claude-code-web-manager /var/log/claude-code-web-manager /var/lib/claude-code-web-manager %h/ /tmp /dev
+
+# Hardware access permissions
+SupplementaryGroups=gpio dialout i2c spi audio video sudo
+# DevicePolicy=auto
+# DeviceAllow=/dev/gpiomem rw
+# DeviceAllow=/dev/i2c-* rw
+# DeviceAllow=/dev/spidev* rw
+# DeviceAllow=/dev/ttyUSB* rw
+# DeviceAllow=/dev/ttyACM* rw
+# DeviceAllow=/dev/ttyAMA* rw
+
+# Resource limits (optimized for Raspberry Pi)
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryLimit=256M
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,54 @@
+#!/bin/bash
+# postrm script for claude-code-web-manager
+
+set -e
+
+case "$1" in
+purge)
+	# Remove distiller user and home directory (only on purge)
+	if getent passwd distiller >/dev/null 2>&1; then
+		echo "Removing distiller user..."
+		userdel -r distiller 2>/dev/null || true
+	fi
+
+	# Remove directories and their contents
+	rm -rf /var/log/claude-code-web-manager
+	rm -rf /var/lib/claude-code-web-manager
+	rm -rf /etc/claude-code-web-manager
+
+	# Remove sudoers configuration
+	rm -f /etc/sudoers.d/distiller
+
+	# Remove log rotation configuration
+	rm -f /etc/logrotate.d/claude-code-web-manager
+
+	echo "Claude Code Web Manager has been completely removed."
+	;;
+
+remove)
+	# On remove (not purge), keep user data but clean up logs
+	# Remove old log files but keep directory structure
+	find /var/log/claude-code-web-manager -name "*.log" -type f -delete 2>/dev/null || true
+
+	echo "Claude Code Web Manager has been removed (user data preserved)."
+	echo "To completely remove all data, run: apt purge claude-code-web-manager"
+	;;
+
+upgrade | failed-upgrade | abort-install | abort-upgrade | disappear)
+	# Do nothing for these cases
+	;;
+
+*)
+	echo "postrm called with unknown argument \`$1'" >&2
+	exit 1
+	;;
+esac
+
+# Reload systemd daemon to clean up service files
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+	systemctl daemon-reload 2>/dev/null || true
+fi
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,81 @@
+#!/usr/bin/make -f
+
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+export DH_VERBOSE = 1
+
+# Modern debhelper rules for Node.js application
+%:
+	dh $@
+
+# Override automatic configure step
+override_dh_auto_configure:
+	# Skip automatic configure - we handle dependencies manually
+
+# Override build step to install Node.js dependencies
+override_dh_auto_build:
+	# Install production Node.js dependencies
+	npm ci --production --no-optional
+	
+	# Download TTYd binary for target architecture
+	@echo "Downloading TTYd binary for $(DEB_HOST_ARCH)"
+	@if [ "$(DEB_HOST_ARCH)" = "arm64" ]; then \
+		curl -L -o ttyd.aarch64 "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.aarch64" || true; \
+	elif [ "$(DEB_HOST_ARCH)" = "amd64" ]; then \
+		curl -L -o ttyd.x86_64 "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64" || true; \
+	fi
+	
+	# Make TTYd binary executable if it exists
+	@if [ -f ttyd.aarch64 ]; then chmod +x ttyd.aarch64; fi
+	@if [ -f ttyd.x86_64 ]; then chmod +x ttyd.x86_64; fi
+
+# Override install step to place files in correct locations
+override_dh_auto_install:
+	# Create application directory structure
+	mkdir -p debian/claude-code-web-manager/opt/claude-code-web-manager
+	mkdir -p debian/claude-code-web-manager/etc/claude-code-web-manager
+	mkdir -p debian/claude-code-web-manager/var/log/claude-code-web-manager
+	mkdir -p debian/claude-code-web-manager/var/lib/claude-code-web-manager
+	
+	# Copy application files
+	cp -r server debian/claude-code-web-manager/opt/claude-code-web-manager/
+	cp -r public debian/claude-code-web-manager/opt/claude-code-web-manager/
+	cp -r node_modules debian/claude-code-web-manager/opt/claude-code-web-manager/
+	cp package.json debian/claude-code-web-manager/opt/claude-code-web-manager/
+	cp package-lock.json debian/claude-code-web-manager/opt/claude-code-web-manager/
+	cp ecosystem.config.js debian/claude-code-web-manager/opt/claude-code-web-manager/
+	
+	# Copy TTYd binary if it exists
+	@if [ -f ttyd.aarch64 ]; then \
+		cp ttyd.aarch64 debian/claude-code-web-manager/opt/claude-code-web-manager/; \
+	fi
+	@if [ -f ttyd.x86_64 ]; then \
+		cp ttyd.x86_64 debian/claude-code-web-manager/opt/claude-code-web-manager/; \
+	fi
+	
+	# Copy configuration files
+	cp config/default.json debian/claude-code-web-manager/etc/claude-code-web-manager/
+	
+	# Systemd service file will be installed automatically by dh_installsystemd
+
+# Override clean to remove build artifacts
+override_dh_auto_clean:
+	# Remove Node.js dependencies and downloaded binaries
+	rm -rf node_modules
+	rm -f ttyd.aarch64 ttyd.x86_64
+	# Keep original package-lock.json if it existed
+
+# Skip automatic test execution (no tests defined)
+override_dh_auto_test:
+	# No tests to run
+
+# Set proper file permissions
+override_dh_fixperms:
+	dh_fixperms
+	# Make TTYd binaries executable
+	@if [ -f debian/claude-code-web-manager/opt/claude-code-web-manager/ttyd.aarch64 ]; then \
+		chmod 755 debian/claude-code-web-manager/opt/claude-code-web-manager/ttyd.aarch64; \
+	fi
+	@if [ -f debian/claude-code-web-manager/opt/claude-code-web-manager/ttyd.x86_64 ]; then \
+		chmod 755 debian/claude-code-web-manager/opt/claude-code-web-manager/ttyd.x86_64; \
+	fi
