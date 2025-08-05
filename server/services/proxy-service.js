@@ -43,7 +43,7 @@ class ProxyService {
   createCodeServerProxy() {
     return (req, res, next) => {
       const proxy = createProxyMiddleware({
-        target: 'http://127.0.0.1:8081',
+        target: 'https://127.0.0.1:8081',
         changeOrigin: true,
         pathRewrite: {
           '^/vscode': '',
@@ -53,9 +53,13 @@ class ProxyService {
         timeout: 30000,
         proxyTimeout: 30000,
         secure: false,
+        headers: {
+          'Host': '127.0.0.1:8081',
+          'Origin': 'http://127.0.0.1:8081'
+        },
         onProxyReq: (proxyReq, req, res) => {
           proxyReq.setHeader('X-Forwarded-For', req.ip || req.connection.remoteAddress);
-          proxyReq.setHeader('X-Forwarded-Proto', 'http');
+          proxyReq.setHeader('X-Forwarded-Proto', 'https');
           proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
         },
         onError: (err, req, res) => {
@@ -104,13 +108,18 @@ class ProxyService {
         logger.debug('Forwarding code-server WebSocket upgrade to code-server');
         
         const wsProxy = createProxyMiddleware({
-          target: 'http://127.0.0.1:8081',
+          target: 'https://127.0.0.1:8081',
           changeOrigin: true,
           pathRewrite: {
             '^/vscode': '',
           },
           ws: true,
           logLevel: 'silent',
+          secure: false,
+          headers: {
+            'Host': '127.0.0.1:8081',
+            'Origin': 'http://127.0.0.1:8081'
+          },
           onError: (err, req, socket) => {
             logger.error('Code-server WebSocket proxy error:', { error: err.message, url: req.url });
             if (socket && !socket.destroyed) {
