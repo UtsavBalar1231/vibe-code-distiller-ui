@@ -6,14 +6,10 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
-const fs = require('fs');
-const { execSync } = require('child_process');
-const os = require('os');
 const compression = require('compression');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
-const { createProxyMiddleware } = require('http-proxy-middleware');
 const config = require('config');
 
 // Import utilities and middleware
@@ -40,10 +36,10 @@ const ttydRoutes = require('./routes/ttyd');
 const filesystemRoutes = require('./routes/filesystem');
 const gitRoutes = require('./routes/git');
 
-// Import socket handler
-const socketHandler = require('./socket-handler');
-
-// Import TTYd service
+// Import services
+const proxyService = require('./services/proxy-service');
+const systemSetupService = require('./services/system-setup');
+const websocketManager = require('./services/websocket-manager');
 const ttydService = require('./services/ttyd-service');
 
 // Setup process error handlers
@@ -65,9 +61,9 @@ const io = socketIo(server, {
   pingTimeout: 60000,
   pingInterval: 25000,
   maxHttpBufferSize: 1024 * 1024, // 1MB
-  transports: ['websocket', 'polling'], // Prefer websocket over polling
-  allowEIO3: true, // Support older clients if needed
-  upgradeTimeout: 30000, // 30 seconds for upgrade
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
+  upgradeTimeout: 30000,
   allowUpgrades: true
 });
 
@@ -75,7 +71,6 @@ const io = socketIo(server, {
 app.set('io', io);
 
 // Initialize theme state management (in-memory storage)
-// Default theme is 'light', reset to 'light' on application restart
 app.set('app-theme', 'light');
 
 // Trust proxy for accurate IP addresses
@@ -83,7 +78,7 @@ app.set('trust proxy', 1);
 
 // Basic security middleware
 app.use(helmet({
-  contentSecurityPolicy: false, // We handle this in cors middleware
+  contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
 }));
 
@@ -135,11 +130,9 @@ app.use(cookieParser());
 
 // Static files
 app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
-
-// Monaco Editor static files
 app.use('/node_modules', express.static(path.join(__dirname, '../node_modules')));
 
-// Health check endpoint (no auth required)
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
     success: true,
@@ -151,87 +144,11 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Setup proxy routes using ProxyService
+app.use('/terminal', proxyService.getTTYdProxy());
+app.use('/vscode', proxyService.getCodeServerProxy());
 
-
-// TTYd terminal proxy route - Dynamic proxy that gets target from service
-const dynamicTTYdProxy = (req, res, next) => {
-  const ttydPort = ttydService.getStatus().port;
-  const proxy = createProxyMiddleware({
-    target: `http://localhost:${ttydPort}`,
-    changeOrigin: true,
-    pathRewrite: {
-      '^/terminal': '',
-    },
-    ws: false,
-    logLevel: 'silent',
-    timeout: 30000,
-    proxyTimeout: 30000,
-    secure: false,
-    onError: (err, req, res) => {
-      logger.error('TTYd proxy error:', { error: err.message, url: req.url, method: req.method });
-      if (!res.headersSent) {
-        res.status(502).json({ error: 'Terminal service unavailable', details: err.message });
-      }
-    },
-    onProxyRes: (proxyRes, req, res) => {
-      delete proxyRes.headers['x-frame-options'];
-      delete proxyRes.headers['content-security-policy'];
-      delete proxyRes.headers['x-content-type-options'];
-      logger.debug('TTYd proxy response:', { statusCode: proxyRes.statusCode, url: req.url });
-    }
-  });
-  
-  return proxy(req, res, next);
-};
-
-// Register TTYd proxy route early
-app.use('/terminal', dynamicTTYdProxy);
-
-// Code-server proxy route - Dynamic proxy for VSCode access
-const dynamicCodeServerProxy = (req, res, next) => {
-  const proxy = createProxyMiddleware({
-    target: 'http://127.0.0.1:8081',
-    changeOrigin: true,
-    pathRewrite: {
-      '^/vscode': '',
-    },
-    ws: false, // WebSocket handling will be done separately in the upgrade event
-    logLevel: 'silent',
-    timeout: 30000,
-    proxyTimeout: 30000,
-    secure: false,
-    onProxyReq: (proxyReq, req, res) => {
-      // Set proper forwarding headers
-      proxyReq.setHeader('X-Forwarded-For', req.ip || req.connection.remoteAddress);
-      proxyReq.setHeader('X-Forwarded-Proto', 'http');
-      proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
-    },
-    onError: (err, req, res) => {
-      logger.error('Code-server proxy error:', { 
-        error: err.message, 
-        url: req.url, 
-        method: req.method,
-        stack: err.stack 
-      });
-      if (!res.headersSent) {
-        res.status(502).json({ error: 'Code-server service unavailable', details: err.message });
-      }
-    },
-    onProxyRes: (proxyRes, req, res) => {
-      // Remove conflicting security headers that might interfere with code-server
-      delete proxyRes.headers['x-frame-options'];
-      delete proxyRes.headers['content-security-policy'];
-      delete proxyRes.headers['x-content-type-options'];
-    }
-  });
-  
-  return proxy(req, res, next);
-};
-
-// Register code-server proxy route
-app.use('/vscode', dynamicCodeServerProxy);
-
-// API routes (no authentication required)
+// API routes
 app.use('/api', apiRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/system', systemRoutes);
@@ -253,7 +170,10 @@ app.use(express.static(path.join(__dirname, '../public'), {
 }));
 
 // Setup Socket.IO handlers
-socketHandler(io);
+websocketManager(io);
+
+// Setup WebSocket upgrade handling
+proxyService.setupWebSocketUpgrade(server, io);
 
 // 404 handler
 app.use(notFoundHandler);
@@ -265,233 +185,25 @@ app.use(errorHandler);
 const port = process.env.PORT || config.get('server.port') || SERVER.DEFAULT_PORT;
 const host = process.env.HOST || config.get('server.host') || SERVER.DEFAULT_HOST;
 
-// Setup tmux configuration function
-const setupTmuxConfig = () => {
-  try {
-    const homeDir = os.homedir();
-    const tmuxConfPath = path.join(homeDir, '.tmux.conf');
-    
-    // Required tmux configuration lines
-    const requiredConfig = [
-      'set -g mouse on',
-      'set -g history-limit 10000',
-      'set-hook -g client-attached \'refresh-client -S\'',
-      'unbind-key -T root MouseDown3Pane'
-    ];
-    
-    let configContent = '';
-    let needsUpdate = false;
-    
-    // Check if .tmux.conf exists
-    if (fs.existsSync(tmuxConfPath)) {
-      configContent = fs.readFileSync(tmuxConfPath, 'utf8');
-      logger.info('Found existing .tmux.conf file');
-    } else {
-      logger.info('.tmux.conf file not found, will create it');
-      needsUpdate = true;
-    }
-    
-    // Check if required configurations exist
-    const missingConfig = requiredConfig.filter(line => !configContent.includes(line));
-    
-    if (missingConfig.length > 0 || needsUpdate) {
-      if (missingConfig.length > 0) {
-        logger.info(`Adding missing tmux configurations: ${missingConfig.join(', ')}`);
-        // Append missing configurations
-        const configToAdd = missingConfig.join('\n') + '\n';
-        if (configContent && !configContent.endsWith('\n')) {
-          configContent += '\n';
-        }
-        configContent += configToAdd;
-      } else if (!configContent) {
-        // Create new config file with required settings
-        configContent = requiredConfig.join('\n') + '\n';
-      }
-      
-      // Write the configuration file
-      fs.writeFileSync(tmuxConfPath, configContent);
-      logger.info('tmux configuration file updated successfully');
-      
-      // Source the tmux configuration if tmux is running
-      try {
-        execSync('tmux source-file ~/.tmux.conf 2>/dev/null', { stdio: 'ignore' });
-        logger.info('tmux configuration sourced successfully');
-      } catch (sourceError) {
-        // This is expected if no tmux sessions are running
-        logger.debug('Could not source tmux config (no active sessions)', sourceError.message);
-      }
-    } else {
-      logger.info('tmux configuration is already properly set up');
-    }
-    
-  } catch (error) {
-    logger.error('Error setting up tmux configuration:', error.message);
-  }
-};
-
-// Check if Git is installed
-const checkGitInstallation = () => {
-  try {
-    // Try to run git --version command
-    execSync('git --version', { stdio: 'ignore' });
-    logger.info('Git installation verified successfully');
-    return true;
-  } catch (error) {
-    const errorMessage = 'Git is not installed or not available in PATH. Please install Git before starting the application.';
-    logger.error(errorMessage);
-    console.error(`
-╔════════════════════════════════════════════════════════════════╗
-║                         ❌ STARTUP ERROR                       ║
-║                                                                ║
-║  Git is required for file editing functionality but was not    ║
-║  found on this system.                                         ║
-║                                                                ║
-║  Please install Git and ensure it's available in your PATH:   ║
-║                                                                ║
-║  • Ubuntu/Debian: sudo apt install git                        ║
-║  • CentOS/RHEL: sudo yum install git                          ║
-║  • macOS: xcode-select --install                              ║
-║                                                                ║
-║  After installing Git, restart the application.               ║
-╚════════════════════════════════════════════════════════════════╝
-    `);
-    return false;
-  }
-};
-
-// Setup Claude aliases function
-const setupClaudeAliases = () => {
-  try {
-    const homeDir = os.homedir();
-    const bashrcPath = path.join(homeDir, '.bashrc');
-    
-    // Check if .bashrc exists
-    if (!fs.existsSync(bashrcPath)) {
-      logger.warn('.bashrc file not found, skipping alias setup');
-      return;
-    }
-    
-    // Read current .bashrc content
-    const bashrcContent = fs.readFileSync(bashrcPath, 'utf8');
-    
-    // Check if aliases already exist
-    const ccAliasExists = bashrcContent.includes('alias cc="claude"') || bashrcContent.includes("alias cc='claude'");
-    const ccsAliasExists = bashrcContent.includes('alias ccs="claude --dangerously-skip-permissions"') || bashrcContent.includes("alias ccs='claude --dangerously-skip-permissions'");
-    
-    if (ccAliasExists && ccsAliasExists) {
-      logger.info('Claude aliases already exist in .bashrc');
-    } else {
-      // Add aliases to .bashrc
-      const aliasesToAdd = [];
-      
-      if (!ccAliasExists) {
-        aliasesToAdd.push('alias cc="claude"');
-      }
-      
-      if (!ccsAliasExists) {
-        aliasesToAdd.push('alias ccs="claude --dangerously-skip-permissions"');
-      }
-      
-      if (aliasesToAdd.length > 0) {
-        const aliasSection = `\n# Claude aliases\n${aliasesToAdd.join('\n')}\n`;
-        fs.appendFileSync(bashrcPath, aliasSection);
-        logger.info(`Added Claude aliases to .bashrc: ${aliasesToAdd.join(', ')}`);
-      }
-    }
-    
-    // Note: Aliases will be available in new shell sessions
-    logger.info('Claude aliases are now available in new shell sessions (cc, ccs)');
-    
-  } catch (error) {
-    logger.error('Error setting up Claude aliases:', error.message);
-  }
-};
-
 // Start server
 const startServer = async () => {
   try {
-    // Check Git installation first (required for file editing functionality)
-    if (!checkGitInstallation()) {
-      logger.error('Application startup aborted due to missing Git installation');
-      process.exit(1);
-    }
+    // Initialize system setup (Git check, aliases, tmux config)
+    logger.info('Initializing system setup...');
+    await systemSetupService.initialize();
     
-    // Setup Claude aliases at startup
-    setupClaudeAliases();
-    
-    // Setup tmux configuration at startup
-    setupTmuxConfig();
-    
-    // Start TTYd service first
+    // Start TTYd service
     logger.info('Starting TTYd service...');
     try {
       await ttydService.start();
       logger.info('TTYd service started successfully');
-      logger.info('TTYd proxy is ready (using dynamic proxy)');
-      
     } catch (ttydError) {
       logger.error('Failed to start TTYd service:', ttydError);
       logger.error('Application will not start without TTYd service');
       process.exit(1);
     }
     
-    // Manual WebSocket upgrade handling to avoid conflicts between Socket.IO, ttyd, and code-server
-    server.on('upgrade', (request, socket, head) => {
-      const pathname = request.url;
-      logger.debug('WebSocket upgrade request:', { pathname });
-      
-      if (pathname.startsWith('/terminal')) {
-        // Forward terminal WebSocket upgrades to ttyd
-        logger.debug('Forwarding terminal WebSocket upgrade to ttyd');
-        
-        // Create a proxy for WebSocket upgrade
-        const { createProxyMiddleware } = require('http-proxy-middleware');
-        const ttydPort = ttydService.getStatus().port;
-        const wsProxy = createProxyMiddleware({
-          target: `http://localhost:${ttydPort}`,
-          changeOrigin: true,
-          pathRewrite: {
-            '^/terminal': '', // remove /terminal prefix when forwarding to ttyd
-          },
-          ws: true,
-          logLevel: 'silent'
-        });
-        
-        wsProxy.upgrade(request, socket, head);
-      } else if (pathname.startsWith('/vscode')) {
-        // Forward code-server WebSocket upgrades to code-server
-        logger.debug('Forwarding code-server WebSocket upgrade to code-server');
-        
-        // Create a proxy for WebSocket upgrade to code-server
-        const { createProxyMiddleware } = require('http-proxy-middleware');
-        const wsProxy = createProxyMiddleware({
-          target: 'http://127.0.0.1:8081',
-          changeOrigin: true,
-          pathRewrite: {
-            '^/vscode': '', // remove /vscode prefix when forwarding to code-server
-          },
-          ws: true,
-          logLevel: 'silent',
-          onError: (err, req, socket) => {
-            logger.error('Code-server WebSocket proxy error:', { error: err.message, url: req.url });
-            if (socket && !socket.destroyed) {
-              socket.destroy();
-            }
-          }
-        });
-        
-        wsProxy.upgrade(request, socket, head);
-      } else if (pathname.startsWith('/socket.io/')) {
-        // Let Socket.IO handle its own WebSocket upgrades
-        logger.debug('Letting Socket.IO handle WebSocket upgrade for:', pathname);
-      } else {
-        // Unknown WebSocket upgrade request
-        logger.warn('Unknown WebSocket upgrade request:', { pathname });
-        socket.destroy();
-      }
-    });
-    
-    // Check if port is available
+    // Start HTTP server
     server.listen(port, host, () => {
       logger.system('Server started', {
         port,
@@ -530,7 +242,6 @@ const startServer = async () => {
     const shutdown = async (signal) => {
       logger.system('Shutdown initiated', { signal });
       
-      // Stop TTYd service first
       try {
         logger.info('Stopping TTYd service...');
         await ttydService.stop();
@@ -539,20 +250,15 @@ const startServer = async () => {
         logger.error('Error stopping TTYd service:', ttydError);
       }
       
-      // Stop accepting new connections
       server.close(() => {
         logger.system('HTTP server closed');
         
-        // Close all socket connections
         io.close(() => {
           logger.system('Socket.IO server closed');
-          
-          // Exit process
           process.exit(0);
         });
       });
       
-      // Force exit after timeout
       setTimeout(() => {
         logger.error('Forced shutdown after timeout');
         process.exit(1);

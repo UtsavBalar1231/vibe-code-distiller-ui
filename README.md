@@ -77,8 +77,7 @@ The main configuration file is `config/default.json`. Here are the key settings 
 
 ```
 ├── server/                    # Backend Node.js application
-│   ├── app.js                # Main Express server with TTYd proxy
-│   ├── socket-handler.js     # WebSocket event handling
+│   ├── app.js                # Main Express server (simplified)
 │   ├── middleware/           # Express middleware
 │   │   ├── cors.js          # CORS configuration
 │   │   └── error-handler.js # Error handling middleware
@@ -94,7 +93,14 @@ The main configuration file is `config/default.json`. Here are the key settings 
 │   │   ├── claude-manager.js # Claude session management
 │   │   ├── file-service.js   # File system operations
 │   │   ├── project-service.js # Project operations
-│   │   └── ttyd-service.js   # TTYd service management
+│   │   ├── ttyd-service.js   # TTYd service management
+│   │   ├── proxy-service.js  # Proxy management (TTYd, Code-server)
+│   │   ├── system-setup.js   # System configuration (Git, aliases, tmux)
+│   │   ├── websocket-manager.js # WebSocket event coordination
+│   │   └── websocket/       # WebSocket handlers (modular)
+│   │       ├── connection-manager.js # Connection & room management
+│   │       ├── project-handler.js    # Project & Claude events
+│   │       └── terminal-handler.js   # Terminal session management
 │   └── utils/              # Utility modules
 │       ├── constants.js    # Application constants
 │       ├── logger.js       # Winston logger configuration
